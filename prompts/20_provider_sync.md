@@ -1,0 +1,1 @@
+Implement the provider adapter interface in src/worker/providers.ts (submit, fetchResult, webhook verify) for Entrupy once the user has developer docs and an approved account (docs given by user, not guessed). Write provider-verified certificates only from real responses; store raw response hash; UI shows them apart from HENGZ outcomes. Keep `connected` gated by a real test.

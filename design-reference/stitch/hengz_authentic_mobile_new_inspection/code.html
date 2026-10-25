@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;background-color:#faf9f6;color:#1a1c1a;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: 'class', theme: { extend: { colors: { 'surface-tint': '#5f5e5e', 'outline-variant': '#c4c7c7', 'surface-container-highest': '#e3e2e0', 'surface-ivory': '#FAF8F5', 'on-primary-fixed': '#1c1b1b', 'on-tertiary-fixed-variant': '#484645', 'ai-telemetry': '#374151', 'border-strong': '#C8C2B7', 'surface-bright': '#faf9f6', 'text-muted': '#6E6B64', 'tertiary': '#000000', 'primary-fixed': '#e5e2e1', 'background': '#faf9f6', 'primary-container': '#1c1b1b', 'status-review-bg': '#FDF8E8', 'on-tertiary': '#ffffff', 'border-hairline': '#E5E0D8', 'on-primary-fixed-variant': '#474746', 'error': '#ba1a1a', 'gold-champagne': '#C5A059', 'secondary-container': '#fed488', 'on-secondary-fixed': '#261900', 'ai-telemetry-bg': '#EEF0F2', 'status-counterfeit-bg': '#F9EBEB', 'on-surface': '#1a1c1a', 'on-primary-container': '#858383', 'surface-container-high': '#e9e8e5', 'secondary-fixed': '#ffdea5', 'on-secondary-container': '#785a1a', 'surface-card': '#FFFFFF', 'tertiary-container': '#1c1b1a', 'secondary-fixed-dim': '#e9c176', 'status-review': '#8C6A1A', 'on-background': '#1a1c1a', 'surface-dim': '#dbdad7', 'primary': '#000000', 'inverse-on-surface': '#f2f1ee', 'status-verified-bg': '#EBF2ED', 'on-surface-variant': '#444748', 'primary-fixed-dim': '#c8c6c5', 'text-charcoal': '#1A1A1A', 'inverse-primary': '#c8c6c5', 'surface-container-low': '#f4f3f0', 'tertiary-fixed': '#e6e2df', 'on-error': '#ffffff', 'surface-container-lowest': '#ffffff', 'gold-light': '#EFE6D2', 'on-error-container': '#93000a', 'surface': '#faf9f6', 'error-container': '#ffdad6', 'on-tertiary-fixed': '#1c1b1a', 'status-counterfeit': '#8A2323', 'tertiary-fixed-dim': '#cac6c4', 'on-secondary-fixed-variant': '#5d4201', 'inverse-surface': '#2f312f', 'on-tertiary-container': '#868382', 'status-verified': '#2C4C38', 'surface-canvas': '#F4F1EA', 'outline': '#747878', 'surface-variant': '#e3e2e0', 'surface-container': '#efeeeb', 'secondary': '#775a19', 'on-primary': '#ffffff', 'on-secondary': '#ffffff' }, borderRadius: { 'DEFAULT': '0.125rem', 'lg': '0.25rem', 'xl': '0.5rem', 'full': '0.75rem' }, spacing: { 'gutter-mobile': '0.75rem', 'space-2xl': '4rem', 'margin': '2.5rem', 'margin-mobile': '1rem', 'space-md': '1rem', 'space-sm': '0.5rem', 'gutter': '1.5rem', 'space-xs': '0.25rem', 'space-xl': '2.5rem', 'space-lg': '1.5rem' }, fontFamily: { 'headline-sm': ['EB Garamond'], 'body-lg': ['Manrope'], 'code-mono': ['JetBrains Mono'], 'title-md': ['Manrope'], 'label-badge': ['JetBrains Mono'], 'display-lg': ['EB Garamond'], 'display-lg-mobile': ['EB Garamond'], 'headline-lg': ['EB Garamond'], 'caption': ['Manrope'], 'body-md': ['Manrope'] }, fontSize: { 'headline-sm': ['20px', { lineHeight: '28px', fontWeight: '500' }], 'body-lg': ['15px', { lineHeight: '24px', fontWeight: '400' }], 'code-mono': ['12px', { lineHeight: '18px', letterSpacing: '0.04em', fontWeight: '500' }], 'title-md': ['16px', { lineHeight: '24px', letterSpacing: '0.01em', fontWeight: '600' }], 'label-badge': ['10px', { lineHeight: '14px', letterSpacing: '0.08em', fontWeight: '600' }], 'display-lg': ['40px', { lineHeight: '48px', letterSpacing: '-0.01em', fontWeight: '400' }], 'display-lg-mobile': ['30px', { lineHeight: '36px', letterSpacing: '0', fontWeight: '400' }], 'headline-lg': ['28px', { lineHeight: '36px', letterSpacing: '-0.01em', fontWeight: '500' }], 'caption': ['11px', { lineHeight: '16px', letterSpacing: '0.02em', fontWeight: '500' }], 'body-md': ['13px', { lineHeight: '20px', fontWeight: '400' }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body-md text-on-surface flex flex-col min-h-screen"><header class="fixed top-0 inset-x-0 z-50 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.03)] pt-safe"><div class="h-20 px-gutter-mobile flex flex-col justify-center gap-space-xs"><div class="flex items-center justify-between"><div class="flex items-center gap-space-sm"><span class="font-headline-sm text-headline-sm text-text-charcoal tracking-wide uppercase">HENGZ AUTHENTIC</span><span class="px-space-xs py-0.5 bg-surface-container rounded font-label-badge text-label-badge text-text-muted border-none uppercase">LAB</span></div><div class="flex items-center gap-space-sm"><button class="min-h-[44px] min-w-[44px] px-space-xs flex items-center justify-center font-code-mono text-caption text-secondary hover:text-text-charcoal transition-colors"><span class="tracking-wider">KH</span><span class="text-border-strong mx-1">/</span><span class="font-semibold text-text-charcoal">EN</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div><div class="flex items-center justify-between text-text-muted font-label-badge text-label-badge"><div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-status-verified inline-block"></span><span class="uppercase tracking-wider text-ai-telemetry">NODE #04 · PARIS SYNCED</span></div><span class="text-gold-champagne font-medium tracking-widest uppercase">Inspect</span></div></div></header><main class="flex flex-col relative w-full pt-20 pb-20 bg-surface min-h-screen"><div class="flex flex-col w-full pb-8">
+<!-- Top Progress Banner -->
+<div class="px-gutter-mobile py-space-sm bg-surface-container flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="px-1.5 py-0.5 rounded bg-primary text-on-primary font-label-badge text-label-badge tracking-wider uppercase">ជំហាន ១ / ៣</span>
+<span class="font-title-md text-body-md text-text-charcoal font-semibold">ថតរូបភាពវត្ថុតាង</span>
+</div>
+<span class="font-code-mono text-caption text-text-muted">4/10 រួចរាល់</span>
+</div>
+<!-- Progress Bar -->
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden flex">
+<div class="bg-gold-champagne h-full transition-all duration-500 rounded-full" style="width: 40%;"></div>
+</div>
+<div class="flex justify-between items-center text-text-muted font-caption text-[10px]">
+<span class="uppercase tracking-wide">Capture Evidence Protocols</span>
+<span class="font-code-mono text-gold-champagne">40% បំពេញ</span>
+</div>
+</div>
+<!-- Collapsible Item Metadata Dossier Header -->
+<div class="px-gutter-mobile pt-space-sm">
+<div class="bg-surface-ivory rounded-lg p-space-sm shadow-sm flex flex-col gap-space-xs">
+<div class="flex items-center justify-between cursor-pointer" id="metadata-toggle" onclick="toggleMetadata()">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[18px] text-gold-champagne">inventory_2</span>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-text-charcoal leading-tight">Louis Vuitton · Speedy Bandoulière 25</span>
+<span class="font-caption text-caption text-text-muted">ឯកសារកូដ Case ID: LV-2024-0982-KH</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-text-muted text-[20px] transition-transform duration-200" id="metadata-chevron">expand_more</span>
+</div>
+<div class="hidden flex-col gap-space-xs pt-space-xs border-t-0" id="metadata-details">
+<div class="grid grid-cols-2 gap-space-xs">
+<div class="bg-surface-canvas p-space-xs rounded">
+<span class="font-caption text-[10px] text-text-muted block uppercase">សម្ភារៈ (Material)</span>
+<span class="font-body-md text-body-md text-text-charcoal font-medium">Monogram Canvas / Vachetta</span>
+</div>
+<div class="bg-surface-canvas p-space-xs rounded">
+<span class="font-caption text-[10px] text-text-muted block uppercase">សម័យកាល (Production Era)</span>
+<span class="font-code-mono text-body-md text-text-charcoal">2015-2021 (Alpha Date)</span>
+</div>
+</div>
+<div class="flex justify-between items-center pt-1">
+<button class="font-caption text-caption text-gold-champagne flex items-center gap-0.5 hover:underline">
+<span class="material-symbols-outlined text-[14px]">edit</span> កែប្រែព័ត៌មានកាបូប (Edit Spec)
+          </button>
+<span class="font-label-badge text-[9px] text-ai-telemetry uppercase tracking-wider bg-ai-telemetry-bg px-1.5 py-0.5 rounded">Silhouette: Authentic Spec Master</span>
+</div>
+</div>
+</div>
+</div>
+<!-- EXIF Scrubbed Telemetry Chip -->
+<div class="px-gutter-mobile pt-space-xs">
+<div class="bg-status-verified-bg text-status-verified px-space-sm py-1.5 rounded flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">verified_user</span>
+<span class="font-caption text-caption font-medium">EXIF Scrubbed: GPS &amp; Phone serial IDs stripped</span>
+</div>
+<span class="font-label-badge text-[9px] uppercase tracking-wider px-1 bg-surface-card rounded text-status-verified">Local Safe</span>
+</div>
+</div>
+<!-- Active Camera Viewport / Optical Reticle Card -->
+<div class="px-gutter-mobile pt-space-sm">
+<div class="relative w-full aspect-[4/3] bg-primary rounded-xl overflow-hidden shadow-md flex items-center justify-center">
+<!-- Background Preview Mock -->
+<div class="absolute inset-0 bg-cover bg-center opacity-60 mix-blend-luminosity" data-alt="Close up macro forensic view of high-end luxury leather bag handle chape stitching on Louis Vuitton monogram canvas, warm daylight, 50mm f2.8 shallow depth of field, archival museum catalog lighting" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAvirKqxeSYv2n2umlHm3ZG7J-u3wfXpbuwUgMW6uDhjiwcyIug6NoxWx2Ad5zOiX6YksLcb8HdGNgXwfkgUTfkEQDxq6d9BMUDhooHp7NmjMS2LvcmZ6RbRgD3lA8kbt-b4MSy6kPh_P8YG_Aq3nC_1mVhkNbQCUBEkfHYaZvbW9cyAOFIZZNC4Y8SKBlBa9qhBSFGXkOY6UsxsTuR--LhukHvg2SxhZxIIJsQM_wLsam2HF8e6bFN')"></div>
+<!-- Zeiss-Style Optical Grid & Level Overlay -->
+<div class="absolute inset-0 p-3 pointer-events-none flex flex-col justify-between">
+<!-- Top HUD Strip -->
+<div class="flex items-center justify-between">
+<div class="bg-tertiary-container/80 backdrop-blur-md px-2 py-1 rounded flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-error animate-pulse"></span>
+<span class="font-code-mono text-caption text-on-tertiary">MACRO RETICLE · 40X OPTIC</span>
+</div>
+<div class="bg-tertiary-container/80 backdrop-blur-md px-2 py-1 rounded flex items-center gap-1 text-gold-champagne font-label-badge text-label-badge">
+<span class="material-symbols-outlined text-[14px] text-gold-champagne">light_mode</span>
+<span>D65 5400K DIFFUSED</span>
+</div>
+</div>
+<!-- Center Reticle Graphic (SVG) -->
+<div class="relative w-full flex items-center justify-center">
+<svg class="w-48 h-48 text-gold-champagne/80" fill="none" stroke="currentColor" viewbox="0 0 200 200">
+<!-- Framing brackets -->
+<path d="M 40 60 L 40 40 L 60 40" stroke-linecap="round" stroke-width="1.5"></path>
+<path d="M 160 40 L 140 40 L 160 40 L 160 60" stroke-linecap="round" stroke-width="1.5"></path>
+<path d="M 40 140 L 40 160 L 60 160" stroke-linecap="round" stroke-width="1.5"></path>
+<path d="M 160 140 L 160 160 L 140 160" stroke-linecap="round" stroke-width="1.5"></path>
+<!-- Center Level Crosshair -->
+<circle cx="100" cy="100" r="18" stroke-dasharray="3 3" stroke-width="1"></circle>
+<line stroke-width="1" x1="100" x2="100" y1="75" y2="85"></line>
+<line stroke-width="1" x1="100" x2="100" y1="115" y2="125"></line>
+<line stroke-width="1" x1="75" x2="85" y1="100" y2="100"></line>
+<line stroke-width="1" x1="115" x2="125" y1="100" y2="100"></line>
+<circle cx="100" cy="100" fill="currentColor" r="2"></circle>
+</svg>
+<!-- Optical Level Bubble -->
+<div class="absolute bottom-2 flex items-center gap-1 bg-surface-card/90 px-2 py-0.5 rounded text-[10px] font-code-mono text-text-charcoal shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-status-verified"></span>
+<span>LEVEL 0.0° TILT</span>
+</div>
+</div>
+<!-- Viewport Bottom Instruction Overlay -->
+<div class="bg-surface-card/90 backdrop-blur-md px-space-sm py-1.5 rounded flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-gold-champagne text-[18px]">lens_blur</span>
+<span class="font-body-md text-caption text-text-charcoal font-medium">គោលដៅ: ក្បាលថ្នេរ Chape 5-Stitch (45° Angle)</span>
+</div>
+<span class="font-label-badge text-caption text-ai-telemetry font-code-mono">AI ALIGN: 96%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Primary Ingest Trigger Actions -->
+<div class="px-gutter-mobile pt-space-sm flex flex-col gap-space-xs">
+<button class="w-full h-12 bg-gold-champagne hover:bg-gold-champagne/90 text-on-primary rounded font-title-md text-title-md flex items-center justify-center gap-space-xs shadow-md transition-all active:scale-[0.99]">
+<span class="material-symbols-outlined text-[22px]">photo_camera</span>
+<span>បើកកាមេរ៉ាថតវត្ថុតាង (Launch Camera)</span>
+</button>
+<div class="grid grid-cols-2 gap-space-xs">
+<button class="h-10 bg-surface-card hover:bg-surface-ivory text-text-charcoal rounded shadow-sm font-caption text-body-md flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[18px] text-text-muted">photo_library</span>
+<span>ជ្រើសពីវិចិត្រសាល</span>
+</button>
+<button class="h-10 bg-surface-card hover:bg-surface-ivory text-text-charcoal rounded shadow-sm font-caption text-body-md flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[18px] text-text-muted">folder_open</span>
+<span>ផ្ទុកឡើងជាថត (Folder)</span>
+</button>
+</div>
+</div>
+<!-- 10-Point Guided Photo Protocol Checklist -->
+<div class="pt-space-md flex flex-col gap-space-xs">
+<div class="px-gutter-mobile flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-text-charcoal">បញ្ជីរូបភាពតម្រូវ (10-Angle Checklist)</span>
+<span class="font-label-badge text-caption text-text-muted uppercase">អប្បបរមា 4 រូបដើម្បីដំណើរការ</span>
+</div>
+<!-- Horizontal Swipeable Checklist Carousel -->
+<div class="flex overflow-x-auto gap-space-xs px-gutter-mobile pb-1">
+<!-- 1. Front Silhouette (Captured) -->
+<div class="min-w-[130px] w-[130px] bg-surface-card rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Full front silhouette of authentic Louis Vuitton Speedy 25 monogram canvas bag with leather handles on neutral stone pedestal with soft museum illumination" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDD5uHwPNu6LoChiy8iiHK4gJ0_VGCCSL7YEmO0Djd7-uZVx4ZW1vaod1wHg_N9nL5QxyfQhM2gE4LFwa7TqHXAwRJPrYMWPAD_DRqI41KK0KP0oOzebsfLMNBoXD2QBdjpqtdAPas1xgmxs8nnupNk1yv9E3JL59N1WabhBTalE6_o8qEscOYxYQEbcnskMyIHaieOUEV77UCUyasvVsrPQbL137uMWGkMt6BlifgCPZP--kScQojc"/>
+<span class="absolute top-1 right-1 bg-status-verified text-on-primary rounded-full p-0.5 flex items-center justify-center">
+<span class="material-symbols-outlined text-[12px]">check</span>
+</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-semibold text-text-charcoal truncate">1. ទ្រង់ទ្រាយមុខ</span>
+<span class="font-code-mono text-[9px] text-status-verified">Captured ✓</span>
+</div>
+</div>
+<!-- 2. Rear Silhouette (Captured) -->
+<div class="min-w-[130px] w-[130px] bg-surface-card rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Rear elevation view of authentic Louis Vuitton Speedy monogram canvas bag, flawless pattern symmetry, soft shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNqN9CFI8NlVv_I5U3OtU4oXufisY-h7frWnp0Of_YGFp-xWb0gCSwA32wOthVzNReY4fxPUqvd1D8bLJIXoqYtKrCVUUcLF3aabq3VGxyIOwBz13h2vNKMUT3V1kynjVD8sbYDpc97j1FlOzK-BFrFRqBPvTB_dCV7Aqh9DrLd6VARInwEA8rsEqi0FpE6jVHCOMYsf5NlFPB65mQjesht4zsaJ7OI0GZGGHQq11n5IEN_Gujqrud"/>
+<span class="absolute top-1 right-1 bg-status-verified text-on-primary rounded-full p-0.5 flex items-center justify-center">
+<span class="material-symbols-outlined text-[12px]">check</span>
+</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-semibold text-text-charcoal truncate">2. ទ្រង់ទ្រាយក្រោយ</span>
+<span class="font-code-mono text-[9px] text-status-verified">Captured ✓</span>
+</div>
+</div>
+<!-- 3. Base & Glazing (Captured) -->
+<div class="min-w-[130px] w-[130px] bg-surface-card rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Detailed corner bottom leather piping and canvas fold alignment of authentic luxury handbag under studio illumination" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAl8y6QcEXDI-UuxtLP3oC1wFgsIPkSR3SbVfuWp7ZY6sxYzfWqS3KOyQ3sdcDmL8xqc32xe8kdcPc85GtAogZJvZ4Zby-L7yUgMzutoW78MPoHeZuOYdeuardgdgSAC8_fdpho6vTjlpGv2rAF7CA8SoRMyRi_7Sjb-H_ugds52qv4DmYKMDs7uKeJkxkfZVpQsu1PlUN_LYWoa4n1RemCWF1sjKii-kVdJVM-hqZkQuJO6WF1dGOm"/>
+<span class="absolute top-1 right-1 bg-status-verified text-on-primary rounded-full p-0.5 flex items-center justify-center">
+<span class="material-symbols-outlined text-[12px]">check</span>
+</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-semibold text-text-charcoal truncate">3. បាត និងជ្រុង</span>
+<span class="font-code-mono text-[9px] text-status-verified">Captured ✓</span>
+</div>
+</div>
+<!-- 4. Chape Stitching (Active Target) -->
+<div class="min-w-[140px] w-[140px] bg-gold-light rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-canvas flex items-center justify-center">
+<span class="material-symbols-outlined text-gold-champagne text-[28px] animate-pulse">center_focus_strong</span>
+<span class="absolute top-1 right-1 bg-gold-champagne text-on-primary rounded-full px-1 text-[9px] font-code-mono">FOCUS</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-bold text-text-charcoal truncate">4. ថ្នេរ Chape 5-Stitch</span>
+<span class="font-caption text-[9px] text-secondary">មុំ 45° Lens Macro</span>
+</div>
+</div>
+<!-- 5. Heat Stamp (Missing / Critical) -->
+<div class="min-w-[130px] w-[130px] bg-status-counterfeit-bg rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-card flex items-center justify-center text-status-counterfeit">
+<span class="material-symbols-outlined text-[24px]">flag</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-semibold text-status-counterfeit truncate">5. Heat Stamp 'O'</span>
+<span class="font-code-mono text-[9px] text-status-counterfeit">Missing · Critical</span>
+</div>
+</div>
+<!-- 6. Zipper Pull (Missing) -->
+<div class="min-w-[120px] w-[120px] bg-surface-card rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-container flex items-center justify-center text-text-muted">
+<span class="material-symbols-outlined text-[22px]">add_a_photo</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-medium text-text-charcoal truncate">6. ឆ្លាក់លើ Zipper</span>
+<span class="font-code-mono text-[9px] text-text-muted">Pending</span>
+</div>
+</div>
+<!-- 7. Interior Lining (Missing) -->
+<div class="min-w-[120px] w-[120px] bg-surface-card rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-container flex items-center justify-center text-text-muted">
+<span class="material-symbols-outlined text-[22px]">add_a_photo</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-medium text-text-charcoal truncate">7. ក្រណាត់ក្នុងហោប៉ៅ</span>
+<span class="font-code-mono text-[9px] text-text-muted">Pending</span>
+</div>
+</div>
+<!-- 8. Date Code / Microchip (Missing) -->
+<div class="min-w-[120px] w-[120px] bg-surface-card rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-container flex items-center justify-center text-text-muted">
+<span class="material-symbols-outlined text-[22px]">qr_code_scanner</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-medium text-text-charcoal truncate">8. កូដកាលបរិច្ឆេទ</span>
+<span class="font-code-mono text-[9px] text-text-muted">Pending</span>
+</div>
+</div>
+<!-- 9. Handle Glazing (Missing) -->
+<div class="min-w-[120px] w-[120px] bg-surface-card rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-container flex items-center justify-center text-text-muted">
+<span class="material-symbols-outlined text-[22px]">add_a_photo</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-medium text-text-charcoal truncate">9. គែមថ្នាំលាប Toron</span>
+<span class="font-code-mono text-[9px] text-text-muted">Pending</span>
+</div>
+</div>
+<!-- 10. Packaging & Provenance (Optional) -->
+<div class="min-w-[120px] w-[120px] bg-surface-card rounded p-space-xs flex flex-col gap-1 shadow-sm shrink-0">
+<div class="relative w-full h-16 rounded overflow-hidden bg-surface-container flex items-center justify-center text-text-muted">
+<span class="material-symbols-outlined text-[22px]">receipt_long</span>
+</div>
+<div class="flex flex-col">
+<span class="font-caption text-[11px] font-medium text-text-charcoal truncate">10. វិក្កយបត្រ / ប្រអប់</span>
+<span class="font-code-mono text-[9px] text-text-muted">Optional</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Captured Gallery Management Tray -->
+<div class="px-gutter-mobile pt-space-md">
+<div class="bg-surface-card p-space-sm rounded-lg shadow-sm flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="font-title-md text-body-md text-text-charcoal font-semibold">រូបភាពដែលបានផ្ទុក (4 សន្លឹក)</span>
+<span class="px-1.5 py-0.2 bg-surface-container text-text-muted rounded font-code-mono text-[10px]">14.2 MB total</span>
+</div>
+<button class="font-caption text-caption text-secondary hover:underline">ពិនិត្យទាំងអស់ (Review All)</button>
+</div>
+<div class="grid grid-cols-4 gap-2 pt-1">
+<!-- Thumbnail 1 -->
+<div class="relative aspect-square rounded overflow-hidden bg-surface-canvas group">
+<img class="w-full h-full object-cover" data-alt="High-resolution evidence photo of monogram leather handbag front silhouette, forensic grading photography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAviWJTV2JsisYsSKXhMzIrxScAwYnxcmWlhpngOOt5wC9FJA0VfUY5d4WlJDkDkpdUm_PV8oEYRVmMSI6vzNEU9iVONQEDEY-jxJQSWUztTtquLGillrziwrsUVqHQxCRJj8H6ArtOo290hAkk5RoXoO1cFlP0PLxUISmQ9J-aaLyt9_cmCrqK1ki6KuIO-MIsI1aXWLLbFLOOjXMQdipM51Mcdcm0K7ReWCSaq3d3c29A8lENaM1o"/>
+<button class="absolute top-1 right-1 bg-primary/70 text-on-primary w-5 h-5 rounded-full flex items-center justify-center opacity-90 hover:opacity-100" title="Delete">
+<span class="material-symbols-outlined text-[12px]">close</span>
+</button>
+<span class="absolute bottom-0 inset-x-0 bg-primary/60 text-[8px] font-code-mono text-on-primary text-center py-0.5">FRONT</span>
+</div>
+<!-- Thumbnail 2 -->
+<div class="relative aspect-square rounded overflow-hidden bg-surface-canvas group">
+<img class="w-full h-full object-cover" data-alt="High-resolution evidence photo of monogram handbag back canvas pattern alignment and bottom seams" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDj-WbWLvX1UxM10OY9-N9STAmE92T4vnZ57j2nI4q01spzbfTio-0kfhQxDb5bKqU0WcY7AGcYZHbRDiyq1_mOim4t0z5EJu5SyDgHmTmAevg6uzpaTsFIjLf53gk2NOnzKtplfKKO7epl1buhdvPIF9Eb0uu-V0JTly2gZNbYxLcC1PP5wG3jL-0pEOYcMqxxdtmoQQROoFYiup1Fs1KXGONVDKocS8bo4UoHK8ooW0tcULel61Tw"/>
+<button class="absolute top-1 right-1 bg-primary/70 text-on-primary w-5 h-5 rounded-full flex items-center justify-center opacity-90 hover:opacity-100" title="Delete">
+<span class="material-symbols-outlined text-[12px]">close</span>
+</button>
+<span class="absolute bottom-0 inset-x-0 bg-primary/60 text-[8px] font-code-mono text-on-primary text-center py-0.5">BACK</span>
+</div>
+<!-- Thumbnail 3 -->
+<div class="relative aspect-square rounded overflow-hidden bg-surface-canvas group">
+<img class="w-full h-full object-cover" data-alt="Forensic macro photo of luxury handbag corner leather trim piping with clean edge coating under clean white laboratory illumination" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBX3GEc2A4SuOWi2x3XD7F74RRtNlf_mr9zHCXYsWbhLNCzTUfA8EyRhpWIXyDN7Id1E53dC9565Zksk1S22qb66qptn3hUI12qGXAatiDo8yaelGxkLAgxOXd249p9Q7hFZV9_a0Li-Evf1ALZVsB1MFPdS1VHLDXAEH0SYma7-DNaogxOxTfrewb97hNnUjB6qvnXQ2238rDvDL5GgetxNllix2Rr1wqdU6SPyrCzhuTCkTMxXtFh"/>
+<button class="absolute top-1 right-1 bg-primary/70 text-on-primary w-5 h-5 rounded-full flex items-center justify-center opacity-90 hover:opacity-100" title="Delete">
+<span class="material-symbols-outlined text-[12px]">close</span>
+</button>
+<span class="absolute bottom-0 inset-x-0 bg-primary/60 text-[8px] font-code-mono text-on-primary text-center py-0.5">CORNER</span>
+</div>
+<!-- Thumbnail 4 (Retake sample) -->
+<div class="relative aspect-square rounded overflow-hidden bg-surface-canvas group">
+<img class="w-full h-full object-cover" data-alt="Close up macro photo of brass brass rivet hardware engraving on leather chape attachment tab" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXSlz510r_nRqHWNfAGjn3pUnqJWkzqqzwD2bUFgJzzl6WQeQo_PwoOhZwDOCPIbJvJ9Z7mpNo_iV_sMr_e7c4QHDhq1rKoYa5F9gLiET_OXhVaEDtZNtcXIYRhA3a_PW3sWIbU0IH5yXQ5eFIwAFkoUFGS8H4oCOrbUYAXM_O8IRZWw3DXgjuMkkCEIAzHNnzuonCWypr7cjz2G6bHQJYVNZULPO5dOOUyivO7S-zdXgJjnRuHJrF"/>
+<button class="absolute top-1 right-1 bg-primary/70 text-on-primary w-5 h-5 rounded-full flex items-center justify-center opacity-90 hover:opacity-100" title="Retake">
+<span class="material-symbols-outlined text-[12px]">replay</span>
+</button>
+<span class="absolute bottom-0 inset-x-0 bg-primary/60 text-[8px] font-code-mono text-on-primary text-center py-0.5">RIVET</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Limitation & Legal Guardrail Callout -->
+<div class="px-gutter-mobile pt-space-sm">
+<div class="bg-status-review-bg rounded-lg p-space-sm flex gap-space-xs text-status-review">
+<span class="material-symbols-outlined text-[20px] shrink-0 text-status-review">gavel</span>
+<div class="flex flex-col gap-0.5">
+<span class="font-title-md text-caption font-semibold">សេចក្តីជូនដំណឹង និងដែនកំណត់ (Forensic Boundary Notice)</span>
+<p class="font-body-md text-[11px] leading-relaxed opacity-95">
+          AI visual appraisal evaluates visible morphological alignment against documented benchmarks. It does not certify chemical composition or unobservable proprietary microchip contents.
+        </p>
+</div>
+</div>
+</div>
+<!-- Primary Execution Sticky Bottom Dock -->
+<div class="px-gutter-mobile pt-space-md flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs">
+<button class="flex-1 h-12 bg-surface-card hover:bg-surface-ivory text-text-charcoal rounded shadow-sm font-title-md text-body-md flex items-center justify-center gap-1 active:scale-[0.98] transition-transform">
+<span class="material-symbols-outlined text-[18px]">bookmark_border</span>
+<span>រក្សាទុកព្រាង (Save Draft)</span>
+</button>
+<button class="flex-[1.5] h-12 bg-primary hover:bg-primary/90 text-on-primary rounded shadow-md font-title-md text-body-md flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+<span class="material-symbols-outlined text-[18px] text-gold-champagne">analytics</span>
+<span>ចាប់ផ្តើមវិភាគ (Start Analysis)</span>
+</button>
+</div>
+<div class="flex justify-center items-center gap-1 text-text-muted font-label-badge text-[10px]">
+<span class="w-1.5 h-1.5 rounded-full bg-status-verified"></span>
+<span>READY: 4 REQUIRED ANGLES SATISFIED (MINIMUM MET)</span>
+</div>
+</div>
+</div>
+<script>
+  function toggleMetadata() {
+    const details = document.getElementById('metadata-details');
+    const chevron = document.getElementById('metadata-chevron');
+    if (details.classList.contains('hidden')) {
+      details.classList.remove('hidden');
+      details.classList.add('flex');
+      chevron.style.transform = 'rotate(180deg)';
+    } else {
+      details.classList.add('hidden');
+      details.classList.remove('flex');
+      chevron.style.transform = 'rotate(0deg)';
+    }
+  }
+</script></main><nav class="fixed bottom-0 inset-x-0 z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-1px_12px_rgba(0,0,0,0.04)]" data-active-classes="text-text-charcoal font-semibold"><div class="flex justify-between items-center h-20 px-2"><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] py-1 text-text-muted hover:text-text-charcoal transition-colors" data-path="home" href="#"><span class="material-symbols-outlined text-[22px]">dashboard</span><span class="font-caption text-[10px] leading-tight mt-0.5 tracking-tight text-center">ផ្ទាំងដើម<br/><span class="text-[9px] opacity-75 font-label-badge uppercase tracking-normal">Home</span></span></a><a aria-current="page" class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] py-1 transition-colors text-text-charcoal font-semibold" data-path="inspect" href="#"><span class="material-symbols-outlined text-[22px]">csv</span><span class="font-caption text-[10px] leading-tight mt-0.5 tracking-tight text-center">ត្រួតពិនិត្យ<br/><span class="text-[9px] opacity-75 font-label-badge uppercase tracking-normal">Inspect</span></span></a><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] py-1 text-text-muted hover:text-text-charcoal transition-colors" data-path="knowledge" href="#"><span class="material-symbols-outlined text-[22px]">menu_book</span><span class="font-caption text-[10px] leading-tight mt-0.5 tracking-tight text-center">ចំណេះដឹង<br/><span class="text-[9px] opacity-75 font-label-badge uppercase tracking-normal">Knowledge</span></span></a><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] py-1 text-text-muted hover:text-text-charcoal transition-colors" data-path="library" href="#"><span class="material-symbols-outlined text-[22px]">folder_special</span><span class="font-caption text-[10px] leading-tight mt-0.5 tracking-tight text-center">បណ្ណាល័យ<br/><span class="text-[9px] opacity-75 font-label-badge uppercase tracking-normal">Library</span></span></a><a class="flex flex-col items-center justify-center min-w-[64px] min-h-[44px] py-1 text-text-muted hover:text-text-charcoal transition-colors" data-path="providers" href="#"><span class="material-symbols-outlined text-[22px]">verified</span><span class="font-caption text-[10px] leading-tight mt-0.5 tracking-tight text-center">ផ្ទៀងផ្ទាត់<br/><span class="text-[9px] opacity-75 font-label-badge uppercase tracking-normal">Providers</span></span></a></div></nav></body></html>

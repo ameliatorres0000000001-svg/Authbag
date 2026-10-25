@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hengz-authentic",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2025-01-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  // These IDs are NOT secrets. They were created through the Cloudflare connector.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "hengz-authentic", "database_id": "6df997e3-47eb-45af-aae4-513311d2762f", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [
+    { "binding": "VAULT", "bucket_name": "hengz-vault-private" }
+  ],
+  "observability": { "enabled": true },
+  "vars": { "AI_MODEL": "" }
+  // Optional secrets (set with `wrangler secret put NAME`, never committed):
+  //   ENTRUPY_API_KEY   – only after Entrupy approves your business account
+  //   GEMINI_API_KEY or ANTHROPIC_API_KEY, plus AI_MODEL (var, a vision-capable model id) – enables AI observation *suggestions* (never verdicts)
+}

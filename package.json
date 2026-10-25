@@ -1,0 +1,36 @@
+{
+  "name": "hengz-authentic",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build && wrangler dev",
+    "build": "vite build",
+    "test": "node --experimental-strip-types --test test/engine.test.ts test/stages.test.ts",
+    "typecheck": "tsc --noEmit",
+    "db:local": "wrangler d1 migrations apply hengz-authentic --local",
+    "db:remote": "wrangler d1 migrations apply hengz-authentic --remote",
+    "deploy": "vite build && wrangler deploy"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261019.1",
+    "@types/react": "^18.3.3",
+    "@types/node": "^22.0.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4",
+    "wrangler": "^4.0.0"
+  }
+}

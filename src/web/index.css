@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body { margin: 0; background: #faf9f6; color: #1a1a1a; font-family: Manrope, 'Noto Sans Khmer', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
+  h1, h2, h3 { font-family: 'EB Garamond', 'Noto Serif Khmer', serif; font-weight: 500; }
+  select, input, textarea { font: inherit; }
+}
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded px-4 py-2 text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed; }
+  .btn-primary { @apply btn bg-charcoal text-white hover:bg-black; }
+  .btn-ghost { @apply btn border border-strong bg-white text-charcoal hover:bg-surface-low; }
+  .btn-danger { @apply btn border border-counterfeit text-counterfeit bg-white hover:bg-counterfeit-bg; }
+  .input { @apply w-full rounded border border-strong bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold; }
+  .label { @apply mb-1 block font-mono text-[10px] uppercase tracking-widest text-muted; }
+  .card { @apply rounded-xl border border-hairline bg-surface-card p-4; }
+}
