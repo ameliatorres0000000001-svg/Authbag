@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&amp;family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"inverse-on-surface":"#f2f1ee","border-hairline":"#E5E0D8","status-counterfeit":"#8A2323","tertiary":"#000000","surface-container-lowest":"#ffffff","status-review":"#8C6A1A","on-secondary-fixed":"#261900","outline":"#747878","primary":"#000000","secondary-fixed-dim":"#e9c176","status-counterfeit-bg":"#F9EBEB","on-secondary-fixed-variant":"#5d4201","error":"#ba1a1a","on-surface":"#1a1c1a","secondary-container":"#fed488","on-tertiary-fixed":"#1c1b1a","inverse-surface":"#2f312f","tertiary-container":"#1c1b1a","status-verified":"#2C4C38","surface-container-low":"#f4f3f0","surface-tint":"#5f5e5e","surface-dim":"#dbdad7","surface-container-highest":"#e3e2e0","on-primary-fixed":"#1c1b1b","on-primary-container":"#858383","on-secondary-container":"#785a1a","on-error":"#ffffff","status-verified-bg":"#EBF2ED","surface-canvas":"#F4F1EA","surface-variant":"#e3e2e0","gold-champagne":"#C5A059","secondary":"#775a19","primary-fixed":"#e5e2e1","inverse-primary":"#c8c6c5","text-muted":"#6E6B64","error-container":"#ffdad6","surface-container-high":"#e9e8e5","text-charcoal":"#1A1A1A","outline-variant":"#c4c7c7","on-primary":"#ffffff","on-background":"#1a1c1a","primary-fixed-dim":"#c8c6c5","surface":"#faf9f6","background":"#faf9f6","on-error-container":"#93000a","on-primary-fixed-variant":"#474746","surface-bright":"#faf9f6","gold-light":"#EFE6D2","surface-ivory":"#FAF8F5","border-strong":"#C8C2B7","on-secondary":"#ffffff","on-tertiary":"#ffffff","on-tertiary-fixed-variant":"#484645","surface-container":"#efeeeb","ai-telemetry":"#374151","surface-card":"#FFFFFF","primary-container":"#1c1b1b","tertiary-fixed":"#e6e2df","tertiary-fixed-dim":"#cac6c4","secondary-fixed":"#ffdea5","status-review-bg":"#FDF8E8","on-tertiary-container":"#868382","on-surface-variant":"#444748","ai-telemetry-bg":"#EEF0F2"},borderRadius:{DEFAULT:"0.125rem",lg:"0.25rem",xl:"0.5rem",full:"0.75rem"},spacing:{"margin-mobile":"1rem","space-2xl":"4rem","space-sm":"0.5rem","space-xs":"0.25rem","space-xl":"2.5rem","space-lg":"1.5rem",gutter:"1.5rem","gutter-mobile":"0.75rem","space-md":"1rem",margin:"2.5rem"},fontFamily:{"label-badge":["JetBrains Mono"],"display-lg":["EB Garamond"],"body-md":["Manrope"],"body-lg":["Manrope"],caption:["Manrope"],"headline-sm":["EB Garamond"],"title-md":["Manrope"],"code-mono":["JetBrains Mono"],"headline-lg":["EB Garamond"],"display-lg-mobile":["EB Garamond"]},fontSize:{"label-badge":["10px",{lineHeight:"14px",letterSpacing:"0.08em",fontWeight:"600"}],"display-lg":["40px",{lineHeight:"48px",letterSpacing:"-0.01em",fontWeight:"400"}],"body-md":["13px",{lineHeight:"20px",fontWeight:"400"}],"body-lg":["15px",{lineHeight:"24px",fontWeight:"400"}],caption:["11px",{lineHeight:"16px",letterSpacing:"0.02em",fontWeight:"500"}],"headline-sm":["20px",{lineHeight:"28px",fontWeight:"500"}],"title-md":["16px",{lineHeight:"24px",letterSpacing:"0.01em",fontWeight:"600"}],"code-mono":["12px",{lineHeight:"18px",letterSpacing:"0.04em",fontWeight:"500"}],"headline-lg":["28px",{lineHeight:"36px",letterSpacing:"-0.01em",fontWeight:"500"}],"display-lg-mobile":["30px",{lineHeight:"36px",letterSpacing:"0",fontWeight:"400"}]}}}}</script></head><body class="bg-surface-canvas font-body-md text-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-ivory shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-50 flex flex-col justify-between"><div class="flex flex-col"><div class="h-16 px-space-md flex items-center gap-space-sm bg-surface-ivory"><img alt="HENGZ AUTHENTIC Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1V0TxftRgtnmtrHl0w61sL4lmRv0Xo_OOApV0p2VS8Wq_o5vOgCAWCoKPTC9LLMDG97SaPdmZSbqUQtRknh5_tjpcsGAgeXp8Gd0SCnAi1_y1H3-5_J1o8V5XXfjNfUTRfPATl29tk836DMSSXrEMRxs1kYZ-V8wCG93xxTdohHWM18UjKph01AwSVnvJCXoUpVZMAMRXfxYrlOdZPII5_2OmCIh2yoQ9SI1Z5jHuVxe_aQtGojnv2NM9s"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm font-medium tracking-tight text-primary leading-none">HENGZ</span><span class="font-label-badge text-label-badge uppercase tracking-widest text-text-muted">Forensic Archive</span></div></div><div class="px-space-md py-space-sm"><div class="bg-surface-canvas rounded p-space-sm flex items-center justify-between"><div class="flex items-center gap-space-xs"><span class="w-2 h-2 rounded-full bg-status-verified"></span><span class="font-label-badge text-label-badge text-text-charcoal uppercase tracking-wider">Node #04 · Paris Synced</span></div><span class="font-code-mono text-code-mono text-text-muted">v2.4.8</span></div></div><nav class="flex flex-col gap-1 px-space-sm py-space-xs" data-active-classes="bg-primary text-on-primary font-title-md text-title-md rounded"><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="dashboard" href="#">Dashboard</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="new-inspection" href="#">New Inspection</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="nfc-chip-reader" href="#">NFC Chip Reader</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="ai-evidence-analysis" href="#">AI Evidence Analysis</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="lv-knowledge-base" href="#">LV Knowledge Base</a><a aria-current="page" class="flex items-center px-space-sm py-space-sm transition-all bg-primary text-on-primary font-title-md text-title-md rounded" data-path="verification-providers" href="#">Verification Providers</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="certificates" href="#">Certificates</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="integration-center" href="#">Integration Center</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="inspection-history" href="#">Inspection History</a></nav></div><div class="p-space-md bg-surface-ivory flex flex-col gap-space-sm"><div class="p-space-sm bg-surface-canvas rounded flex flex-col gap-space-xs"><span class="font-label-badge text-label-badge text-text-muted uppercase tracking-wider">Vault Calibration</span><div class="flex items-center justify-between text-on-surface-variant"><span class="font-caption text-caption">Microscope 4K</span><span class="font-label-badge text-label-badge text-status-verified font-medium">READY</span></div><div class="flex items-center justify-between text-on-surface-variant"><span class="font-caption text-caption">UV Spectrum 365nm</span><span class="font-label-badge text-label-badge text-status-verified font-medium">CALIBRATED</span></div></div><div class="flex items-center justify-between pt-space-xs"><span class="font-caption text-caption text-text-muted">© 2025 HENGZ Atelier</span><span class="font-label-badge text-label-badge text-secondary uppercase">LV Forensic Lab</span></div></div></aside><div class="pl-72 flex flex-col min-h-screen"><header class="fixed top-0 left-72 right-0 h-16 bg-surface-ivory/95 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 px-space-lg flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-md flex-1"><div class="relative w-full max-w-sm"><span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted">search</span><input class="w-full pl-9 pr-space-md py-1.5 bg-surface-canvas rounded font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-gold-champagne transition-all" placeholder="Filter by reference ID, Bag Model..." type="text"/></div><nav class="hidden md:flex items-center gap-1 pl-space-xs" data-active-classes="text-primary font-semibold border-b-2 border-primary"><a class="px-space-sm py-1 font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" data-path="dashboard" href="#">Dashboard</a><a aria-current="page" class="px-space-sm py-1 transition-colors text-primary font-semibold border-b-2 border-primary" data-path="verification-providers" href="#">Verification Providers</a><a class="px-space-sm py-1 font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" data-path="certificates" href="#">Certificates</a></nav></div><div class="flex items-center gap-space-md"><div class="flex items-center bg-surface-canvas rounded p-0.5"><button class="px-2 py-1 font-label-badge text-label-badge rounded bg-surface-card text-on-surface font-semibold shadow-[0_1px_8px_rgba(0,0,0,0.04)]" type="button">EN</button><button class="px-2 py-1 font-label-badge text-label-badge rounded text-text-muted hover:text-on-surface transition-colors" type="button">KH (ភាសាខ្មែរ)</button></div><div class="px-2.5 py-1 bg-status-review-bg rounded flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-status-review animate-pulse"></span><span class="font-label-badge text-label-badge text-status-review tracking-widest uppercase">Sandbox / Demo Mode</span></div><div class="px-2.5 py-1 bg-ai-telemetry-bg rounded flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px] text-ai-telemetry">shield_person</span><span class="font-label-badge text-label-badge text-ai-telemetry tracking-wider uppercase">Lead Authenticator (Admin)</span></div><div class="h-5 w-px bg-border-hairline"></div><div class="flex items-center gap-space-sm pl-space-xs"><div class="relative"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDG__aECOHS4HLBfoc3rG7pqo0hU8Ev-U95ajSlTGXomNa45wAfheAFz8-2CAP1zmOJuh5IcoRuJelu48NjUeqvLruKvtHt_kSHVWLPAKDfJOdmFC9XY2PaE6HFefQVJhn54BbeQ-6yVPrdVI9oSHBBmfEw0t5u7iz46X8FIWdMQAksDHO0LeWP7vgDdl4h_5uStuJtKTdXS71Fm0P4PNbwBFrEaJofrz-BABaGrvHI9ZcDwj7Surk7"/><span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-status-verified ring-2 ring-surface-ivory"></span></div><div class="flex flex-col text-left"><span class="font-title-md text-title-md font-semibold text-text-charcoal leading-none">S. Vong</span><span class="font-caption text-caption text-text-muted leading-tight">Lead Specialist</span></div></div></div></header><main class="w-full pt-16 bg-surface-canvas flex-1"><div class="flex flex-col w-full">
+<!-- Top Archival Navigation & Header Bar -->
+<section class="px-space-xl py-space-lg bg-surface-ivory border-b border-border-hairline">
+<div class="max-w-7xl mx-auto flex flex-col gap-space-md">
+<!-- Breadcrumb & Tag -->
+<div class="flex flex-wrap items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs font-label-badge text-label-badge uppercase tracking-widest text-text-muted">
+<span>Atelier Archive</span>
+<span class="text-border-strong">/</span>
+<span class="text-secondary font-semibold">Verification Gateways</span>
+<span class="text-border-strong">/</span>
+<span class="text-on-surface">External Providers</span>
+</div>
+<div class="flex items-center gap-space-xs px-2.5 py-1 bg-surface-card border border-border-hairline rounded font-code-mono text-code-mono text-text-muted shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-status-verified animate-ping"></span>
+<span>Gateway Mesh Node: <strong class="text-on-surface font-semibold">EU-PARIS-09</strong></span>
+<span class="text-border-strong">|</span>
+<span>Latency: <strong class="text-on-surface font-semibold">41ms</strong></span>
+</div>
+</div>
+<!-- Title & Main Actions Split -->
+<div class="flex flex-col lg:flex-row lg:items-end justify-between gap-space-lg">
+<div class="max-w-3xl flex flex-col gap-space-xs">
+<div class="flex items-center gap-2">
+<span class="font-label-badge text-label-badge uppercase tracking-widest px-2 py-0.5 bg-gold-light/60 text-secondary border border-gold-champagne/40 rounded">Protocol Registry 2025</span>
+<span class="font-code-mono text-code-mono text-text-muted">ISO/IEC 27001-Aligned Bridge</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-text-charcoal tracking-tight font-normal">
+            Official Third-Party Verification Providers
+          </h1>
+<p class="font-body-lg text-body-lg text-text-muted">
+            Modular hardware token &amp; certified partner API integrations. Independent expert statements require verified cryptographically signed gateway handshakes and dual-custody audit signatures.
+          </p>
+</div>
+<!-- Header Actions -->
+<div class="flex flex-wrap items-center gap-space-xs">
+<button class="px-space-md py-2 bg-surface-card hover:bg-surface-ivory text-text-charcoal border border-border-strong rounded font-body-md text-body-md flex items-center gap-1.5 transition-all shadow-sm" id="btn-run-all-mesh">
+<span class="material-symbols-outlined text-[17px] text-secondary">wifi_tethering</span>
+<span>Test Gateway Mesh</span>
+</button>
+<button class="px-space-md py-2 bg-surface-card hover:bg-surface-ivory text-text-charcoal border border-border-strong rounded font-body-md text-body-md flex items-center gap-1.5 transition-all shadow-sm" id="btn-api-logs">
+<span class="material-symbols-outlined text-[17px] text-text-muted">history_edu</span>
+<span>API Audit Log</span>
+</button>
+<button class="px-space-md py-2 bg-primary hover:bg-neutral-800 text-on-primary rounded font-title-md text-title-md flex items-center gap-1.5 transition-all shadow-md">
+<span class="material-symbols-outlined text-[18px]">add_circle</span>
+<span>Configure New Provider</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Notice Banner: Compliance & Sandbox Guardrail -->
+<section class="px-space-xl py-space-sm bg-surface-canvas border-b border-border-hairline">
+<div class="max-w-7xl mx-auto">
+<div class="bg-status-review-bg border border-gold-champagne/40 rounded p-space-md flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md">
+<div class="flex items-start gap-space-sm">
+<div class="p-2 bg-gold-light rounded text-secondary flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px]">verified_user</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-status-review font-semibold">Compliance Advisory</span>
+<span class="w-1 h-1 rounded-full bg-status-review"></span>
+<span class="font-code-mono text-code-mono text-text-muted">Mutual TLS Required (FIPS 140-3)</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface mt-0.5">
+              Licensed provider certificates require active enterprise contracts, optical hardware calibration certificates, and mutual TLS (mTLS). In demo/sandbox mode, authentic upstream legal financial guarantees cannot be simulated or forged without live token exchange.
+            </p>
+</div>
+</div>
+<div class="flex items-center gap-space-xs shrink-0 pl-10 md:pl-0">
+<span class="font-caption text-caption text-text-muted">Enforcement Policy: v4.12</span>
+<button class="px-space-sm py-1 font-caption text-caption bg-surface-card hover:bg-surface-canvas text-secondary border border-gold-champagne/50 rounded transition-colors font-medium">
+            View Protocol SLA
+          </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Main Content Body -->
+<main class="px-space-xl py-space-xl bg-surface-canvas flex-1">
+<div class="max-w-7xl mx-auto flex flex-col gap-space-xl">
+<!-- Providers Section Header with Quick Status Stats -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-space-md">
+<div class="bg-surface-card border border-border-hairline rounded p-space-md shadow-sm flex flex-col justify-between">
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-text-muted">Registered Gateways</span>
+<div class="flex items-baseline justify-between mt-space-xs">
+<span class="font-display-lg text-display-lg text-text-charcoal leading-none">04</span>
+<span class="font-caption text-caption text-status-verified font-medium">1 Online · 1 Pending</span>
+</div>
+</div>
+<div class="bg-surface-card border border-border-hairline rounded p-space-md shadow-sm flex flex-col justify-between">
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-text-muted">24H Handshake Volume</span>
+<div class="flex items-baseline justify-between mt-space-xs">
+<span class="font-display-lg text-display-lg text-text-charcoal leading-none">1,492</span>
+<span class="font-code-mono text-code-mono text-status-verified">99.8% OK</span>
+</div>
+</div>
+<div class="bg-surface-card border border-border-hairline rounded p-space-md shadow-sm flex flex-col justify-between">
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-text-muted">Active Financial Guarantees</span>
+<div class="flex items-baseline justify-between mt-space-xs">
+<span class="font-display-lg text-display-lg text-secondary leading-none">$1.84M</span>
+<span class="font-caption text-caption text-text-muted">Insured Aggregate</span>
+</div>
+</div>
+<div class="bg-surface-card border border-border-hairline rounded p-space-md shadow-sm flex flex-col justify-between">
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-text-muted">Cryptographic Keys</span>
+<div class="flex items-baseline justify-between mt-space-xs">
+<span class="font-display-lg text-display-lg text-text-charcoal leading-none">ECDSA</span>
+<span class="font-code-mono text-code-mono text-text-muted">P-384 / Ed25519</span>
+</div>
+</div>
+</div>
+<!-- Providers Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
+<!-- Provider 1: Entrupy Luxury Authentication Gateway (Primary) -->
+<article class="bg-surface-card border-2 border-border-strong rounded-lg shadow-sm flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-md">
+<!-- Metallic Accent Bar for Certified Primary Provider -->
+<div class="h-1 bg-gradient-to-r from-gold-champagne via-status-verified to-gold-champagne"></div>
+<div class="p-space-lg flex flex-col gap-space-md">
+<!-- Header Row -->
+<div class="flex items-start justify-between gap-space-sm pb-space-sm border-b border-border-hairline">
+<div class="flex items-start gap-space-sm">
+<div class="w-12 h-12 rounded bg-surface-canvas border border-border-hairline flex items-center justify-center p-1.5 shrink-0">
+<span class="material-symbols-outlined text-[28px] text-text-charcoal">lens_blur</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<h2 class="font-headline-sm text-headline-sm text-text-charcoal font-medium">Entrupy Luxury Gateway</h2>
+<span class="px-1.5 py-0.5 bg-gold-light text-secondary font-label-badge text-label-badge rounded uppercase">Primary AI</span>
+</div>
+<span class="font-caption text-caption text-text-muted block">Direct Optical Micro-Forensic API Bridge (v3.8r)</span>
+</div>
+</div>
+<!-- Status Badge -->
+<div class="flex flex-col items-end gap-1">
+<div class="px-2.5 py-1 bg-status-verified-bg border border-status-verified/40 rounded flex items-center gap-1.5 shadow-sm">
+<span class="w-2 h-2 rounded-full bg-status-verified animate-pulse"></span>
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-status-verified font-bold">Connected</span>
+</div>
+<span class="font-code-mono text-code-mono text-text-muted">Lat: 142ms · mTLS 256-bit GCM</span>
+</div>
+</div>
+<!-- Visual Feature Preview / Hardware spec -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-sm">
+<div class="p-space-sm bg-surface-ivory rounded border border-border-hairline flex flex-col">
+<span class="font-label-badge text-label-badge uppercase text-text-muted">Hardware Module</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold mt-0.5">48MP Macro-Lens</span>
+<span class="font-code-mono text-code-mono text-secondary mt-1">SN: #EP-9942-X</span>
+</div>
+<div class="p-space-sm bg-surface-ivory rounded border border-border-hairline flex flex-col">
+<span class="font-label-badge text-label-badge uppercase text-text-muted">Contract Status</span>
+<span class="font-title-md text-title-md text-status-verified font-semibold mt-0.5">Tier 1 Enterprise</span>
+<span class="font-caption text-caption text-text-muted mt-1">Renews Dec 31, 2025</span>
+</div>
+<div class="p-space-sm bg-surface-ivory rounded border border-border-hairline flex flex-col">
+<span class="font-label-badge text-label-badge uppercase text-text-muted">Financial Backing</span>
+<span class="font-title-md text-title-md text-text-charcoal font-semibold mt-0.5">Certificate Insured</span>
+<span class="font-caption text-caption text-text-muted mt-1">Up to $150,000 / bag</span>
+</div>
+</div>
+<!-- Credentials & Specifications Data Sheet -->
+<div class="flex flex-col gap-space-xs font-body-md text-body-md">
+<div class="flex items-center justify-between py-1 border-b border-border-hairline/60">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Supported Maisons</span>
+<span class="text-on-surface font-medium text-right">Louis Vuitton, Chanel, Hermès, Gucci, Dior, Saint Laurent, Celine, Prada</span>
+</div>
+<div class="flex items-center justify-between py-1 border-b border-border-hairline/60">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Automated Workflows</span>
+<span class="text-on-surface font-medium">10-Point Photomicrography · Convolutional AI · Financial Warrant</span>
+</div>
+<div class="flex items-center justify-between py-1 border-b border-border-hairline/60">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Client Identity (App ID)</span>
+<span class="font-code-mono text-code-mono text-text-charcoal bg-surface-canvas px-2 py-0.5 rounded">entrupy_corp_hengz_atelier_04</span>
+</div>
+<div class="flex items-center justify-between py-1">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Active Secret Key</span>
+<div class="flex items-center gap-2">
+<span class="font-code-mono text-code-mono text-text-charcoal bg-surface-canvas px-2 py-0.5 rounded">sk_live_••••••••••••98fc2</span>
+<button class="text-text-muted hover:text-on-surface" title="Copy Key Reference">
+<span class="material-symbols-outlined text-[15px]">content_copy</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Quota Bar Component -->
+<div class="p-space-sm bg-surface-canvas rounded border border-border-hairline flex flex-col gap-1.5">
+<div class="flex items-center justify-between font-caption text-caption">
+<span class="text-text-muted">Monthly API Certification Quota</span>
+<span class="font-code-mono text-code-mono text-text-charcoal font-semibold">842 / 1,000 used (84.2%)</span>
+</div>
+<div class="w-full bg-border-hairline h-1.5 rounded-full overflow-hidden">
+<div class="bg-status-verified h-full rounded-full" style="width: 84.2%;"></div>
+</div>
+<div class="flex items-center justify-between font-caption text-caption text-text-muted">
+<span>Heartbeat: <strong class="text-on-surface">42s ago</strong> via Mutual TLS handshake</span>
+<span class="text-status-verified">158 scans remaining</span>
+</div>
+</div>
+</div>
+<!-- Action Buttons Bar -->
+<div class="p-space-md bg-surface-ivory border-t border-border-hairline flex flex-wrap items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs">
+<button class="px-space-md py-1.5 bg-surface-card hover:bg-surface-canvas text-text-charcoal border border-border-strong rounded font-title-md text-title-md flex items-center gap-1.5 transition-colors shadow-sm" onclick="simulateDiagnostic('Entrupy Luxury Gateway', 142, '200 OK')">
+<span class="material-symbols-outlined text-[16px] text-status-verified">bolt</span>
+<span>Test Connection</span>
+</button>
+<button class="px-space-md py-1.5 bg-surface-card hover:bg-surface-canvas text-text-charcoal border border-border-hairline rounded font-title-md text-title-md flex items-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined text-[16px] text-text-muted">speed</span>
+<span>View Quota Details</span>
+</button>
+</div>
+<button class="px-space-md py-1.5 text-text-muted hover:text-on-surface font-title-md text-title-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+<span>Provider Settings</span>
+</button>
+</div>
+</article>
+<!-- Provider 2: Real Authentication (Manual Expert Network) -->
+<article class="bg-surface-card border border-border-hairline rounded-lg shadow-sm flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-md">
+<div class="p-space-lg flex flex-col gap-space-md">
+<!-- Header Row -->
+<div class="flex items-start justify-between gap-space-sm pb-space-sm border-b border-border-hairline">
+<div class="flex items-start gap-space-sm">
+<div class="w-12 h-12 rounded bg-surface-canvas border border-border-hairline flex items-center justify-center p-1.5 shrink-0">
+<span class="material-symbols-outlined text-[28px] text-status-review">draw</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<h2 class="font-headline-sm text-headline-sm text-text-charcoal font-medium">Real Authentication API</h2>
+<span class="px-1.5 py-0.5 bg-surface-canvas text-text-muted font-label-badge text-label-badge rounded uppercase">Human Dual-Sign</span>
+</div>
+<span class="font-caption text-caption text-text-muted block">Manual Expert Dual-Sign Appraisal Network</span>
+</div>
+</div>
+<!-- Status Badge -->
+<div class="flex flex-col items-end gap-1">
+<div class="px-2.5 py-1 bg-status-review-bg border border-status-review/40 rounded flex items-center gap-1.5 shadow-sm">
+<span class="w-2 h-2 rounded-full bg-status-review animate-pulse"></span>
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-status-review font-bold">Awaiting Authorization</span>
+</div>
+<span class="font-code-mono text-code-mono text-text-muted">OAuth 2.0 PKCE Callback Pending</span>
+</div>
+</div>
+<p class="font-body-md text-body-md text-on-surface">
+              Specialist secondary appraiser network with 24-hour turnaround for rare, vintage, and bespoke trunks. Dual-expert consensus required for LV Courrier trunks, early malletier locks, and special order crocodile specimens.
+            </p>
+<!-- Pending Action Callout -->
+<div class="p-space-md bg-status-review-bg/50 border border-gold-champagne/30 rounded flex flex-col gap-space-xs">
+<div class="flex items-center gap-2 text-status-review font-semibold font-label-badge text-label-badge uppercase">
+<span class="material-symbols-outlined text-[16px]">warning</span>
+<span>Uncompleted Pairings</span>
+</div>
+<ul class="font-body-md text-body-md text-on-surface list-disc pl-5 space-y-1">
+<li>Production Webhook Endpoint URL unconfigured in provider dashboard</li>
+<li>Appraiser cryptokey cert handshake awaits master admin OAuth PKCE confirmation</li>
+</ul>
+</div>
+<!-- Credentials & Specifications Data Sheet -->
+<div class="flex flex-col gap-space-xs font-body-md text-body-md">
+<div class="flex items-center justify-between py-1 border-b border-border-hairline/60">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Expertise Domain</span>
+<span class="text-on-surface font-medium">All Heritage Maisons (Pre-1980 LV, Goyard, Moynat, Vintage Hermès)</span>
+</div>
+<div class="flex items-center justify-between py-1 border-b border-border-hairline/60">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Turnaround SLA</span>
+<span class="text-on-surface font-medium">12 to 24 Hours Standard · 2-Hour Expedited Trunk Option</span>
+</div>
+<div class="flex items-center justify-between py-1">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Mutual Dual-Signatures</span>
+<span class="font-code-mono text-code-mono text-text-charcoal bg-surface-canvas px-2 py-0.5 rounded">2 Licensed Appraisers Required</span>
+</div>
+</div>
+</div>
+<!-- Action Buttons Bar -->
+<div class="p-space-md bg-surface-ivory border-t border-border-hairline flex flex-wrap items-center justify-between gap-space-sm">
+<button class="px-space-md py-1.5 bg-primary text-on-primary hover:bg-neutral-800 rounded font-title-md text-title-md flex items-center gap-1.5 transition-all shadow-sm">
+<span class="material-symbols-outlined text-[16px]">key</span>
+<span>Complete OAuth Pairing</span>
+</button>
+<div class="flex items-center gap-space-xs">
+<button class="px-space-md py-1.5 bg-surface-card hover:bg-surface-canvas text-text-charcoal border border-border-hairline rounded font-title-md text-title-md flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[16px] text-text-muted">download</span>
+<span>Download Setup Guide</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Provider 3: LegitGrails Partner Bridge (Consignment Mesh) -->
+<article class="bg-surface-card border border-border-hairline rounded-lg shadow-sm flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-md">
+<div class="p-space-lg flex flex-col gap-space-md">
+<!-- Header Row -->
+<div class="flex items-start justify-between gap-space-sm pb-space-sm border-b border-border-hairline">
+<div class="flex items-start gap-space-sm">
+<div class="w-12 h-12 rounded bg-surface-canvas border border-border-hairline flex items-center justify-center p-1.5 shrink-0">
+<span class="material-symbols-outlined text-[28px] text-text-muted">hub</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<h2 class="font-headline-sm text-headline-sm text-text-charcoal font-medium">LegitGrails Inspection Mesh</h2>
+<span class="px-1.5 py-0.5 bg-surface-canvas text-text-muted font-label-badge text-label-badge rounded uppercase">Digital Batch</span>
+</div>
+<span class="font-caption text-caption text-text-muted block">High-Volume Digital Consignment Pre-Clearance Bridge</span>
+</div>
+</div>
+<!-- Status Badge -->
+<div class="flex flex-col items-end gap-1">
+<div class="px-2.5 py-1 bg-surface-container border border-border-hairline rounded flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-text-muted"></span>
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-text-muted font-bold">Not Configured</span>
+</div>
+<span class="font-code-mono text-code-mono text-text-muted">Slot #03 Standby</span>
+</div>
+</div>
+<p class="font-body-md text-body-md text-text-muted">
+              Designed for high-throughput digital intake pipelines. Rapid turnaround digital photo scoring, serial stamp pattern matching, and batch consignment triage prior to physical intake.
+            </p>
+<!-- Requirements Box -->
+<div class="p-space-md bg-surface-ivory rounded border border-border-hairline flex flex-col gap-2">
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-text-charcoal">Account Eligibility &amp; Credentials Required</span>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-body-md font-body-md">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-text-muted">check_box_outline_blank</span>
+<span>Commercial Partner Key</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-text-muted">check_box_outline_blank</span>
+<span>Webhook Secret Signing Key</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-text-muted">check_box_outline_blank</span>
+<span>Licensed Resale Business Tax ID</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-text-muted">check_box_outline_blank</span>
+<span>Minimum 50 Monthly Intake Cap</span>
+</div>
+</div>
+</div>
+<!-- Credentials & Specifications Data Sheet -->
+<div class="flex flex-col gap-space-xs font-body-md text-body-md">
+<div class="flex items-center justify-between py-1 border-b border-border-hairline/60">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Average Speed</span>
+<span class="text-on-surface font-medium">30 Minutes Automated Initial Verdict</span>
+</div>
+<div class="flex items-center justify-between py-1">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Payload Protocol</span>
+<span class="font-code-mono text-code-mono text-text-charcoal">JSON REST / HMAC-SHA256 Webhooks</span>
+</div>
+</div>
+</div>
+<!-- Action Buttons Bar -->
+<div class="p-space-md bg-surface-ivory border-t border-border-hairline flex flex-wrap items-center justify-between gap-space-sm">
+<button class="px-space-md py-1.5 bg-surface-card hover:bg-surface-canvas text-text-charcoal border border-border-strong rounded font-title-md text-title-md flex items-center gap-1.5 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[16px] text-secondary">add_link</span>
+<span>Connect Provider</span>
+</button>
+<button class="px-space-md py-1.5 text-text-muted hover:text-on-surface font-title-md text-title-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">policy</span>
+<span>Review Commercial Terms</span>
+</button>
+</div>
+</article>
+<!-- Provider 4: Bababebi Forensic Archive (Hermès & Exotic Specialist) -->
+<article class="bg-surface-card border border-status-counterfeit/30 rounded-lg shadow-sm flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-md">
+<div class="p-space-lg flex flex-col gap-space-md">
+<!-- Header Row -->
+<div class="flex items-start justify-between gap-space-sm pb-space-sm border-b border-border-hairline">
+<div class="flex items-start gap-space-sm">
+<div class="w-12 h-12 rounded bg-status-counterfeit-bg border border-status-counterfeit/20 flex items-center justify-center p-1.5 shrink-0">
+<span class="material-symbols-outlined text-[28px] text-status-counterfeit">diamond</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<h2 class="font-headline-sm text-headline-sm text-text-charcoal font-medium">Bababebi Forensic Archive</h2>
+<span class="px-1.5 py-0.5 bg-gold-light text-secondary font-label-badge text-label-badge rounded uppercase">Exotic Specialist</span>
+</div>
+<span class="font-caption text-caption text-text-muted block">Hermès Birkin/Kelly, Rare Exotics &amp; Special Orders</span>
+</div>
+</div>
+<!-- Status Badge -->
+<div class="flex flex-col items-end gap-1">
+<div class="px-2.5 py-1 bg-status-counterfeit-bg border border-status-counterfeit/40 rounded flex items-center gap-1.5 shadow-sm">
+<span class="w-2 h-2 rounded-full bg-status-counterfeit"></span>
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-status-counterfeit font-bold">Test Failed</span>
+</div>
+<span class="font-code-mono text-code-mono text-status-counterfeit">HTTP 401: Cert Expired</span>
+</div>
+</div>
+<!-- Error Diagnostic Callout -->
+<div class="p-space-md bg-status-counterfeit-bg/60 border border-status-counterfeit/30 rounded flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-status-counterfeit font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">error</span>
+<span>Handshake Failure Diagnostic</span>
+</span>
+<span class="font-code-mono text-code-mono text-text-muted">18 mins ago (14:32:09 UTC)</span>
+</div>
+<p class="font-code-mono text-code-mono text-text-charcoal bg-surface-card/80 p-2 rounded border border-border-hairline">
+                SEC_ERROR_EXPIRED_CLIENT_CERT: Client certificate [HENGZ_BB_2024_A] expired on 2025-02-15 00:00:00 UTC. Mutual TLS session rejected by upstream security terminator.
+              </p>
+</div>
+<!-- Credentials & Specifications Data Sheet -->
+<div class="flex flex-col gap-space-xs font-body-md text-body-md">
+<div class="flex items-center justify-between py-1 border-b border-border-hairline/60">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Specialty Focus</span>
+<span class="text-on-surface font-medium">Porosus/Niloticus Crocodile, Hermès Blindstamps, Hand Saddle Stitching</span>
+</div>
+<div class="flex items-center justify-between py-1 border-b border-border-hairline/60">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Certificate Format</span>
+<span class="text-on-surface font-medium">Cryptographically Encrypted PDF &amp; On-Chain Verification Ledger</span>
+</div>
+<div class="flex items-center justify-between py-1">
+<span class="text-text-muted font-caption text-caption uppercase tracking-wider">Gateway Client Hash</span>
+<span class="font-code-mono text-code-mono text-text-charcoal bg-surface-canvas px-2 py-0.5 rounded">SHA256: 4f88...e91a (Revoked)</span>
+</div>
+</div>
+</div>
+<!-- Action Buttons Bar -->
+<div class="p-space-md bg-surface-ivory border-t border-border-hairline flex flex-wrap items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs">
+<button class="px-space-md py-1.5 bg-status-counterfeit hover:bg-red-800 text-on-error rounded font-title-md text-title-md flex items-center gap-1.5 transition-colors shadow-sm" onclick="simulateDiagnostic('Bababebi Forensic Archive', 320, '401 Unauthorized - Expired Cert')">
+<span class="material-symbols-outlined text-[16px]">refresh</span>
+<span>Retry Handshake</span>
+</button>
+<button class="px-space-md py-1.5 bg-surface-card hover:bg-surface-canvas text-text-charcoal border border-border-hairline rounded font-title-md text-title-md flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[16px] text-text-muted">key</span>
+<span>Update TLS Certificate</span>
+</button>
+</div>
+<button class="px-space-md py-1.5 text-text-muted hover:text-on-surface font-title-md text-title-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">bug_report</span>
+<span>Inspect Error Log</span>
+</button>
+</div>
+</article>
+</div>
+<!-- Lower Analytical Section: Gateway Architecture & Diagnostic Panel -->
+<section class="bg-surface-card border border-border-hairline rounded-lg shadow-sm overflow-hidden">
+<div class="p-space-lg border-b border-border-hairline bg-surface-ivory flex flex-col md:flex-row md:items-center justify-between gap-space-md">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-text-charcoal font-medium">HENGZ Provider Bridge Architecture (v2.4)</span>
+<span class="font-label-badge text-label-badge bg-primary text-on-primary px-2 py-0.5 rounded">Active Engine</span>
+</div>
+<p class="font-body-md text-body-md text-text-muted">
+              Unified schema mapping: normalizes heterogeneous provider payloads into canonical JSON schema with verifiable zero-knowledge hashes.
+            </p>
+</div>
+<div class="flex items-center gap-space-sm">
+<button class="px-space-md py-1.5 bg-surface-card hover:bg-surface-canvas text-text-charcoal border border-border-strong rounded font-title-md text-title-md flex items-center gap-1.5 transition-all shadow-sm" id="toggle-console-btn">
+<span class="material-symbols-outlined text-[18px] text-secondary">terminal</span>
+<span>Live Diagnostic Console</span>
+</button>
+</div>
+</div>
+<div class="p-space-lg grid grid-cols-1 lg:grid-cols-3 gap-space-lg">
+<!-- Gateway Security Health Parameters -->
+<div class="flex flex-col gap-space-md lg:col-span-1 border-r-0 lg:border-r border-border-hairline lg:pr-space-lg">
+<h3 class="font-label-badge text-label-badge uppercase tracking-wider text-text-muted">Security Controls &amp; Enclaves</h3>
+<div class="flex flex-col gap-space-sm">
+<div class="p-space-sm bg-surface-ivory rounded border border-border-hairline flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-status-verified">lock</span>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md text-on-surface">Mutual TLS (mTLS)</span>
+<span class="font-caption text-caption text-text-muted">Enforced on all egress egress gates</span>
+</div>
+</div>
+<span class="font-label-badge text-label-badge text-status-verified font-bold uppercase">Active</span>
+</div>
+<div class="p-space-sm bg-surface-ivory rounded border border-border-hairline flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-status-verified">vpn_key</span>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md text-on-surface">Zero-Knowledge Key Storage</span>
+<span class="font-caption text-caption text-text-muted">AWS KMS / Hardware Security Module</span>
+</div>
+</div>
+<span class="font-label-badge text-label-badge text-status-verified font-bold uppercase">HSM Level 3</span>
+</div>
+<div class="p-space-sm bg-surface-ivory rounded border border-border-hairline flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-status-verified">autorenew</span>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md text-on-surface">Idempotent Retries</span>
+<span class="font-caption text-caption text-text-muted">Exponential backoff + Jitter (max 3)</span>
+</div>
+</div>
+<span class="font-label-badge text-label-badge text-status-verified font-bold uppercase">Enabled</span>
+</div>
+<div class="p-space-sm bg-surface-ivory rounded border border-border-hairline flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-status-verified">receipt_long</span>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md text-on-surface">Cryptographic Receipts</span>
+<span class="font-caption text-caption text-text-muted">SHA-3 512 immutable ledger hash</span>
+</div>
+</div>
+<span class="font-label-badge text-label-badge text-status-verified font-bold uppercase">Online</span>
+</div>
+</div>
+</div>
+<!-- Interactive Real-time Diagnostic Ping Module -->
+<div class="flex flex-col gap-space-md lg:col-span-2">
+<div class="flex items-center justify-between">
+<h3 class="font-label-badge text-label-badge uppercase tracking-wider text-text-muted">Real-Time Diagnostic Test Harness</h3>
+<div class="flex items-center gap-2">
+<span class="font-caption text-caption text-text-muted">Test Target:</span>
+<select class="px-space-sm py-1 bg-surface-canvas rounded border border-border-strong font-code-mono text-code-mono text-text-charcoal focus:outline-none focus:ring-1 focus:ring-gold-champagne" id="diagnostic-target-select">
+<option value="entrupy">Entrupy Luxury Gateway (Primary)</option>
+<option value="realauth">Real Authentication API (OAuth 2.0)</option>
+<option value="legitgrails">LegitGrails Mesh (Consignment)</option>
+<option value="bababebi">Bababebi Forensic Archive (Hermès)</option>
+<option value="mesh">All Gateways (Mesh Health Sweep)</option>
+</select>
+<button class="px-space-md py-1 bg-primary text-on-primary hover:bg-neutral-800 rounded font-code-mono text-code-mono font-medium flex items-center gap-1.5 transition-colors" id="btn-run-diagnostic">
+<span class="material-symbols-outlined text-[14px]">play_arrow</span>
+<span>Run Live Ping</span>
+</button>
+</div>
+</div>
+<!-- Terminal output window -->
+<div class="bg-primary text-surface-ivory font-code-mono text-code-mono p-space-md rounded-lg flex flex-col gap-2 min-h-[220px] shadow-inner overflow-x-auto border border-neutral-800">
+<div class="flex items-center justify-between pb-2 border-b border-neutral-800 text-text-muted text-[11px]">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-red-500/80"></span>
+<span class="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></span>
+<span class="w-2.5 h-2.5 rounded-full bg-green-500/80"></span>
+<span class="ml-2 font-mono">hengz-bridge-cli — diagnostics://v2.4.8-session</span>
+</div>
+<span id="terminal-clock">2025-02-15 14:50:32 UTC</span>
+</div>
+<div class="flex flex-col gap-1 text-[12px] leading-relaxed" id="terminal-body">
+<p class="text-neutral-400">[INIT] Initialized HENGZ Gateway Diagnostic Socket on Node #04 (Paris Atelier).</p>
+<p class="text-neutral-400">[MTLS] Local Client Identity: <span class="text-gold-light">CN=atelier-node-04.hengz.internal</span>, Serial=9812A-LV</p>
+<p class="text-status-verified">[READY] Entrupy Gateway: ECHO received (142ms) — TLS_AES_256_GCM_SHA384 active.</p>
+<p class="text-status-review">[WARN]  RealAuth Gateway: Callback probe 302 redirected to /oauth/v2/auth (unpaired).</p>
+<p class="text-status-counterfeit">[FAIL]  Bababebi Gateway: Handshake aborted (401 Expired Client Certificate).</p>
+<p class="text-neutral-300 font-semibold mt-1">Ready for input. Select provider above and dispatch diagnostic probe.</p>
+</div>
+</div>
+<!-- Verification Payload Structure preview -->
+<div class="flex items-center justify-between px-space-sm py-1 bg-surface-ivory rounded border border-border-hairline text-text-muted font-caption text-caption">
+<span>Canonical Payload Version: <strong class="text-text-charcoal font-code-mono text-code-mono">schema.hengz.org/v2/verdict.json</strong></span>
+<span>Hardware Signature: <strong class="text-text-charcoal font-code-mono text-code-mono">ED25519-STAMP-OK</strong></span>
+<span class="text-secondary font-medium hover:underline cursor-pointer">Inspect Schema Specification →</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Archival Provider Registry Table -->
+<section class="bg-surface-card border border-border-hairline rounded-lg shadow-sm p-space-lg flex flex-col gap-space-md">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-text-charcoal font-medium">Archival Handshake Audit Registry</h3>
+<p class="font-body-md text-body-md text-text-muted">Cryptographic validation trail of recent automated consensus calls across verified channels.</p>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-caption text-caption text-text-muted">Filtering:</span>
+<span class="px-2 py-0.5 bg-surface-canvas rounded font-label-badge text-label-badge text-text-charcoal">All Channels (Last 24 Hours)</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left font-body-md text-body-md">
+<thead>
+<tr class="border-b border-border-hairline text-text-muted font-caption text-caption uppercase tracking-wider">
+<th class="py-2.5 px-3">Session Hash</th>
+<th class="py-2.5 px-3">Gateway Target</th>
+<th class="py-2.5 px-3">Target Maison / Model</th>
+<th class="py-2.5 px-3">Handshake Cipher</th>
+<th class="py-2.5 px-3 text-right">Round-Trip</th>
+<th class="py-2.5 px-3 text-right">Consensus Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-hairline font-code-mono text-code-mono">
+<tr class="hover:bg-surface-ivory/60 transition-colors">
+<td class="py-3 px-3 text-secondary font-medium">#HNG-9041-01</td>
+<td class="py-3 px-3 font-body-md text-body-md text-on-surface">Entrupy Luxury Gateway</td>
+<td class="py-3 px-3 font-body-md text-body-md text-on-surface">Louis Vuitton Neverfull MM (Damier Ebene)</td>
+<td class="py-3 px-3 text-text-muted text-[11px]">ECDSA-P384 / TLS 1.3</td>
+<td class="py-3 px-3 text-right text-text-charcoal">139ms</td>
+<td class="py-3 px-3 text-right">
+<span class="px-2 py-0.5 rounded font-label-badge text-label-badge uppercase bg-status-verified-bg text-status-verified border border-status-verified/40">Verified Authentic</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-ivory/60 transition-colors">
+<td class="py-3 px-3 text-secondary font-medium">#HNG-9040-88</td>
+<td class="py-3 px-3 font-body-md text-body-md text-on-surface">Entrupy Luxury Gateway</td>
+<td class="py-3 px-3 font-body-md text-body-md text-on-surface">Chanel Classic Medium Double Flap 24K</td>
+<td class="py-3 px-3 text-text-muted text-[11px]">ECDSA-P384 / TLS 1.3</td>
+<td class="py-3 px-3 text-right text-text-charcoal">148ms</td>
+<td class="py-3 px-3 text-right">
+<span class="px-2 py-0.5 rounded font-label-badge text-label-badge uppercase bg-status-verified-bg text-status-verified border border-status-verified/40">Verified Authentic</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-ivory/60 transition-colors">
+<td class="py-3 px-3 text-secondary font-medium">#HNG-9039-42</td>
+<td class="py-3 px-3 font-body-md text-body-md text-on-surface">Bababebi Forensic Archive</td>
+<td class="py-3 px-3 font-body-md text-body-md text-on-surface">Hermès Birkin 25 Togo Gold Hardware</td>
+<td class="py-3 px-3 text-status-counterfeit text-[11px]">TLS Handshake Aborted</td>
+<td class="py-3 px-3 text-right text-text-muted">320ms</td>
+<td class="py-3 px-3 text-right">
+<span class="px-2 py-0.5 rounded font-label-badge text-label-badge uppercase bg-status-counterfeit-bg text-status-counterfeit border border-status-counterfeit/40">Gateway 401</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-ivory/60 transition-colors">
+<td class="py-3 px-3 text-secondary font-medium">#HNG-9038-17</td>
+<td class="py-3 px-3 font-body-md text-body-md text-on-surface">Real Authentication API</td>
+<td class="py-3 px-3 font-body-md text-body-md text-on-surface">LV 1928 Wardrobe Malle Trunk (Monogram)</td>
+<td class="py-3 px-3 text-text-muted text-[11px]">RSA-4096 / TLS 1.3</td>
+<td class="py-3 px-3 text-right text-text-charcoal">412ms</td>
+<td class="py-3 px-3 text-right">
+<span class="px-2 py-0.5 rounded font-label-badge text-label-badge uppercase bg-status-review-bg text-status-review border border-status-review/40">Dual Appraiser Review</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</main>
+</div>
+<script>
+  // Interactive Diagnostic Console Simulator for HENGZ Providers
+  function simulateDiagnostic(providerName, latency, responseCode) {
+    const terminalBody = document.getElementById('terminal-body');
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+    
+    // Add ping initiation message
+    const line1 = document.createElement('p');
+    line1.className = 'text-gold-light mt-1';
+    line1.textContent = `[PROBE] Initiating direct cryptographic ping to: ${providerName}...`;
+    terminalBody.appendChild(line1);
+
+    setTimeout(() => {
+      const line2 = document.createElement('p');
+      if (responseCode.includes('200') || responseCode.includes('OK')) {
+        line2.className = 'text-status-verified font-semibold';
+        line2.textContent = `[SUCCESS] ${providerName} -> Received ${responseCode} in ${latency}ms. Cipher: ChaCha20-Poly1305. Key Verified.`;
+      } else if (responseCode.includes('401')) {
+        line2.className = 'text-status-counterfeit font-semibold';
+        line2.textContent = `[ALERT] ${providerName} -> Handshake failure (${responseCode}). Check mTLS expiration logs.`;
+      } else {
+        line2.className = 'text-status-review font-semibold';
+        line2.textContent = `[PENDING] ${providerName} -> Gateway reachable (${latency}ms) but awaiting authorization handshake.`;
+      }
+      terminalBody.appendChild(line2);
+      terminalBody.scrollTop = terminalBody.scrollHeight;
+    }, 450);
+  }
+
+  // Hook terminal buttons
+  document.getElementById('btn-run-diagnostic')?.addEventListener('click', () => {
+    const select = document.getElementById('diagnostic-target-select');
+    const target = select.value;
+    if (target === 'entrupy') {
+      simulateDiagnostic('Entrupy Luxury Gateway', 142, '200 OK');
+    } else if (target === 'realauth') {
+      simulateDiagnostic('Real Authentication API', 210, '302 Awaiting PKCE Exchange');
+    } else if (target === 'legitgrails') {
+      simulateDiagnostic('LegitGrails Mesh', 88, '404 Endpoint Unconfigured');
+    } else if (target === 'bababebi') {
+      simulateDiagnostic('Bababebi Forensic Archive', 320, '401 Unauthorized - Expired Cert');
+    } else {
+      simulateDiagnostic('All Gateways (Mesh Health Sweep)', 184, 'Mesh Multi-State Check Complete');
+    }
+  });
+
+  document.getElementById('btn-run-all-mesh')?.addEventListener('click', () => {
+    const terminalBody = document.getElementById('terminal-body');
+    terminalBody.innerHTML += '<p class="text-gold-light mt-2 font-semibold">>>> INITIATING COMPREHENSIVE MESH INTEGRITY AUDIT (4 NODES)...</p>';
+    setTimeout(() => simulateDiagnostic('Entrupy Luxury Gateway', 138, '200 OK (Signed Token Active)'), 200);
+    setTimeout(() => simulateDiagnostic('Real Authentication API', 205, '302 OAuth Incomplete'), 500);
+    setTimeout(() => simulateDiagnostic('LegitGrails Mesh', 92, '404 Standby Token'), 800);
+    setTimeout(() => simulateDiagnostic('Bababebi Forensic Archive', 315, '401 Handshake Failed'), 1100);
+  });
+
+  document.getElementById('toggle-console-btn')?.addEventListener('click', () => {
+    const select = document.getElementById('diagnostic-target-select');
+    select.focus();
+    select.classList.add('ring-2', 'ring-gold-champagne');
+    setTimeout(() => select.classList.remove('ring-2', 'ring-gold-champagne'), 1200);
+  });
+</script></main></div></body></html>

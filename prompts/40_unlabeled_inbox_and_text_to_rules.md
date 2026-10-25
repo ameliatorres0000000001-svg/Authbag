@@ -1,0 +1,4 @@
+Add two features (read CLAUDE.md first):
+1. "Unlabeled inbox": daily photo uploads whose truth is unknown (label='unknown', status stays quarantine, never trainable). A batch job (cron trigger) uses the vision model to classify model/component, cluster similar photos, and flag outliers; the page lists outliers first so an expert reviews the most informative photos. Nothing here may become label authentic/counterfeit without a human + a label basis that is not seller_claim/unverified.
+2. "Text → draft rules": the owner pastes knowledge as text; the model proposes rules in the existing rule schema (observation key from observation_defs, check, polarity, severity, source note quoting the owner's text, source_tier 4). They are inserted as status='draft' only. Show a diff-style preview; user confirms each before insert. Add golden-set tests ensuring invalid keys/values are rejected.
+Keep guardrails: no verdicts, no percentages, 4-eyes approval.

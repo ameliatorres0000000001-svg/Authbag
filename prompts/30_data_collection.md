@@ -1,0 +1,1 @@
+Build an admin "Data to collect" view from /api/coverage: per model × era checklist of missing items with capture instructions, export as CSV, and a bulk reference-photo uploader with provenance fields. Add Louis Vuitton eras for each seeded model (draft) for experts to approve. Do not scrape brand sites for photos; text/spec notes only with source URL.

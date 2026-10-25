@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&amp;family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&amp;family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"inverse-on-surface":"#f2f1ee","border-hairline":"#E5E0D8","status-counterfeit":"#8A2323","tertiary":"#000000","surface-container-lowest":"#ffffff","status-review":"#8C6A1A","on-secondary-fixed":"#261900","outline":"#747878","primary":"#000000","secondary-fixed-dim":"#e9c176","status-counterfeit-bg":"#F9EBEB","on-secondary-fixed-variant":"#5d4201","error":"#ba1a1a","on-surface":"#1a1c1a","secondary-container":"#fed488","on-tertiary-fixed":"#1c1b1a","inverse-surface":"#2f312f","tertiary-container":"#1c1b1a","status-verified":"#2C4C38","surface-container-low":"#f4f3f0","surface-tint":"#5f5e5e","surface-dim":"#dbdad7","surface-container-highest":"#e3e2e0","on-primary-fixed":"#1c1b1b","on-primary-container":"#858383","on-secondary-container":"#785a1a","on-error":"#ffffff","status-verified-bg":"#EBF2ED","surface-canvas":"#F4F1EA","surface-variant":"#e3e2e0","gold-champagne":"#C5A059","secondary":"#775a19","primary-fixed":"#e5e2e1","inverse-primary":"#c8c6c5","text-muted":"#6E6B64","error-container":"#ffdad6","surface-container-high":"#e9e8e5","text-charcoal":"#1A1A1A","outline-variant":"#c4c7c7","on-primary":"#ffffff","on-background":"#1a1c1a","primary-fixed-dim":"#c8c6c5","surface":"#faf9f6","background":"#faf9f6","on-error-container":"#93000a","on-primary-fixed-variant":"#474746","surface-bright":"#faf9f6","gold-light":"#EFE6D2","surface-ivory":"#FAF8F5","border-strong":"#C8C2B7","on-secondary":"#ffffff","on-tertiary":"#ffffff","on-tertiary-fixed-variant":"#484645","surface-container":"#efeeeb","ai-telemetry":"#374151","surface-card":"#FFFFFF","primary-container":"#1c1b1b","tertiary-fixed":"#e6e2df","tertiary-fixed-dim":"#cac6c4","secondary-fixed":"#ffdea5","status-review-bg":"#FDF8E8","on-tertiary-container":"#868382","on-surface-variant":"#444748","ai-telemetry-bg":"#EEF0F2"},borderRadius:{DEFAULT:"0.125rem",lg:"0.25rem",xl:"0.5rem",full:"0.75rem"},spacing:{"margin-mobile":"1rem","space-2xl":"4rem","space-sm":"0.5rem","space-xs":"0.25rem","space-xl":"2.5rem","space-lg":"1.5rem",gutter:"1.5rem","gutter-mobile":"0.75rem","space-md":"1rem",margin:"2.5rem"},fontFamily:{"label-badge":["JetBrains Mono"],"display-lg":["EB Garamond"],"body-md":["Manrope"],"body-lg":["Manrope"],caption:["Manrope"],"headline-sm":["EB Garamond"],"title-md":["Manrope"],"code-mono":["JetBrains Mono"],"headline-lg":["EB Garamond"],"display-lg-mobile":["EB Garamond"]},fontSize:{"label-badge":["10px",{lineHeight:"14px",letterSpacing:"0.08em",fontWeight:"600"}],"display-lg":["40px",{lineHeight:"48px",letterSpacing:"-0.01em",fontWeight:"400"}],"body-md":["13px",{lineHeight:"20px",fontWeight:"400"}],"body-lg":["15px",{lineHeight:"24px",fontWeight:"400"}],caption:["11px",{lineHeight:"16px",letterSpacing:"0.02em",fontWeight:"500"}],"headline-sm":["20px",{lineHeight:"28px",fontWeight:"500"}],"title-md":["16px",{lineHeight:"24px",letterSpacing:"0.01em",fontWeight:"600"}],"code-mono":["12px",{lineHeight:"18px",letterSpacing:"0.04em",fontWeight:"500"}],"headline-lg":["28px",{lineHeight:"36px",letterSpacing:"-0.01em",fontWeight:"500"}],"display-lg-mobile":["30px",{lineHeight:"36px",letterSpacing:"0",fontWeight:"400"}]}}}}</script></head><body class="bg-surface-canvas font-body-md text-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 h-full w-72 bg-surface-ivory shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-50 flex flex-col justify-between"><div class="flex flex-col"><div class="h-16 px-space-md flex items-center gap-space-sm bg-surface-ivory"><img alt="HENGZ AUTHENTIC Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1V0TxftRgtnmtrHl0w61sL4lmRv0Xo_OOApV0p2VS8Wq_o5vOgCAWCoKPTC9LLMDG97SaPdmZSbqUQtRknh5_tjpcsGAgeXp8Gd0SCnAi1_y1H3-5_J1o8V5XXfjNfUTRfPATl29tk836DMSSXrEMRxs1kYZ-V8wCG93xxTdohHWM18UjKph01AwSVnvJCXoUpVZMAMRXfxYrlOdZPII5_2OmCIh2yoQ9SI1Z5jHuVxe_aQtGojnv2NM9s"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm font-medium tracking-tight text-primary leading-none">HENGZ</span><span class="font-label-badge text-label-badge uppercase tracking-widest text-text-muted">Forensic Archive</span></div></div><div class="px-space-md py-space-sm"><div class="bg-surface-canvas rounded p-space-sm flex items-center justify-between"><div class="flex items-center gap-space-xs"><span class="w-2 h-2 rounded-full bg-status-verified"></span><span class="font-label-badge text-label-badge text-text-charcoal uppercase tracking-wider">Node #04 · Paris Synced</span></div><span class="font-code-mono text-code-mono text-text-muted">v2.4.8</span></div></div><nav class="flex flex-col gap-1 px-space-sm py-space-xs" data-active-classes="bg-primary text-on-primary font-title-md text-title-md rounded"><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="dashboard" href="#">Dashboard</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="new-inspection" href="#">New Inspection</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="nfc-chip-reader" href="#">NFC Chip Reader</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="ai-evidence-analysis" href="#">AI Evidence Analysis</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="lv-knowledge-base" href="#">LV Knowledge Base</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="verification-providers" href="#">Verification Providers</a><a aria-current="page" class="flex items-center px-space-sm py-space-sm transition-all bg-primary text-on-primary font-title-md text-title-md rounded" data-path="certificates" href="#">Certificates</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="integration-center" href="#">Integration Center</a><a class="flex items-center px-space-sm py-space-sm rounded font-body-md text-body-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all" data-path="inspection-history" href="#">Inspection History</a></nav></div><div class="p-space-md bg-surface-ivory flex flex-col gap-space-sm"><div class="p-space-sm bg-surface-canvas rounded flex flex-col gap-space-xs"><span class="font-label-badge text-label-badge text-text-muted uppercase tracking-wider">Vault Calibration</span><div class="flex items-center justify-between text-on-surface-variant"><span class="font-caption text-caption">Microscope 4K</span><span class="font-label-badge text-label-badge text-status-verified font-medium">READY</span></div><div class="flex items-center justify-between text-on-surface-variant"><span class="font-caption text-caption">UV Spectrum 365nm</span><span class="font-label-badge text-label-badge text-status-verified font-medium">CALIBRATED</span></div></div><div class="flex items-center justify-between pt-space-xs"><span class="font-caption text-caption text-text-muted">© 2025 HENGZ Atelier</span><span class="font-label-badge text-label-badge text-secondary uppercase">LV Forensic Lab</span></div></div></aside><div class="pl-72 flex flex-col min-h-screen"><header class="fixed top-0 left-72 right-0 h-16 bg-surface-ivory/95 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 px-space-lg flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-md flex-1"><div class="relative w-full max-w-sm"><span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted">search</span><input class="w-full pl-9 pr-space-md py-1.5 bg-surface-canvas rounded font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-gold-champagne transition-all" placeholder="Filter by reference ID, Bag Model..." type="text"/></div><nav class="hidden md:flex items-center gap-1 pl-space-xs" data-active-classes="text-primary font-semibold border-b-2 border-primary"><a class="px-space-sm py-1 font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" data-path="dashboard" href="#">Dashboard</a><a class="px-space-sm py-1 font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" data-path="verification-providers" href="#">Verification Providers</a><a aria-current="page" class="px-space-sm py-1 transition-colors text-primary font-semibold border-b-2 border-primary" data-path="certificates" href="#">Certificates</a></nav></div><div class="flex items-center gap-space-md"><div class="flex items-center bg-surface-canvas rounded p-0.5"><button class="px-2 py-1 font-label-badge text-label-badge rounded bg-surface-card text-on-surface font-semibold shadow-[0_1px_8px_rgba(0,0,0,0.04)]" type="button">EN</button><button class="px-2 py-1 font-label-badge text-label-badge rounded text-text-muted hover:text-on-surface transition-colors" type="button">KH (ភាសាខ្មែរ)</button></div><div class="px-2.5 py-1 bg-status-review-bg rounded flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-status-review animate-pulse"></span><span class="font-label-badge text-label-badge text-status-review tracking-widest uppercase">Sandbox / Demo Mode</span></div><div class="px-2.5 py-1 bg-ai-telemetry-bg rounded flex items-center gap-1.5"><span class="material-symbols-outlined text-[14px] text-ai-telemetry">shield_person</span><span class="font-label-badge text-label-badge text-ai-telemetry tracking-wider uppercase">Lead Authenticator (Admin)</span></div><div class="h-5 w-px bg-border-hairline"></div><div class="flex items-center gap-space-sm pl-space-xs"><div class="relative"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDG__aECOHS4HLBfoc3rG7pqo0hU8Ev-U95ajSlTGXomNa45wAfheAFz8-2CAP1zmOJuh5IcoRuJelu48NjUeqvLruKvtHt_kSHVWLPAKDfJOdmFC9XY2PaE6HFefQVJhn54BbeQ-6yVPrdVI9oSHBBmfEw0t5u7iz46X8FIWdMQAksDHO0LeWP7vgDdl4h_5uStuJtKTdXS71Fm0P4PNbwBFrEaJofrz-BABaGrvHI9ZcDwj7Surk7"/><span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-status-verified ring-2 ring-surface-ivory"></span></div><div class="flex flex-col text-left"><span class="font-title-md text-title-md font-semibold text-text-charcoal leading-none">S. Vong</span><span class="font-caption text-caption text-text-muted leading-tight">Lead Specialist</span></div></div></div></header><main class="w-full pt-16 bg-surface-canvas flex-1"><div class="flex flex-col w-full">
+<div class="p-space-lg lg:p-margin flex flex-col gap-space-lg">
+<!-- Top Registry Header & Status Telemetry -->
+<section class="flex flex-col lg:flex-row lg:items-end justify-between gap-space-md">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-2">
+<span class="font-label-badge text-label-badge uppercase tracking-widest text-gold-champagne font-semibold">Atelier Archive</span>
+<span class="text-text-muted text-caption">/</span>
+<span class="font-label-badge text-label-badge uppercase tracking-widest text-text-muted">Cryptographic Registry</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-verified-bg text-status-verified font-label-badge text-label-badge font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-status-verified"></span>
+            LEDGER ONLINE · BLOCK #481,092
+          </span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-text-charcoal tracking-tight font-medium">Official Certificates &amp; Verification Ledgers</h1>
+<p class="font-body-md text-body-md text-text-muted max-w-3xl">
+          Verifiable luxury authentication certificates, official provider statements, and immutable cryptographic chain records preserved under archival forensic custody.
+        </p>
+</div>
+<!-- Action Suite -->
+<div class="flex items-center flex-wrap gap-space-sm">
+<button class="px-space-md py-2.5 rounded bg-surface-card hover:bg-surface-ivory text-text-charcoal shadow-sm hover:shadow font-title-md text-body-md flex items-center gap-2 transition-all" id="verifyHashTrigger">
+<span class="material-symbols-outlined text-[18px] text-gold-champagne">qr_code_scanner</span>
+<span>Verify QR / Hash</span>
+</button>
+<button class="px-space-md py-2.5 rounded bg-surface-card hover:bg-surface-ivory text-text-charcoal shadow-sm hover:shadow font-title-md text-body-md flex items-center gap-2 transition-all">
+<span class="material-symbols-outlined text-[18px] text-text-muted">download</span>
+<span>Export Ledger</span>
+</button>
+<div class="relative">
+<button class="px-space-md py-2.5 rounded bg-primary text-on-primary font-title-md text-body-md flex items-center gap-2 hover:bg-neutral-800 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+<span>Issue New Certificate</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Metrics Bar / Ledger Health -->
+<section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
+<div class="bg-surface-card p-space-md rounded shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between text-text-muted">
+<span class="font-label-badge text-label-badge uppercase tracking-wider">Total Certificates Issued</span>
+<span class="material-symbols-outlined text-[18px] text-primary">workspace_premium</span>
+</div>
+<div class="mt-space-sm flex items-baseline gap-2">
+<span class="font-display-lg text-display-lg text-text-charcoal leading-none">1,289</span>
+<span class="font-label-badge text-label-badge text-status-verified font-medium">100% Sealed</span>
+</div>
+<div class="mt-space-xs font-caption text-caption text-text-muted flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-status-verified"></span>
+          SHA-256 Ledger sync real-time
+        </div>
+</div>
+<div class="bg-surface-card p-space-md rounded shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between text-text-muted">
+<span class="font-label-badge text-label-badge uppercase tracking-wider">Official Provider Backed</span>
+<span class="material-symbols-outlined text-[18px] text-gold-champagne">shield</span>
+</div>
+<div class="mt-space-sm flex items-baseline gap-2">
+<span class="font-display-lg text-display-lg text-text-charcoal leading-none">1,142</span>
+<span class="font-label-badge text-label-badge text-gold-champagne font-medium">Entrupy Guarantee</span>
+</div>
+<div class="mt-space-xs font-caption text-caption text-text-muted">
+          Full third-party underwriting active
+        </div>
+</div>
+<div class="bg-surface-card p-space-md rounded shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between text-text-muted">
+<span class="font-label-badge text-label-badge uppercase tracking-wider">Internal Master Sign-Off</span>
+<span class="material-symbols-outlined text-[18px] text-status-verified">draw</span>
+</div>
+<div class="mt-space-sm flex items-baseline gap-2">
+<span class="font-display-lg text-display-lg text-text-charcoal leading-none">147</span>
+<span class="font-label-badge text-label-badge text-status-verified font-medium">Dual-Expert</span>
+</div>
+<div class="mt-space-xs font-caption text-caption text-text-muted">
+          Physical microscopic loupe inspection
+        </div>
+</div>
+<div class="bg-surface-card p-space-md rounded shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between text-text-muted">
+<span class="font-label-badge text-label-badge uppercase tracking-wider">Revoked / Disputed</span>
+<span class="material-symbols-outlined text-[18px] text-status-verified">task_alt</span>
+</div>
+<div class="mt-space-sm flex items-baseline gap-2">
+<span class="font-display-lg text-display-lg text-status-verified leading-none">0</span>
+<span class="font-label-badge text-label-badge text-text-muted font-normal">Zero Breach</span>
+</div>
+<div class="mt-space-xs font-caption text-caption text-text-muted">
+          Zero claims across 36-month registry run
+        </div>
+</div>
+</section>
+<!-- Strict Regulatory & Provenance Notice (Anti-Fraud Guardrail) -->
+<div class="bg-surface-ivory rounded p-space-md flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md shadow-sm">
+<div class="flex items-start gap-space-sm">
+<div class="p-2 rounded bg-gold-light text-secondary flex-shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[20px] text-secondary">gavel</span>
+</div>
+<div class="flex flex-col gap-0.5">
+<div class="flex items-center gap-2">
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-secondary font-bold">Provenance &amp; Integrity Notice</span>
+<span class="font-caption text-caption px-2 py-0.2 bg-gold-champagne/15 text-secondary rounded">Audited Compliance</span>
+</div>
+<p class="font-body-md text-body-md text-text-charcoal/90 leading-relaxed max-w-4xl">
+            HENGZ AUTHENTIC issues certificates exclusively when verified by licensed official providers (e.g. <strong>Entrupy Inc.</strong> with financial backing guarantee) or certified by two credentialed <strong>Master Appraisers</strong>. User-uploaded unverified receipts are strictly demarcated as <em>“Unverified Third-Party Documents”</em> and never receive authentic certification badges.
+          </p>
+</div>
+</div>
+<button class="flex-shrink-0 px-3 py-1.5 rounded bg-surface-card text-text-charcoal hover:bg-surface-canvas font-caption text-caption tracking-wider uppercase transition-colors shadow-sm">
+        Review Governance Protocol
+      </button>
+</div>
+<!-- Main Workspace Layout: Ledger Table (7 Cols) + Live Inspector Showcase (5 Cols) -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-space-lg items-start">
+<!-- Primary Certificates Ledger (xl:col-span-8) -->
+<section class="xl:col-span-8 flex flex-col gap-space-md">
+<!-- Filter Bar and Search System -->
+<div class="bg-surface-card rounded p-space-md shadow-sm flex flex-col gap-space-sm">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-sm">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted">search</span>
+<input class="w-full pl-9 pr-space-md py-2 bg-surface-canvas rounded font-body-md text-body-md text-on-surface placeholder:text-text-muted focus:outline-none transition-all" placeholder="Search by Certificate ID, Dossier Ref (#HA-LV-...), Bag Serial, or Client Name..." type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex items-center bg-surface-canvas rounded p-1">
+<button class="px-2.5 py-1 text-label-badge font-label-badge uppercase rounded bg-surface-card shadow-sm text-text-charcoal font-semibold">Ledger View</button>
+<button class="px-2.5 py-1 text-label-badge font-label-badge uppercase rounded text-text-muted hover:text-text-charcoal transition-colors">Grid Cards</button>
+</div>
+<button class="px-3 py-2 bg-surface-canvas hover:bg-surface-container-high rounded text-text-charcoal flex items-center gap-1 font-caption text-caption">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+<span>Filters</span>
+</button>
+</div>
+</div>
+<!-- Status Categorical Tabs -->
+<div class="flex items-center gap-space-xs overflow-x-auto pt-space-xs scrollbar-none">
+<button class="px-3 py-1.5 rounded font-label-badge text-label-badge uppercase tracking-wider bg-primary text-on-primary font-semibold whitespace-nowrap">
+              All Certificates (1,289)
+            </button>
+<button class="px-3 py-1.5 rounded font-label-badge text-label-badge uppercase tracking-wider bg-surface-canvas text-text-muted hover:text-text-charcoal transition-colors whitespace-nowrap">
+              Provider Verified (1,142)
+            </button>
+<button class="px-3 py-1.5 rounded font-label-badge text-label-badge uppercase tracking-wider bg-surface-canvas text-text-muted hover:text-text-charcoal transition-colors whitespace-nowrap">
+              Expert Dual-Signed (147)
+            </button>
+<button class="px-3 py-1.5 rounded font-label-badge text-label-badge uppercase tracking-wider bg-status-counterfeit-bg text-status-counterfeit font-semibold hover:bg-red-100 transition-colors whitespace-nowrap flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-status-counterfeit animate-ping"></span>
+              Unverified Client Uploads (4 Flagged)
+            </button>
+<button class="px-3 py-1.5 rounded font-label-badge text-label-badge uppercase tracking-wider bg-surface-canvas text-text-muted hover:text-text-charcoal transition-colors whitespace-nowrap">
+              Archived Ledgers
+            </button>
+</div>
+<!-- Silhouette Filter Pills -->
+<div class="flex items-center gap-2 overflow-x-auto pt-1 text-caption font-caption text-text-muted">
+<span class="uppercase tracking-widest text-label-badge font-label-badge text-text-muted flex-shrink-0">Silhouette:</span>
+<button class="px-2 py-0.5 rounded bg-surface-canvas text-primary font-semibold">All</button>
+<button class="px-2 py-0.5 rounded hover:bg-surface-canvas text-text-muted hover:text-on-surface transition-colors">Speedy</button>
+<button class="px-2 py-0.5 rounded hover:bg-surface-canvas text-text-muted hover:text-on-surface transition-colors">Neverfull</button>
+<button class="px-2 py-0.5 rounded hover:bg-surface-canvas text-text-muted hover:text-on-surface transition-colors">Capucines</button>
+<button class="px-2 py-0.5 rounded hover:bg-surface-canvas text-text-muted hover:text-on-surface transition-colors">Keepall</button>
+<button class="px-2 py-0.5 rounded hover:bg-surface-canvas text-text-muted hover:text-on-surface transition-colors">Petite Malle</button>
+<button class="px-2 py-0.5 rounded hover:bg-surface-canvas text-text-muted hover:text-on-surface transition-colors">Alma</button>
+</div>
+</div>
+<!-- Ledger Table Card -->
+<div class="bg-surface-card rounded shadow-sm overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-ivory font-label-badge text-label-badge uppercase tracking-wider text-text-muted">
+<th class="py-3 px-4">Certificate ID &amp; Provenance</th>
+<th class="py-3 px-4">Specimen Details</th>
+<th class="py-3 px-4">Issuing Provider / Model</th>
+<th class="py-3 px-4">Verdict Statement</th>
+<th class="py-3 px-4 text-right">Cryptographic Hash</th>
+<th class="py-3 px-4 text-center">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container-low font-body-md text-body-md text-on-surface">
+<!-- ROW 1: Active Entrupy Sealed Item (Selected) -->
+<tr class="hover:bg-surface-ivory/60 transition-colors bg-surface-ivory/30">
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-1.5">
+<span class="font-code-mono text-code-mono font-semibold text-text-charcoal">HA-CERT-2024-8841</span>
+<span class="p-0.5 rounded bg-gold-light text-secondary" title="Cryptographically Sealed Certificate">
+<span class="material-symbols-outlined text-[13px] text-secondary">verified</span>
+</span>
+</div>
+<span class="font-caption text-caption text-text-muted">Ref: #HA-LV-2024-1049</span>
+<div class="inline-flex items-center gap-1 mt-1 text-gold-champagne font-label-badge text-label-badge uppercase font-bold tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-gold-champagne"></span>
+                        Entrupy Financial Seal
+                      </div>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex items-start gap-3">
+<img class="w-11 h-11 object-cover rounded shadow-sm flex-shrink-0" data-alt="High resolution studio macro photo of an authentic Louis Vuitton Speedy 25 Monogram Canvas bag with natural honey patina leather handles on an ivory display surface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0aG_KF7vsIeaY5IMxGtSNM6xeHj30sLnIDIdGHKi0MgYp4D-SlGFEBug22bjMBq0pADmLT0_tmjpQfpcY8198RQQ7E6p4H99P9-gQiq2G2H7v990Pk0jP-_TRC2WJVWEA2KLb3D7afAkN2i0aasCBDB1jz-alIeF1kekrIihbxDzpwBVOV6Bv8U6FR1p9BMSpJ3mFiPNdd-kcr-hsTUjJbQSR1dGBNkcWnhB9pFLXh87o2zHMq24n"/>
+<div class="flex flex-col">
+<span class="font-title-md text-body-md font-semibold text-text-charcoal leading-snug">Speedy 25 Monogram Canvas</span>
+<span class="font-caption text-caption text-text-muted">Circa 2021 · Production France</span>
+<span class="font-code-mono text-[10px] text-text-muted mt-0.5">NFC ID: E004015F924B88C1</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col">
+<div class="flex items-center gap-1">
+<span class="font-body-md text-body-md font-medium text-text-charcoal">Entrupy Inc.</span>
+<span class="material-symbols-outlined text-[14px] text-status-verified">verified</span>
+</div>
+<span class="font-caption text-caption text-text-muted">Cert #ENT-99120-FR</span>
+<span class="font-caption text-caption text-text-muted mt-1">Underwritten $15k USD</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col items-start gap-1">
+<span class="inline-flex items-center px-2 py-0.5 rounded bg-status-verified-bg text-status-verified font-label-badge text-label-badge font-semibold uppercase tracking-wider">
+                        Consistent With Authentic
+                      </span>
+<span class="font-caption text-caption text-text-muted">Oct 24, 2024 · 14:32 Paris</span>
+<span class="font-caption text-[10px] text-ai-telemetry">Signer: S. Vong (Lead) + AI v4.11</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top text-right">
+<div class="flex flex-col items-end gap-1">
+<button class="inline-flex items-center gap-1 px-2 py-1 bg-surface-canvas hover:bg-surface-container rounded font-code-mono text-code-mono text-text-charcoal transition-colors group" title="Click to copy SHA-256 hash">
+<span>0x7f8a...3c21</span>
+<span class="material-symbols-outlined text-[13px] text-text-muted group-hover:text-primary">content_copy</span>
+</button>
+<span class="font-label-badge text-[9px] text-status-verified uppercase font-medium">Merkle Root Verified</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top text-center">
+<div class="flex items-center justify-center gap-1">
+<button class="p-1.5 rounded hover:bg-surface-canvas text-text-charcoal" title="View Certificate Dossier">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-canvas text-text-charcoal" title="Download Official PDF">
+<span class="material-symbols-outlined text-[18px]">file_download</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-canvas text-text-charcoal" title="Public Shareable Link">
+<span class="material-symbols-outlined text-[18px]">share</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- ROW 2: Master Atelier Dual-Sign Specimen -->
+<tr class="hover:bg-surface-ivory/60 transition-colors">
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-1.5">
+<span class="font-code-mono text-code-mono font-semibold text-text-charcoal">HA-CERT-2024-8839</span>
+<span class="p-0.5 rounded bg-surface-container-high text-primary" title="Atelier Master Dual Consensus">
+<span class="material-symbols-outlined text-[13px]">military_tech</span>
+</span>
+</div>
+<span class="font-caption text-caption text-text-muted">Ref: #HA-LV-2024-0870</span>
+<div class="inline-flex items-center gap-1 mt-1 text-primary font-label-badge text-label-badge uppercase font-bold tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Dual Master Human Review
+                      </div>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex items-start gap-3">
+<img class="w-11 h-11 object-cover rounded shadow-sm flex-shrink-0" data-alt="Forensic inspection view of a Louis Vuitton Keepall 50 Eclipse travel duffle bag showcasing matte black hardware and dark monogram shadow detailing." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxG45y37j8vVn8mWiSNymT0NTq_Gr07uBrxG9dVf3kdjvL9HxJbIcmDuF2o-74GXngCIwWCbayw8E0uVL9A8mWO1SQtkcczMb8O40QT0tm38Mm_YWosItBSR7IOkeHUD6oQB9YcZrry6yZI9UMzxKkvqFRCvllCaPXZYcva34V_zko20-b8LKZKLhNVfSEmoPH04ooBo1OnsZU7V-cpmLrZ5N7NsrPSZ7VAB0YYzI-9G_mT7xfKRR7"/>
+<div class="flex flex-col">
+<span class="font-title-md text-body-md font-semibold text-text-charcoal leading-snug">Keepall Bandoulière 50 Eclipse</span>
+<span class="font-caption text-caption text-text-muted">Circa 2021 · Micro-RFID Tested</span>
+<span class="font-code-mono text-[10px] text-text-muted mt-0.5">UID: 046B4A3A295E80</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col">
+<div class="flex items-center gap-1">
+<span class="font-body-md text-body-md font-medium text-text-charcoal">HENGZ Master Atelier</span>
+<span class="material-symbols-outlined text-[14px] text-secondary">workspace_premium</span>
+</div>
+<span class="font-caption text-caption text-text-muted">Appraisers: J. Chen &amp; S. Vong</span>
+<span class="font-caption text-caption text-text-muted mt-1">High-Precision Loupe 40X</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col items-start gap-1">
+<span class="inline-flex items-center px-2 py-0.5 rounded bg-status-verified-bg text-status-verified font-label-badge text-label-badge font-semibold uppercase tracking-wider">
+                        Authentic Master Consensus
+                      </span>
+<span class="font-caption text-caption text-text-muted">Oct 22, 2024 · 18:45 Paris</span>
+<span class="font-caption text-[10px] text-text-muted">Physical Seal Attached</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top text-right">
+<div class="flex flex-col items-end gap-1">
+<button class="inline-flex items-center gap-1 px-2 py-1 bg-surface-canvas hover:bg-surface-container rounded font-code-mono text-code-mono text-text-charcoal transition-colors group">
+<span>0x4b1e...88f0</span>
+<span class="material-symbols-outlined text-[13px] text-text-muted group-hover:text-primary">content_copy</span>
+</button>
+<span class="font-label-badge text-[9px] text-status-verified uppercase font-medium">Tamper Sealed</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top text-center">
+<div class="flex items-center justify-center gap-1">
+<button class="p-1.5 rounded hover:bg-surface-canvas text-text-charcoal">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-canvas text-text-charcoal">
+<span class="material-symbols-outlined text-[18px]">file_download</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-canvas text-text-charcoal">
+<span class="material-symbols-outlined text-[18px]">share</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- ROW 3: Capucines BB Entrupy -->
+<tr class="hover:bg-surface-ivory/60 transition-colors">
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-1.5">
+<span class="font-code-mono text-code-mono font-semibold text-text-charcoal">HA-CERT-2024-8835</span>
+<span class="p-0.5 rounded bg-gold-light text-secondary">
+<span class="material-symbols-outlined text-[13px] text-secondary">verified</span>
+</span>
+</div>
+<span class="font-caption text-caption text-text-muted">Ref: #HA-LV-2024-0879</span>
+<div class="inline-flex items-center gap-1 mt-1 text-gold-champagne font-label-badge text-label-badge uppercase font-bold tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-gold-champagne"></span>
+                        Entrupy Financial Seal
+                      </div>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex items-start gap-3">
+<img class="w-11 h-11 object-cover rounded shadow-sm flex-shrink-0" data-alt="Studio photograph of a black Taurillon grained leather Louis Vuitton Capucines BB handbag with brushed gold LV monogram clasp." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-U7_p_y0_SUKFAOp7GZUxkQGSMv0BpwvBmcNihamFt3ziUjA4sUcfKPYkdsfwRdayK2ZSHofahEMC_i1C1jUb5-fcbiKicW30C4_RCCPGiFp3OZmvLPGnr-TfNnNARvbAGCK_q6saBJAeYkKfBY-hidCxfFn1dQG6NsRnhf0iWzDidf0TgLEgeFdpwFsLzJSK60bF5LSO0jPt_28HdXDsy8UUpzdlck8OFi96Ej9p89t5ge6pv-tj"/>
+<div class="flex flex-col">
+<span class="font-title-md text-body-md font-semibold text-text-charcoal leading-snug">Capucines BB Taurillon Noir</span>
+<span class="font-caption text-caption text-text-muted">Circa 2022 · Full Hardware Spec</span>
+<span class="font-code-mono text-[10px] text-text-muted mt-0.5">Heat Stamp: Font Type C-04</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col">
+<div class="flex items-center gap-1">
+<span class="font-body-md text-body-md font-medium text-text-charcoal">Entrupy Inc.</span>
+<span class="material-symbols-outlined text-[14px] text-status-verified">verified</span>
+</div>
+<span class="font-caption text-caption text-text-muted">Cert #ENT-98402-CH</span>
+<span class="font-caption text-caption text-text-muted mt-1">Underwritten $20k USD</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col items-start gap-1">
+<span class="inline-flex items-center px-2 py-0.5 rounded bg-status-verified-bg text-status-verified font-label-badge text-label-badge font-semibold uppercase tracking-wider">
+                        Consistent With Authentic
+                      </span>
+<span class="font-caption text-caption text-text-muted">Oct 21, 2024 · 11:15 Paris</span>
+<span class="font-caption text-[10px] text-ai-telemetry">Entrupy Microscopic Algorithm</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top text-right">
+<div class="flex flex-col items-end gap-1">
+<button class="inline-flex items-center gap-1 px-2 py-1 bg-surface-canvas hover:bg-surface-container rounded font-code-mono text-code-mono text-text-charcoal transition-colors group">
+<span>0x91d2...aa44</span>
+<span class="material-symbols-outlined text-[13px] text-text-muted group-hover:text-primary">content_copy</span>
+</button>
+<span class="font-label-badge text-[9px] text-status-verified uppercase font-medium">Merkle Root Verified</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top text-center">
+<div class="flex items-center justify-center gap-1">
+<button class="p-1.5 rounded hover:bg-surface-canvas text-text-charcoal">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-canvas text-text-charcoal">
+<span class="material-symbols-outlined text-[18px]">file_download</span>
+</button>
+<button class="p-1.5 rounded hover:bg-surface-canvas text-text-charcoal">
+<span class="material-symbols-outlined text-[18px]">share</span>
+</button>
+</div>
+</td>
+</tr>
+<!-- ROW 4: Strictly Demarcated Unverified User Document (Regulatory Warning) -->
+<tr class="bg-status-review-bg/40 hover:bg-status-review-bg/60 transition-colors">
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-1.5">
+<span class="font-code-mono text-code-mono font-semibold text-status-review">DOC-EXT-UNVERIFIED-012</span>
+<span class="p-0.5 rounded bg-status-review-bg text-status-review" title="Unverified Non-Cert Document">
+<span class="material-symbols-outlined text-[14px]">warning</span>
+</span>
+</div>
+<span class="font-caption text-caption text-text-muted">Ref: #HA-LV-2024-0881</span>
+<div class="inline-flex items-center gap-1 mt-1 text-status-counterfeit font-label-badge text-label-badge uppercase font-bold tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-status-counterfeit"></span>
+                        Uncertified Client Upload
+                      </div>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex items-start gap-3">
+<div class="w-11 h-11 rounded bg-surface-canvas flex items-center justify-center flex-shrink-0 text-text-muted">
+<span class="material-symbols-outlined text-[20px]">description</span>
+</div>
+<div class="flex flex-col">
+<span class="font-title-md text-body-md font-semibold text-text-charcoal leading-snug">Neverfull MM Damier Ebene</span>
+<span class="font-caption text-caption text-status-review font-medium">Alleged 2019 · Scanned PDF</span>
+<span class="font-caption text-[10px] text-text-muted mt-0.5">Origin: Unvetted 3rd-Party Boutique</span>
+</div>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col">
+<div class="flex items-center gap-1">
+<span class="font-body-md text-body-md font-semibold text-status-counterfeit">None (User Upload)</span>
+</div>
+<span class="font-caption text-caption text-text-muted">Store Receipt / Invoice Image</span>
+<span class="font-caption text-caption text-status-review mt-1 font-medium">Zero Provenance Warranty</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top">
+<div class="flex flex-col items-start gap-1">
+<span class="inline-flex items-center px-2 py-0.5 rounded bg-status-review-bg text-status-review font-label-badge text-label-badge font-semibold uppercase tracking-wider">
+                        Unverified Claim · Review
+                      </span>
+<span class="font-caption text-caption text-text-muted">Submitted Oct 24, 2024</span>
+<span class="font-caption text-[10px] text-status-counterfeit font-semibold">NOT ELIGIBLE FOR CERTIFICATE</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top text-right">
+<div class="flex flex-col items-end gap-1">
+<span class="inline-flex items-center gap-1 px-2 py-1 bg-surface-canvas rounded font-code-mono text-code-mono text-text-muted">
+                        Pending Verification
+                      </span>
+<span class="font-label-badge text-[9px] text-status-review uppercase font-medium">Unsealed Entry</span>
+</div>
+</td>
+<td class="py-4 px-4 align-top text-center">
+<div class="flex items-center justify-center gap-1">
+<button class="px-2 py-1 rounded bg-surface-card hover:bg-surface-canvas text-text-charcoal font-caption text-caption shadow-sm" title="Examine Original Document">
+                        Examine
+                      </button>
+<button class="px-2 py-1 rounded bg-primary text-on-primary font-caption text-caption hover:bg-neutral-800 shadow-sm" title="Route to Entrupy Pipeline">
+                        Route
+                      </button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Pagination & Audit Hash Sync Footnote -->
+<div class="bg-surface-ivory px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-space-sm font-caption text-caption text-text-muted">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-status-verified">verified_user</span>
+<span>Ledger Node: <strong class="text-text-charcoal font-code-mono">PARIS-VAULT-04</strong> · Merkle Sync: 2m ago</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span>Showing 1–4 of 1,289</span>
+<div class="flex items-center gap-1">
+<button class="px-2 py-1 rounded bg-surface-card hover:bg-surface-canvas text-text-charcoal shadow-sm disabled:opacity-40" disabled="">Previous</button>
+<button class="px-2 py-1 rounded bg-surface-card hover:bg-surface-canvas text-text-charcoal shadow-sm">Next</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Live Certificate Verification Inspector Showcase (xl:col-span-4) -->
+<aside class="xl:col-span-4 flex flex-col gap-space-md">
+<!-- Showcase Container Card -->
+<div class="bg-surface-card rounded shadow-md overflow-hidden flex flex-col">
+<!-- Inspector Header Bar -->
+<div class="bg-surface-ivory px-space-md py-3 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-gold-champagne">workspace_premium</span>
+<span class="font-label-badge text-label-badge uppercase tracking-widest text-text-charcoal font-semibold">Live Certificate Inspector</span>
+</div>
+<span class="font-code-mono text-code-mono text-gold-champagne font-bold">HA-CERT-2024-8841</span>
+</div>
+<!-- Archival Luxury Certificate Replica Preview -->
+<div class="p-space-md flex flex-col gap-space-md bg-surface-ivory/40 relative">
+<!-- Subtle Watermark Seal -->
+<div class="absolute right-4 bottom-14 opacity-5 pointer-events-none select-none">
+<span class="font-headline-lg text-[130px] leading-none font-display-lg text-primary">LV</span>
+</div>
+<!-- The Archival Certificate Card with Gold Trim Accent -->
+<div class="bg-surface-card rounded p-space-md shadow-sm relative flex flex-col gap-space-md">
+<!-- Certificate Header Band -->
+<div class="flex items-start justify-between pb-3 bg-gradient-to-b from-transparent via-transparent to-surface-canvas/40">
+<div class="flex flex-col">
+<span class="font-label-badge text-[9px] uppercase tracking-widest text-gold-champagne font-bold">Official Certificate of Authenticity</span>
+<span class="font-headline-sm text-headline-sm text-text-charcoal font-normal tracking-tight">HENGZ Forensic Atelier</span>
+<span class="font-caption text-caption text-text-muted">Issued under Entrupy Global Guarantee Protocol</span>
+</div>
+<!-- Entrupy Seal Badge -->
+<div class="w-10 h-10 rounded-full bg-gold-light/60 flex items-center justify-center flex-shrink-0 text-secondary shadow-sm">
+<span class="material-symbols-outlined text-[20px] text-gold-champagne">verified</span>
+</div>
+</div>
+<!-- Specimen Visual & Attributes -->
+<div class="flex items-center gap-space-md">
+<img class="w-16 h-16 object-cover rounded shadow-sm flex-shrink-0" data-alt="Macro product photo of an authentic Louis Vuitton Speedy 25 Monogram luxury bag resting on clean white studio pedestal with soft daylight illumination." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7WEsFHEVXtdpdWWiL23j_gsOA5uDGn_WBHac_N-gB9MGTlwQFFq4z5qALJyn4xn3W3kwdHN3gAkgpMjGNwsPteTzqYMB10s8K1G8Dw8ErRYliOm-bqZ8I4OwXPKjrYALn8ZNpMQ8VliQitesnRO3qULh73UNc02Ok9k6tCJ7P_j4OwB88L0KiW_1XvuXv84KS6cm-x9jXSY1CTgx2zWoVrM_zrPsNp2jwyRO0rl1LwmOPQXIfC9if"/>
+<div class="flex flex-col">
+<span class="font-title-md text-title-md text-text-charcoal font-semibold leading-tight">Speedy 25 Monogram</span>
+<span class="font-caption text-caption text-text-muted">Louis Vuitton Malletier · Paris</span>
+<span class="font-code-mono text-code-mono text-secondary mt-0.5">Cert #ENT-99120-FR</span>
+</div>
+</div>
+<!-- Multi-Point Forensic Telemetry Grid -->
+<div class="grid grid-cols-2 gap-space-xs pt-1 font-caption text-caption">
+<div class="p-2 bg-surface-canvas rounded flex flex-col">
+<span class="text-text-muted text-[10px] uppercase tracking-wider font-label-badge">Heat Stamp Precision</span>
+<span class="font-code-mono text-code-mono text-text-charcoal font-bold mt-0.5">99.8% Match</span>
+<span class="text-[9px] text-status-verified font-medium">Font Geometry C-02 Valid</span>
+</div>
+<div class="p-2 bg-surface-canvas rounded flex flex-col">
+<span class="text-text-muted text-[10px] uppercase tracking-wider font-label-badge">Thread Tension &amp; SPI</span>
+<span class="font-code-mono text-code-mono text-text-charcoal font-bold mt-0.5">99.1% Match</span>
+<span class="text-[9px] text-status-verified font-medium">5.0 SPI Linen Thread</span>
+</div>
+<div class="p-2 bg-surface-canvas rounded flex flex-col">
+<span class="text-text-muted text-[10px] uppercase tracking-wider font-label-badge">Era / Factory Date</span>
+<span class="font-code-mono text-code-mono text-text-charcoal font-bold mt-0.5">Circa 2021</span>
+<span class="text-[9px] text-status-verified font-medium">France Era Alignment</span>
+</div>
+<div class="p-2 bg-surface-canvas rounded flex flex-col">
+<span class="text-text-muted text-[10px] uppercase tracking-wider font-label-badge">RFID Transponder</span>
+<span class="font-code-mono text-[10px] text-text-charcoal font-bold mt-0.5 truncate">E0:04:01:5F:92:4B</span>
+<span class="text-[9px] text-status-verified font-medium">Encrypted Payload OK</span>
+</div>
+</div>
+<!-- Financial Guarantee Box -->
+<div class="p-2.5 rounded bg-status-verified-bg flex items-start gap-2">
+<span class="material-symbols-outlined text-[16px] text-status-verified mt-0.5">verified_user</span>
+<div class="flex flex-col">
+<span class="font-label-badge text-[10px] uppercase text-status-verified font-bold tracking-wider">$15,000 USD Authenticity Warranty</span>
+<span class="font-caption text-[11px] text-text-charcoal/80 leading-snug">
+                    Underwritten unconditionally by Entrupy Partner Agreement #2024-FR-092.
+                  </span>
+</div>
+</div>
+<!-- Cryptographic QR Code & Ledger Anchor -->
+<div class="pt-2 flex items-center justify-between gap-space-sm bg-gradient-to-t from-transparent via-transparent to-surface-canvas/40">
+<div class="flex flex-col gap-0.5">
+<span class="font-label-badge text-[9px] uppercase tracking-widest text-text-muted">Public Registry URL</span>
+<span class="font-code-mono text-[11px] text-text-charcoal font-medium">verify.hengz-authentic.com/cert/8841</span>
+<span class="font-code-mono text-[10px] text-text-muted truncate max-w-[190px]">Hash: 0x7f8a4cd33b91a90c21...</span>
+</div>
+<!-- Stylized Forensic QR Mockup -->
+<div class="w-16 h-16 bg-surface-card p-1 rounded shadow-sm flex items-center justify-center flex-shrink-0">
+<svg class="w-full h-full text-text-charcoal" fill="currentColor" viewbox="0 0 24 24">
+<path d="M2 2h8v8H2V2zm2 2v4h4V4H4zm10-2h8v8h-8V2zm2 2v4h4V4h-4zM2 14h8v8H2v-8zm2 2v4h4v-4H4zm10 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 4h2v2h-2v-2zm2-2h2v2h-2v-2zm-6-2h2v2h-2v-2zm6-4h2v2h-2v-2zM6 6h0v0H6z"></path>
+</svg>
+</div>
+</div>
+<!-- Authorized Signatures Strip -->
+<div class="flex items-end justify-between pt-2">
+<div class="flex flex-col">
+<span class="font-caption text-[10px] text-text-muted">Lead Forensic Appraiser</span>
+<span class="font-headline-sm text-[16px] text-text-charcoal italic leading-none mt-1">S. Vong, M.Sc.</span>
+<span class="font-label-badge text-[9px] text-text-muted mt-0.5">Credential: LV-EXP-2018-09</span>
+</div>
+<div class="flex flex-col text-right">
+<span class="font-caption text-[10px] text-text-muted">Cryptographic Seal</span>
+<span class="font-label-badge text-[10px] text-status-verified uppercase font-bold mt-1">VALIDATED OK</span>
+<span class="font-code-mono text-[9px] text-text-muted">Timestamp: 1729780320</span>
+</div>
+</div>
+</div>
+<!-- Inspector Action Suite -->
+<div class="flex flex-col gap-2 pt-space-xs">
+<button class="w-full py-2.5 rounded bg-primary text-on-primary hover:bg-neutral-800 font-title-md text-body-md flex items-center justify-center gap-2 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">print</span>
+<span>Print Official Archival Certificate</span>
+</button>
+<div class="grid grid-cols-2 gap-2">
+<button class="py-2 rounded bg-surface-card hover:bg-surface-canvas text-text-charcoal font-caption text-caption uppercase tracking-wider font-semibold transition-colors shadow-sm flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[16px]">file_download</span>
+<span>Export PDF</span>
+</button>
+<button class="py-2 rounded bg-surface-card hover:bg-surface-canvas text-text-charcoal font-caption text-caption uppercase tracking-wider font-semibold transition-colors shadow-sm flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[16px]">open_in_new</span>
+<span>Public URL</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Chain Integrity & Merkle Telemetry Widget -->
+<div class="bg-surface-card rounded p-space-md shadow-sm flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-badge text-label-badge uppercase tracking-wider text-text-muted">Chain Provenance Integrity</span>
+<span class="material-symbols-outlined text-[16px] text-status-verified">verified</span>
+</div>
+<p class="font-caption text-caption text-text-charcoal/80 leading-relaxed">
+            Every issued certificate is permanently hashed into the HENGZ Private Merkle Archive. Any modification to specimen records invalidates the QR certificate signature immediately.
+          </p>
+<div class="mt-2 p-2 bg-surface-canvas rounded flex items-center justify-between font-code-mono text-[11px]">
+<span class="text-text-muted">Root: 0x82b9...55c1</span>
+<span class="text-status-verified font-medium">Chain Intact (0 Errors)</span>
+</div>
+</div>
+</aside>
+</div>
+</div>
+<!-- Interactive Modal for QR & Hash Verification (Hidden by default, triggered via script) -->
+<div class="fixed inset-0 bg-primary/40 backdrop-blur-sm z-50 hidden items-center justify-center p-4" id="verifyModal">
+<div class="bg-surface-card rounded-lg max-w-lg w-full p-space-lg shadow-xl flex flex-col gap-space-md">
+<div class="flex items-center justify-between pb-space-xs">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px] text-gold-champagne">qr_code_scanner</span>
+<h3 class="font-headline-sm text-headline-sm text-text-charcoal font-medium">Verify Certificate Hash</h3>
+</div>
+<button class="p-1 rounded hover:bg-surface-canvas text-text-muted hover:text-text-charcoal" id="closeModal">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<p class="font-body-md text-body-md text-text-muted">
+        Paste a certificate SHA-256 hash or scan the archival QR code to verify integrity against the Paris Forensic Ledger.
+      </p>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-badge text-label-badge uppercase tracking-wider text-text-muted">SHA-256 Certificate Hash</label>
+<input class="w-full px-3 py-2 bg-surface-canvas rounded font-code-mono text-body-md text-text-charcoal focus:outline-none" id="hashInput" type="text" value="0x7f8a4cd33b91a90c2134aa8f9e02c5d11894a73c21"/>
+</div>
+<div class="p-space-sm rounded bg-status-verified-bg flex items-start gap-2" id="verifyResult">
+<span class="material-symbols-outlined text-[18px] text-status-verified mt-0.5">check_circle</span>
+<div class="flex flex-col font-caption text-caption">
+<span class="font-semibold text-status-verified">Hash Match Confirmed in Registry</span>
+<span class="text-text-charcoal/80">Belongs to HA-CERT-2024-8841 (Speedy 25 Monogram) · Unmodified</span>
+</div>
+</div>
+<div class="flex items-center justify-end gap-space-sm pt-space-xs">
+<button class="px-4 py-2 rounded bg-surface-canvas hover:bg-surface-container font-title-md text-body-md text-text-charcoal transition-colors" id="closeModalBtn">
+          Dismiss
+        </button>
+<button class="px-4 py-2 rounded bg-primary text-on-primary hover:bg-neutral-800 font-title-md text-body-md transition-colors shadow-sm">
+          Run Deep Ledger Audit
+        </button>
+</div>
+</div>
+</div>
+<!-- Inline Micro-Interactions Script -->
+<script>
+    (function() {
+      const modal = document.getElementById('verifyModal');
+      const trigger = document.getElementById('verifyHashTrigger');
+      const closeBtn = document.getElementById('closeModal');
+      const closeBtn2 = document.getElementById('closeModalBtn');
+
+      if (trigger && modal) {
+        trigger.addEventListener('click', () => {
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+        });
+      }
+
+      function hideModal() {
+        if (modal) {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+        }
+      }
+
+      if (closeBtn) closeBtn.addEventListener('click', hideModal);
+      if (closeBtn2) closeBtn2.addEventListener('click', hideModal);
+
+      // Dismiss on backdrop click
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) hideModal();
+        });
+      }
+    })();
+  </script>
+</div></main></div></body></html>
