@@ -1,6 +1,6 @@
 # Deploy (no secrets pasted anywhere)
 
-D1 and R2 already exist and are bound in `wrangler.jsonc`; migrations 0001–0002 are already applied remotely.
+D1 and R2 already exist and are bound in `wrangler.jsonc`; migrations 0001–0002 are already applied remotely; 0003–0004 still need `npm run db:remote`.
 ```
 npm install && npm run typecheck && npm test && npm run build
 npx wrangler login            # browser OAuth, nothing to paste
