@@ -12,7 +12,7 @@
   },
   // These IDs are NOT secrets. They were created through the Cloudflare connector.
   "d1_databases": [
-    { "binding": "DB", "database_name": "hengz-authentic", "database_id": "6df997e3-47eb-45af-aae4-513311d2762f", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "hengz-authentic", "database_id": "43949a74-3876-4fe9-9818-d662d2d1467c", "migrations_dir": "migrations" }
   ],
   "r2_buckets": [
     { "binding": "VAULT", "bucket_name": "hengz-vault-private" }
