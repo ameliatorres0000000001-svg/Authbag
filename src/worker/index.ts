@@ -332,7 +332,9 @@ app.get('/api/inspections/:id', async (c) => {
     c.env.DB.prepare('SELECT id, engine_version, outcome, detail_json, rules_snapshot_hash, created_at FROM evaluations WHERE inspection_id = ? ORDER BY created_at DESC LIMIT 1').bind(id).first(),
     resolveTemplates(c.env, insp.brand_id, insp.model_id),
     c.env.DB.prepare('SELECT * FROM observation_defs ORDER BY component_code, key').all(),
-    c.env.DB.prepare('SELECT id, capture_id, x, y, w, h, label, note, source, created_at FROM capture_marks WHERE inspection_id = ? ORDER BY created_at').bind(id).all(),
+    // tolerate a deploy that lands before migration 0006: the page still works, just without analysis points
+    c.env.DB.prepare('SELECT id, capture_id, x, y, w, h, label, note, source, created_at FROM capture_marks WHERE inspection_id = ? ORDER BY created_at').bind(id).all()
+      .catch(() => ({ results: [] })),
   ]);
   return c.json({ inspection: insp, captures: captures.results, observations: observations.results, evaluation, templates, observationDefs: defs.results, marks: marks.results });
 });
