@@ -6,6 +6,8 @@
   html, body { margin: 0; background: #faf9f6; color: #1a1a1a; font-family: Manrope, 'Noto Sans Khmer', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
   h1, h2, h3 { font-family: 'EB Garamond', 'Noto Serif Khmer', serif; font-weight: 500; }
   select, input, textarea { font: inherit; }
+  /* Wide letter-spacing tears Khmer clusters apart; keep the tracked mono look for Latin text only. */
+  :lang(km) .label, :lang(km) .tracking-widest, :lang(km) .tracking-wider { letter-spacing: 0; }
 }
 @layer components {
   .btn { @apply inline-flex items-center justify-center gap-2 rounded px-4 py-2 text-sm font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed; }

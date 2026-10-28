@@ -8,7 +8,8 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { aiConfigured, explainDifferences, suggestObservations } from './vision.ts';
+import { aiConfigured, explainDifferences, suggestFocusRegions, suggestObservations } from './vision.ts';
+import { isValidRect } from '../shared/marks.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
 const app = new Hono<AppEnv>();
@@ -325,14 +326,15 @@ app.get('/api/inspections/:id', async (c) => {
     `SELECT i.*, b.name AS brand, m.name AS model FROM inspections i JOIN brands b ON b.id = i.brand_id JOIN models m ON m.id = i.model_id WHERE i.id = ?`,
   ).bind(id).first<Record<string, any>>();
   if (!insp) return c.json({ error: 'not_found' }, 404);
-  const [captures, observations, evaluation, templates, defs] = await Promise.all([
+  const [captures, observations, evaluation, templates, defs, marks] = await Promise.all([
     c.env.DB.prepare('SELECT id, template_code, mime, bytes, width, height, quality_json, created_at FROM captures WHERE inspection_id = ? ORDER BY created_at').bind(id).all(),
     c.env.DB.prepare('SELECT id, capture_id, component_code, key, value_json, source, confidence, entered_by, created_at FROM observations WHERE inspection_id = ? ORDER BY created_at').bind(id).all(),
     c.env.DB.prepare('SELECT id, engine_version, outcome, detail_json, rules_snapshot_hash, created_at FROM evaluations WHERE inspection_id = ? ORDER BY created_at DESC LIMIT 1').bind(id).first(),
     resolveTemplates(c.env, insp.brand_id, insp.model_id),
     c.env.DB.prepare('SELECT * FROM observation_defs ORDER BY component_code, key').all(),
+    c.env.DB.prepare('SELECT id, capture_id, x, y, w, h, label, note, source, created_at FROM capture_marks WHERE inspection_id = ? ORDER BY created_at').bind(id).all(),
   ]);
-  return c.json({ inspection: insp, captures: captures.results, observations: observations.results, evaluation, templates, observationDefs: defs.results });
+  return c.json({ inspection: insp, captures: captures.results, observations: observations.results, evaluation, templates, observationDefs: defs.results, marks: marks.results });
 });
 
 app.post('/api/inspections/:id/captures', need(STAFF), async (c) => {
@@ -416,15 +418,80 @@ async function referenceCandidates(env: AppEnv['Bindings'], captureId: string) {
      FROM captures c JOIN inspections i ON i.id = c.inspection_id WHERE c.id = ?`,
   ).bind(captureId).first<Record<string, any>>();
   if (!cap) return null;
-  const refs = (await env.DB.prepare(
+  return { cap, refs: await approvedReferences(env, cap.brand_id, cap.model_id, cap.era_id, cap.component_code) };
+}
+
+/** Approved authentic reference photos for a scope, most specific first. Never includes quarantined or unlabelled assets. */
+async function approvedReferences(env: AppEnv['Bindings'], brandId: string, modelId: string | null, eraId: string | null, component: string | null) {
+  return (await env.DB.prepare(
     `SELECT id, model_id, era_id, component_code, label_basis, license FROM reference_assets
      WHERE status = 'approved' AND label = 'authentic' AND brand_id = ?1
        AND (model_id IS NULL OR model_id = ?2) AND (era_id IS NULL OR ?3 IS NULL OR era_id = ?3)
        AND (component_code IS NULL OR ?4 IS NULL OR component_code = ?4)
      ORDER BY (model_id = ?2) DESC, (era_id = ?3) DESC, (component_code = ?4) DESC, created_at DESC LIMIT 12`,
-  ).bind(cap.brand_id, cap.model_id, cap.era_id, cap.component_code).all<Record<string, any>>()).results;
-  return { cap, refs };
+  ).bind(brandId, modelId, eraId, component).all<Record<string, any>>()).results;
 }
+
+// Approved examples for the guided scan's "how to look" panel (same scope as the side-by-side comparator).
+app.get('/api/inspections/:id/references', async (c) => {
+  const insp = await c.env.DB.prepare('SELECT brand_id, model_id, era_id FROM inspections WHERE id = ?').bind(c.req.param('id')).first<Record<string, any>>();
+  if (!insp) return c.json({ error: 'not_found' }, 404);
+  const component = c.req.query('component') || null;
+  const refs = await approvedReferences(c.env, insp.brand_id, insp.model_id, insp.era_id, component);
+  return c.json({ component, candidates: refs, aiConfigured: aiConfigured(c.env) });
+});
+
+// ───────────────────────── analysis points (marks): annotation only, never read by the engine ─────────────────────────
+async function markableCapture(env: AppEnv['Bindings'], captureId: string) {
+  return env.DB.prepare(
+    `SELECT c.id, c.inspection_id, c.r2_key, c.mime, c.template_code, i.status,
+            (SELECT t.component_code FROM capture_templates t WHERE t.code = c.template_code LIMIT 1) AS component_code,
+            (SELECT t.label_en FROM capture_templates t WHERE t.code = c.template_code LIMIT 1) AS shot
+     FROM captures c JOIN inspections i ON i.id = c.inspection_id WHERE c.id = ?`,
+  ).bind(captureId).first<Record<string, any>>();
+}
+
+app.post('/api/captures/:id/marks', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number(), label: z.string().trim().min(1).max(80), note: z.string().max(500).optional() }));
+  if (!isValidRect(b)) return c.json({ error: 'invalid_rect' }, 400);
+  const cap = await markableCapture(c.env, c.req.param('id'));
+  if (!cap) return c.json({ error: 'not_found' }, 404);
+  if (cap.status === 'signed_off') return c.json({ error: 'inspection_signed_off' }, 409);
+  const id = uid('mk_');
+  await c.env.DB.prepare(`INSERT INTO capture_marks (id, capture_id, inspection_id, x, y, w, h, label, note, source, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'appraiser', ?)`)
+    .bind(id, cap.id, cap.inspection_id, b.x, b.y, b.w, b.h, b.label, b.note ?? null, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'mark.add', 'capture', cap.id, { mark: id, label: b.label });
+  return c.json({ id });
+});
+
+app.delete('/api/marks/:id', need(STAFF), async (c) => {
+  const m = await c.env.DB.prepare('SELECT m.id, m.capture_id, m.label, i.status FROM capture_marks m JOIN inspections i ON i.id = m.inspection_id WHERE m.id = ?').bind(c.req.param('id')).first<Record<string, any>>();
+  if (!m) return c.json({ error: 'not_found' }, 404);
+  if (m.status === 'signed_off') return c.json({ error: 'inspection_signed_off' }, 409);
+  await c.env.DB.prepare('DELETE FROM capture_marks WHERE id = ?').bind(m.id).run();
+  await audit(c.env, c.get('user').id, 'mark.delete', 'capture', m.capture_id, { mark: m.id, label: m.label });
+  return c.json({ ok: true });
+});
+
+app.post('/api/captures/:id/marks/suggest', need(STAFF), async (c) => {
+  const cap = await markableCapture(c.env, c.req.param('id'));
+  if (!cap) return c.json({ error: 'not_found' }, 404);
+  if (cap.status === 'signed_off') return c.json({ error: 'inspection_signed_off' }, 409);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const obj = await c.env.VAULT.get(cap.r2_key);
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  try {
+    const sugg = await suggestFocusRegions(c.env, { data: await obj.arrayBuffer(), mime: cap.mime }, cap.component_code ?? 'unspecified', cap.shot ?? cap.template_code);
+    for (const s of sugg) {
+      await c.env.DB.prepare(`INSERT INTO capture_marks (id, capture_id, inspection_id, x, y, w, h, label, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ai_suggested')`)
+        .bind(uid('mk_'), cap.id, cap.inspection_id, s.x, s.y, s.w, s.h, s.label).run();
+    }
+    await audit(c.env, c.get('user').id, 'mark.ai_suggest', 'capture', cap.id, { count: sugg.length });
+    return c.json({ suggestions: sugg.length });
+  } catch (e) {
+    return c.json({ error: 'ai_failed', detail: (e as Error).message }, 502);
+  }
+});
 
 app.get('/api/captures/:id/references', async (c) => {
   const r = await referenceCandidates(c.env, c.req.param('id'));

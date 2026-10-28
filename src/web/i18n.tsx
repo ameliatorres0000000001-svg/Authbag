@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 export type Locale = 'km' | 'en';
 
@@ -54,6 +54,29 @@ const D: Record<string, { km: string; en: string }> = {
   secretMissing: { km: 'secret មិនទាន់កំណត់', en: 'secret not set' },
   testConnection: { km: 'សាកល្បងការតភ្ជាប់ (ពិតប្រាកដ)', en: 'Test connection (real call)' },
   verifyChain: { km: 'ផ្ទៀងផ្ទាត់ខ្សែសង្វាក់', en: 'Verify chain' },
+  // guided scan (mobile) + analysis points
+  'scan.photos': { km: 'រូប', en: 'photos' },
+  'scan.step': { km: 'ជំហាន', en: 'Step' },
+  'scan.howToLook': { km: 'របៀបមើលចំណុចនេះ', en: 'How to look at this point' },
+  'scan.noGuidance': { km: 'មិនទាន់មានការណែនាំសម្រាប់រូបនេះទេ។ គ្រូ/អ្នកជំនាញអាចបន្ថែមក្នុងគំរូរូបថត។', en: 'No guidance for this shot yet. An expert can add it to the capture template.' },
+  'scan.examples': { km: 'រូបគំរូដែលបានអនុម័ត', en: 'Approved reference examples' },
+  'scan.noExamples': { km: 'មិនទាន់មានរូបគំរូដែលបានអនុម័តសម្រាប់ផ្នែកនេះទេ។ ដាក់រូបពិតដែលមានប្រភពច្បាស់ក្នុង "បណ្ណាល័យ reference" ហើយឲ្យ reviewer អនុម័ត។', en: 'No approved reference example for this part yet. Add photos with clear provenance to the Reference library and have a reviewer approve them.' },
+  'scan.shotList': { km: 'បញ្ជីរូបដែលត្រូវថត', en: 'Shot list' },
+  'scan.nowShooting': { km: 'កំពុងថត', en: 'Now shooting' },
+  'scan.retake': { km: 'ថតបន្ថែម', en: 'Add another photo' },
+  'scan.stageDone': { km: 'រូបចាំបាច់នៃជំហាននេះគ្រប់ហើយ។ ចុចរូបណាមួយក្នុងបញ្ជី ដើម្បីថតបន្ថែម។', en: 'All required photos for this stage are in. Tap any shot in the list to add more.' },
+  'scan.analysis': { km: 'វិភាគរូប · ចំណុចពិនិត្យ', en: 'Photo analysis · inspection points' },
+  'scan.analysisHelp': { km: 'អូសម្រាមដៃលើរូប ដើម្បីគូសប្រអប់ជុំវិញចំណុចដែលចង់ពង្រីក (ឧ. អក្សរលើបន្ទះលេខ, ក្បាលវីស, ថ្នេរ)។ ចំណុចទាំងនេះសម្រាប់មើល និងបង្រៀនប៉ុណ្ណោះ មិនប៉ះពាល់លទ្ធផលទេ។', en: 'Drag on the photo to draw a box around a detail to zoom (e.g. serial-plate characters, screw heads, stitches). Points are for viewing and teaching only; they never affect the outcome.' },
+  'scan.pointLabel': { km: 'ឈ្មោះចំណុច (ឧ. អក្សរ serial)', en: 'Point name (e.g. serial characters)' },
+  'scan.addPoint': { km: 'រក្សាទុកចំណុច', en: 'Save point' },
+  'scan.noPoints': { km: 'មិនទាន់មានចំណុចពិនិត្យលើរូបនេះទេ។', en: 'No inspection points on this photo yet.' },
+  'scan.aiPoints': { km: 'ឲ្យ AI ស្នើចំណុចគួរពង្រីក', en: 'Ask AI where to zoom' },
+  'scan.aiPointBadge': { km: 'AI ស្នើ', en: 'AI suggested' },
+  'scan.aiOff': { km: 'AI មិនទាន់កំណត់ ដូច្នេះអាចគូសចំណុចដោយដៃប៉ុណ្ណោះ។', en: 'AI is not configured, so points can only be drawn by hand.' },
+  'scan.aiNote': { km: 'AI ប្រាប់តែកន្លែងគួរមើល មិនប្រាប់ថាពិត ឬក្លែងទេ។', en: 'AI only says where to look, never whether an item is authentic or counterfeit.' },
+  'scan.delete': { km: 'លុប', en: 'Delete' },
+  'scan.compare': { km: 'ប្រៀបធៀបជាមួយ reference', en: 'Compare with references' },
+  'scan.tapPhoto': { km: 'ចុចរូបខាងលើ ដើម្បីវិភាគ។', en: 'Tap a photo above to analyse it.' },
   // outcomes
   'outcome.insufficient_evidence': { km: 'ភស្តុតាងមិនគ្រប់គ្រាន់', en: 'Insufficient evidence' },
   'outcome.requires_expert_review': { km: 'ត្រូវការអ្នកជំនាញពិនិត្យ', en: 'Requires expert review' },
@@ -91,6 +114,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLoc] = useState<Locale>(() => {
     try { return (localStorage.getItem('hz_locale') as Locale) || 'km'; } catch { return 'km'; }
   });
+  useEffect(() => { document.documentElement.lang = locale; }, [locale]);
   const value = useMemo<Ctx>(() => ({
     locale,
     setLocale: (l) => { setLoc(l); try { localStorage.setItem('hz_locale', l); } catch { /* ignore */ } document.documentElement.lang = l; },

@@ -1,4 +1,5 @@
 import type { Env } from './env.ts';
+import { MAX_AI_MARKS, parseSuggestedMarks, type SuggestedMark } from '../shared/marks.ts';
 
 export interface ObsDef { key: string; value_type: 'enum' | 'number' | 'boolean' | 'text'; enum_json: string | null; label_en: string }
 export interface Suggestion { key: string; value: string | number | boolean; confidence: number }
@@ -86,4 +87,18 @@ export async function explainDifferences(env: Env, inspected: VisionImage, refs:
     const o = JSON.parse(json) as { summary?: string; differences?: Difference[] };
     return { summary: String(o.summary ?? ''), differences: (o.differences ?? []).filter((d) => d && d.feature).slice(0, 20) };
   } catch { return { summary: '', differences: [] }; }
+}
+
+/**
+ * Propose up to 4 small regions of ONE photo that are worth a close look (letters, screws, stitches, edges).
+ * Where to look only: no verdict. Results are stored as source='ai_suggested' marks and never feed the engine.
+ */
+export async function suggestFocusRegions(env: Env, image: VisionImage, component: string, shot: string): Promise<SuggestedMark[]> {
+  const text = await callVision(env,
+    `You help a luxury-goods appraiser decide where to zoom in on a photo. ${NO_VERDICT} ` +
+    `Return up to ${MAX_AI_MARKS} small rectangles around details an expert would inspect closely (engraved or stamped characters, logo shapes, screw heads, stitch rows, edges, plating wear). ` +
+    `Coordinates are fractions of the image width/height (0..1) with the origin at the top-left. Labels name the detail neutrally (e.g. "Serial plate characters"), max 60 characters. ` +
+    `Reply with JSON only: [{"label":"...","x":0..1,"y":0..1,"w":0..1,"h":0..1}]`,
+    [image], `Component: ${component}. Shot: ${shot}.`, 600);
+  return parseSuggestedMarks(text);
 }
