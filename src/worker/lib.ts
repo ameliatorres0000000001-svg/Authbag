@@ -10,7 +10,8 @@ export async function sha256Hex(data: string | ArrayBuffer): Promise<string> {
 }
 
 // ───── passwords: PBKDF2-SHA256, per-user salt. No secrets needed in env. ─────
-const PBKDF2_ITER = 210_000;
+// Workers runtime caps PBKDF2 at 100k iterations; higher values throw NotSupportedError.
+const PBKDF2_ITER = 100_000;
 async function pbkdf2(password: string, saltHex: string, iter: number): Promise<string> {
   const salt = new Uint8Array(saltHex.match(/../g)!.map((h) => parseInt(h, 16)));
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
