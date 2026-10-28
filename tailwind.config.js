@@ -13,7 +13,7 @@ export default {
       fontFamily: {
         serif: ['"EB Garamond"', '"Noto Serif Khmer"', 'serif'],
         sans: ['Manrope', '"Noto Sans Khmer"', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        mono: ['"JetBrains Mono"', '"Noto Sans Khmer"', 'ui-monospace', 'monospace'],
       },
       borderRadius: { DEFAULT: '0.125rem', lg: '0.25rem', xl: '0.5rem' },
     },

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite build && wrangler dev",
     "build": "vite build",
-    "test": "node --experimental-strip-types --test test/engine.test.ts test/stages.test.ts",
+    "test": "node --experimental-strip-types --test test/engine.test.ts test/stages.test.ts test/marks.test.ts test/lens.test.ts",
     "typecheck": "tsc --noEmit",
     "db:local": "wrangler d1 migrations apply hengz-authentic --local",
     "db:remote": "wrangler d1 migrations apply hengz-authentic --remote",

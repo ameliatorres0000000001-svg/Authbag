@@ -17,4 +17,5 @@ export const api = {
   get: <T = any>(u: string) => req<T>('GET', u),
   post: <T = any>(u: string, b?: unknown) => req<T>('POST', u, b ?? {}),
   put: <T = any>(u: string, b?: unknown) => req<T>('PUT', u, b ?? {}),
+  del: <T = any>(u: string) => req<T>('DELETE', u),
 };
