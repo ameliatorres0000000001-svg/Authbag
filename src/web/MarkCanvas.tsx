@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useI18n } from './i18n.tsx';
 import { cropBox, rectFromDrag, type Rect } from '../shared/marks.ts';
 import { Badge, Notice } from './ui.tsx';
+import LensViewer from './LensViewer.tsx';
 
 export interface Mark extends Rect { id: string; label: string; note?: string | null; source: 'appraiser' | 'ai_suggested' }
 
@@ -26,6 +27,7 @@ export default function MarkCanvas({ src, marks, locked, aiConfigured, busy, onA
   const start = useRef<{ x: number; y: number } | null>(null);
   const [draft, setDraft] = useState<Rect | null>(null);
   const [label, setLabel] = useState('');
+  const [open, setOpen] = useState<string | null>(null); // mark shown in the lens viewer
   const [size, setSize] = useState<{ w: number; h: number } | null>(null); // natural size, for undistorted crops
 
   const at = (e: React.PointerEvent) => {
@@ -82,12 +84,12 @@ export default function MarkCanvas({ src, marks, locked, aiConfigured, busy, onA
           {marks.map((m, i) => {
             const c = size ? cropBox(m, size.w, size.h) : null;
             return (
-            <figure key={m.id} className="overflow-hidden rounded-lg border border-hairline bg-surface-card">
-              <div className="flex items-center justify-center bg-charcoal" style={{ aspectRatio: '1 / 1' }}>
+            <figure key={m.id} className={`overflow-hidden rounded-lg border bg-surface-card ${open === m.id ? 'border-gold ring-1 ring-gold' : 'border-hairline'}`}>
+              <button type="button" className="flex w-full items-center justify-center bg-charcoal" style={{ aspectRatio: '1 / 1' }} onClick={() => setOpen(open === m.id ? null : m.id)}>
                 {c && <div className={`relative overflow-hidden ${m.w * size!.w >= m.h * size!.h ? 'w-full' : 'h-full'}`} style={{ aspectRatio: c.aspectRatio }}>
                   <img src={src} alt="" draggable={false} className="absolute max-w-none" style={c.img} />
                 </div>}
-              </div>
+              </button>
               <figcaption className="space-y-1 p-2">
                 <div className="flex items-start gap-1 text-xs font-semibold"><span className="font-mono text-muted">{i + 1}.</span><span className="flex-1">{m.label}</span></div>
                 <div className="flex items-center justify-between gap-1">
@@ -100,6 +102,10 @@ export default function MarkCanvas({ src, marks, locked, aiConfigured, busy, onA
           })}
         </div>
       )}
+      {marks.length > 0 && (() => {
+        const i = marks.findIndex((m) => m.id === open);
+        return i < 0 ? <p className="text-xs text-muted">{t('lens.tap')}</p> : <LensViewer src={src} rect={marks[i]} title={`${i + 1}. ${marks[i].label}`} />;
+      })()}
     </div>
   );
 }
