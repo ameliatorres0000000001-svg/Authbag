@@ -12,7 +12,9 @@ interface Props {
   locked: boolean;
   aiConfigured: boolean;
   busy: boolean;
-  onAdd: (r: Rect, label: string) => Promise<void>;
+  onAdd: (r: Rect, label: string, note?: string) => Promise<void>;
+  /** show a note box next to the label (reference teaching points) */
+  withNote?: boolean;
   onDelete: (id: string) => Promise<void>;
   onSuggest: () => Promise<void>;
 }
@@ -21,12 +23,13 @@ interface Props {
  * One photo with numbered analysis boxes drawn on it, plus a zoomed crop of each box below.
  * Boxes are annotations only; they never feed the rules engine.
  */
-export default function MarkCanvas({ src, marks, locked, aiConfigured, busy, onAdd, onDelete, onSuggest }: Props) {
+export default function MarkCanvas({ src, marks, locked, aiConfigured, busy, onAdd, onDelete, onSuggest, withNote }: Props) {
   const { t } = useI18n();
   const box = useRef<HTMLDivElement>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const [draft, setDraft] = useState<Rect | null>(null);
   const [label, setLabel] = useState('');
+  const [note, setNote] = useState('');
   const [open, setOpen] = useState<string | null>(null); // mark shown in the lens viewer
   const [size, setSize] = useState<{ w: number; h: number } | null>(null); // natural size, for undistorted crops
 
@@ -48,8 +51,8 @@ export default function MarkCanvas({ src, marks, locked, aiConfigured, busy, onA
 
   async function save() {
     if (!draft || !label.trim()) return;
-    await onAdd(draft, label.trim());
-    setDraft(null); setLabel('');
+    await onAdd(draft, label.trim(), note.trim() || undefined);
+    setDraft(null); setLabel(''); setNote('');
   }
 
   const pct = (r: Rect) => ({ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: `${r.h * 100}%` });
@@ -69,9 +72,12 @@ export default function MarkCanvas({ src, marks, locked, aiConfigured, busy, onA
       </div>
 
       {draft && !locked && (
-        <div className="flex gap-2">
-          <input className="input" autoFocus value={label} maxLength={80} placeholder={t('scan.pointLabel')} onChange={(e) => setLabel(e.target.value)} />
-          <button className="btn-primary shrink-0" disabled={busy || !label.trim()} onClick={save}>{t('scan.addPoint')}</button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input className="input" autoFocus value={label} maxLength={80} placeholder={t('scan.pointLabel')} onChange={(e) => setLabel(e.target.value)} />
+            <button className="btn-primary shrink-0" disabled={busy || !label.trim()} onClick={save}>{t('scan.addPoint')}</button>
+          </div>
+          {withNote && <textarea className="input" rows={2} maxLength={1000} value={note} placeholder={t('studio.pointNote')} onChange={(e) => setNote(e.target.value)} />}
         </div>
       )}
 
@@ -92,6 +98,7 @@ export default function MarkCanvas({ src, marks, locked, aiConfigured, busy, onA
               </button>
               <figcaption className="space-y-1 p-2">
                 <div className="flex items-start gap-1 text-xs font-semibold"><span className="font-mono text-muted">{i + 1}.</span><span className="flex-1">{m.label}</span></div>
+                {m.note && <p className="text-[11px] leading-snug text-muted">{m.note}</p>}
                 <div className="flex items-center justify-between gap-1">
                   {m.source === 'ai_suggested' ? <Badge tone="info">{t('scan.aiPointBadge')}</Badge> : <span />}
                   {!locked && <button className="text-[11px] text-counterfeit underline" disabled={busy} onClick={() => onDelete(m.id)}>{t('scan.delete')}</button>}

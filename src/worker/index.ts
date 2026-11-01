@@ -8,12 +8,13 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { aiConfigured, explainDifferences, suggestFocusRegions, suggestObservations } from './vision.ts';
+import { aiConfigured, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
 const app = new Hono<AppEnv>();
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const MODEL_SET_SIZE = 5;
 
 const STAFF: Role[] = ['owner', 'lead_authenticator', 'appraiser'];
 const REVIEWERS: Role[] = ['owner', 'lead_authenticator', 'reviewer'];
@@ -570,13 +571,33 @@ app.post('/api/assets', need(STAFF), async (c) => {
     brandId: z.string(), modelId: z.string().optional(), eraId: z.string().optional(), componentCode: z.string().optional(),
     label: z.enum(['authentic', 'counterfeit', 'unknown']), labelBasis: z.enum(['purchase_receipt', 'brand_boutique', 'provider_certificate', 'expert_consensus', 'seller_claim', 'unverified']),
     license: z.enum(['own', 'consented', 'licensed', 'public_domain', 'unknown']), consentRef: z.string().optional(), sourceUrl: z.string().optional(),
+    purpose: z.enum(['general', 'model_set', 'study']).default('general'),
+    slot: z.coerce.number().int().min(1).max(MODEL_SET_SIZE).optional(),
+    teachingTitle: z.string().max(120).optional(), teachingNote: z.string().max(4000).optional(), aiPrompt: z.string().max(2000).optional(),
   }).parse(Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === 'string')));
+
+  // A model teaching set holds up to MODEL_SET_SIZE photos of a KNOWN-GENUINE item, one per slot.
+  if (meta.purpose === 'model_set') {
+    if (!meta.modelId) return c.json({ error: 'model_required' }, 400);
+    if (meta.label !== 'authentic') return c.json({ error: 'model_set_requires_genuine_reference' }, 400);
+    const used = (await c.env.DB.prepare(`SELECT slot FROM reference_assets WHERE purpose = 'model_set' AND model_id = ? AND status <> 'rejected'`).bind(meta.modelId).all<{ slot: number | null }>()).results.map((r) => r.slot);
+    if (used.length >= MODEL_SET_SIZE) return c.json({ error: 'model_set_full' }, 409);
+    if (meta.slot == null) meta.slot = [1, 2, 3, 4, 5].find((n) => !used.includes(n));
+    else if (used.includes(meta.slot)) return c.json({ error: 'slot_taken' }, 409);
+  } else if (meta.slot != null) return c.json({ error: 'slot_only_for_model_set' }, 400);
+
+  // Fewer approval steps: an owner / lead authenticator's upload is approved immediately when its provenance already
+  // satisfies the database CHECK (known licence, label basis not a seller claim / unverified). Everything else waits in quarantine.
+  const provenanceOk = meta.license !== 'unknown' && !['seller_claim', 'unverified'].includes(meta.labelBasis) && meta.label !== 'unknown';
+  const status = ADMINS.includes(c.get('user').role) && provenanceOk ? 'approved' : 'quarantine';
+
   const id = uid('a_'); const key = `reference/${id}`; const sha = await sha256Hex(buf);
   await c.env.VAULT.put(key, buf, { httpMetadata: { contentType: mime } });
-  await c.env.DB.prepare(`INSERT INTO reference_assets (id, brand_id, model_id, era_id, component_code, r2_key, sha256, label, label_basis, license, consent_ref, source_url, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'quarantine', ?)`)
-    .bind(id, meta.brandId, meta.modelId ?? null, meta.eraId ?? null, meta.componentCode ?? null, key, sha, meta.label, meta.labelBasis, meta.license, meta.consentRef ?? null, meta.sourceUrl ?? null, c.get('user').id).run();
-  await audit(c.env, c.get('user').id, 'asset.upload_quarantine', 'asset', id, { label: meta.label, basis: meta.labelBasis, license: meta.license });
-  return c.json({ id });
+  await c.env.DB.prepare(`INSERT INTO reference_assets (id, brand_id, model_id, era_id, component_code, r2_key, sha256, label, label_basis, license, consent_ref, source_url, status, created_by, purpose, slot, teaching_title, teaching_note, ai_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, meta.brandId, meta.modelId ?? null, meta.eraId ?? null, meta.componentCode ?? null, key, sha, meta.label, meta.labelBasis, meta.license, meta.consentRef ?? null, meta.sourceUrl ?? null, status, c.get('user').id,
+      meta.purpose, meta.slot ?? null, meta.teachingTitle || null, meta.teachingNote || null, meta.aiPrompt || null).run();
+  await audit(c.env, c.get('user').id, status === 'approved' ? 'asset.upload_approved' : 'asset.upload_quarantine', 'asset', id, { label: meta.label, basis: meta.labelBasis, license: meta.license, purpose: meta.purpose, slot: meta.slot ?? null });
+  return c.json({ id, status });
 });
 
 app.post('/api/assets/:id/review', need(REVIEWERS), async (c) => {
@@ -585,6 +606,85 @@ app.post('/api/assets/:id/review', need(REVIEWERS), async (c) => {
   await c.env.DB.prepare('UPDATE reference_assets SET status = ? WHERE id = ?').bind(decision === 'approve' ? 'approved' : 'rejected', c.req.param('id')).run();
   await audit(c.env, c.get('user').id, `asset.${decision}`, 'asset', c.req.param('id'));
   return c.json({ ok: true });
+});
+
+
+// ───────────────────────── learning studio: model teaching sets + study photos ─────────────────────────
+// Teaching data (notes, AI prompts, points) is annotation only. The engine never reads it.
+app.get('/api/studio', async (c) => {
+  const [models, set, study, points] = await Promise.all([
+    c.env.DB.prepare(`SELECT m.id, m.name, m.brand_id, b.name AS brand FROM models m JOIN brands b ON b.id = m.brand_id WHERE m.status <> 'RETIRED' ORDER BY b.name, m.name`).all<Record<string, any>>(),
+    c.env.DB.prepare(`SELECT id, model_id, slot, status, teaching_title, teaching_note IS NOT NULL AS has_note FROM reference_assets WHERE purpose = 'model_set' AND status <> 'rejected' ORDER BY slot`).all<Record<string, any>>(),
+    c.env.DB.prepare(`SELECT model_id, label, COUNT(*) AS n FROM reference_assets WHERE purpose = 'study' AND status <> 'rejected' GROUP BY model_id, label`).all<Record<string, any>>(),
+    c.env.DB.prepare(`SELECT p.asset_id, COUNT(*) AS n FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id WHERE a.purpose = 'model_set' GROUP BY p.asset_id`).all<Record<string, any>>(),
+  ]);
+  const pts = new Map(points.results.map((r) => [r.asset_id, r.n]));
+  const out = models.results.map((m) => ({
+    ...m,
+    set: set.results.filter((a) => a.model_id === m.id).map((a) => ({ ...a, points: pts.get(a.id) ?? 0 })),
+    study: {
+      genuine: study.results.find((r) => r.model_id === m.id && r.label === 'authentic')?.n ?? 0,
+      counterfeit: study.results.find((r) => r.model_id === m.id && r.label === 'counterfeit')?.n ?? 0,
+    },
+  }));
+  const recentStudy = (await c.env.DB.prepare(`SELECT a.id, a.model_id, a.label, a.label_basis, a.status, a.teaching_note, a.created_at, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id WHERE a.purpose = 'study' AND a.status <> 'rejected' ORDER BY a.created_at DESC LIMIT 12`).all()).results;
+  return c.json({ setSize: MODEL_SET_SIZE, models: out, recentStudy, aiConfigured: aiConfigured(c.env) });
+});
+
+app.get('/api/studio/assets/:id', async (c) => {
+  const a = await c.env.DB.prepare(`SELECT a.id, a.brand_id, a.model_id, a.label, a.label_basis, a.license, a.source_url, a.status, a.purpose, a.slot, a.teaching_title, a.teaching_note, a.ai_prompt, a.created_at, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id WHERE a.id = ?`).bind(c.req.param('id')).first<Record<string, any>>();
+  if (!a) return c.json({ error: 'not_found' }, 404);
+  const points = (await c.env.DB.prepare('SELECT id, x, y, w, h, label, note, source, created_at FROM reference_points WHERE asset_id = ? ORDER BY created_at').bind(a.id).all()).results;
+  return c.json({ ...a, points, aiConfigured: aiConfigured(c.env) });
+});
+
+app.put('/api/assets/:id/teaching', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ teachingTitle: z.string().max(120).optional(), teachingNote: z.string().max(4000).optional(), aiPrompt: z.string().max(2000).optional() }));
+  const r = await c.env.DB.prepare('UPDATE reference_assets SET teaching_title = ?, teaching_note = ?, ai_prompt = ? WHERE id = ?')
+    .bind(b.teachingTitle || null, b.teachingNote || null, b.aiPrompt || null, c.req.param('id')).run();
+  if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await audit(c.env, c.get('user').id, 'asset.teaching_update', 'asset', c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+app.post('/api/assets/:id/points', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number(), label: z.string().trim().min(1).max(80), note: z.string().max(1000).optional() }));
+  if (!isValidRect(b)) return c.json({ error: 'invalid_rect' }, 400);
+  const a = await c.env.DB.prepare('SELECT id FROM reference_assets WHERE id = ?').bind(c.req.param('id')).first();
+  if (!a) return c.json({ error: 'not_found' }, 404);
+  const id = uid('rp_');
+  await c.env.DB.prepare(`INSERT INTO reference_points (id, asset_id, x, y, w, h, label, note, source, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'appraiser', ?)`)
+    .bind(id, c.req.param('id'), b.x, b.y, b.w, b.h, b.label, b.note || null, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'reference_point.add', 'asset', c.req.param('id'), { point: id, label: b.label });
+  return c.json({ id });
+});
+
+app.delete('/api/reference-points/:id', need(STAFF), async (c) => {
+  const p = await c.env.DB.prepare('SELECT id, asset_id, label FROM reference_points WHERE id = ?').bind(c.req.param('id')).first<Record<string, any>>();
+  if (!p) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('DELETE FROM reference_points WHERE id = ?').bind(p.id).run();
+  await audit(c.env, c.get('user').id, 'reference_point.delete', 'asset', p.asset_id, { point: p.id, label: p.label });
+  return c.json({ ok: true });
+});
+
+app.post('/api/assets/:id/points/suggest', need(STAFF), async (c) => {
+  const a = await c.env.DB.prepare('SELECT a.id, a.r2_key, a.teaching_title, a.teaching_note, a.ai_prompt, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id WHERE a.id = ?').bind(c.req.param('id')).first<Record<string, any>>();
+  if (!a) return c.json({ error: 'not_found' }, 404);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const obj = await c.env.VAULT.get(a.r2_key);
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  try {
+    const sugg = await suggestTeachingPoints(c.env, { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? 'image/jpeg' },
+      { model: a.model ?? 'unspecified', title: a.teaching_title, note: a.teaching_note, prompt: a.ai_prompt });
+    for (const s of sugg) {
+      await c.env.DB.prepare(`INSERT INTO reference_points (id, asset_id, x, y, w, h, label, note, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ai_suggested')`)
+        .bind(uid('rp_'), a.id, s.x, s.y, s.w, s.h, s.label, s.note ?? null).run();
+    }
+    await audit(c.env, c.get('user').id, 'reference_point.ai_suggest', 'asset', a.id, { count: sugg.length });
+    return c.json({ suggestions: sugg.length });
+  } catch (e) {
+    return c.json({ error: 'ai_failed', detail: (e as Error).message }, 502);
+  }
 });
 
 // ───────────────────────── providers & certificates ─────────────────────────

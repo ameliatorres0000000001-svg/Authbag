@@ -2,7 +2,7 @@
 // Annotation only. The engine never reads marks, so they cannot change an outcome.
 
 export interface Rect { x: number; y: number; w: number; h: number }
-export interface SuggestedMark extends Rect { label: string }
+export interface SuggestedMark extends Rect { label: string; note?: string }
 
 export const MIN_SIDE = 0.02;   // smaller boxes are almost always accidental taps
 export const MAX_AI_MARKS = 4;
@@ -37,11 +37,11 @@ export function parseSuggestedMarks(text: string): SuggestedMark[] {
   const out: SuggestedMark[] = [];
   for (const e of raw) {
     if (!e || typeof e !== 'object') continue;
-    const { label, x, y, w, h } = e as Record<string, unknown>;
+    const { label, x, y, w, h, note } = e as Record<string, unknown>;
     if (typeof label !== 'string' || !label.trim()) continue;
     if (![x, y, w, h].every((n) => typeof n === 'number')) continue;
     const r = rectFromDrag(x as number, y as number, (x as number) + (w as number), (y as number) + (h as number));
-    if (r) out.push({ ...r, label: label.trim().slice(0, 80) });
+    if (r) out.push({ ...r, label: label.trim().slice(0, 80), ...(typeof note === 'string' && note.trim() ? { note: note.trim().slice(0, 1000) } : {}) });
     if (out.length === MAX_AI_MARKS) break;
   }
   return out;

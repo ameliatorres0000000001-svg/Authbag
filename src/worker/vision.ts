@@ -102,3 +102,21 @@ export async function suggestFocusRegions(env: Env, image: VisionImage, componen
     [image], `Component: ${component}. Shot: ${shot}.`, 600);
   return parseSuggestedMarks(text);
 }
+
+/**
+ * Teaching points on a REFERENCE photo: up to 4 boxes, each with a short explanation of what a learner should check
+ * there. The admin's prompt/note steers it (e.g. "point at the date code and explain each character").
+ * Teaching only: stored as source='ai_suggested' reference points, never read by the engine.
+ */
+export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: { model: string; title?: string | null; note?: string | null; prompt?: string | null }): Promise<SuggestedMark[]> {
+  const text = await callVision(env,
+    `You help teach luxury-bag inspection from a reference photo. ${NO_VERDICT} ` +
+    `Return up to ${MAX_AI_MARKS} small rectangles around details a learner should study (stamps, date codes, letter shapes, stitches, hardware engraving, edges). ` +
+    `For each give a neutral label (max 60 characters) and a note (max 300 characters) explaining what to look at there and how to read it; if the admin's instructions explain a code or detail, use that explanation. ` +
+    `Coordinates are fractions of the image width/height (0..1) with the origin at the top-left. ` +
+    `Reply with JSON only: [{"label":"...","note":"...","x":0..1,"y":0..1,"w":0..1,"h":0..1}]`,
+    [image],
+    `Model: ${ctx.model}.${ctx.title ? ` Photo: ${ctx.title}.` : ''}${ctx.note ? `\nAdmin teaching note: ${ctx.note}` : ''}${ctx.prompt ? `\nAdmin instructions: ${ctx.prompt}` : ''}`,
+    900);
+  return parseSuggestedMarks(text);
+}

@@ -16,6 +16,7 @@ import Providers from './pages/Providers.tsx';
 import Certificates from './pages/Certificates.tsx';
 import Audit from './pages/Audit.tsx';
 import Settings from './pages/Settings.tsx';
+import ModelStudio from './pages/ModelStudio.tsx';
 
 export interface Me { id: string; email: string; name: string; role: string; locale: 'km' | 'en' }
 export const MeContext = React.createContext<Me | null>(null);
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="/inspections/:id" element={<InspectionDetail />} />
             <Route path="/inspections/:id/scan" element={<GuidedScan />} />
             <Route path="/inspections/:id/compare/:captureId" element={<Comparator />} />
+            <Route path="/studio/:modelId" element={<ModelStudio />} />
             <Route path="/knowledge" element={<Knowledge />} />
             <Route path="/coverage" element={<Coverage />} />
             <Route path="/library" element={<Library />} />

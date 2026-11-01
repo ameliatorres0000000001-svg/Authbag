@@ -70,3 +70,32 @@ export function decodeDateCode(
   }
   return { raw, normalized, candidates, usable: true, state: 'inconsistent', reason: [...new Set(bad)].join('; ') };
 }
+
+export type DateCodeRole = 'factory' | 'period' | 'year' | 'other';
+export interface DateCodeSegment { text: string; role: DateCodeRole }
+
+/**
+ * Teaching view: split a normalized code into coloured segments (factory letters, period digits, year digits)
+ * using the format's own regex groups. Returns null when the format does not match. Pure data, no brand claims.
+ */
+export function dateCodeSegments(normalized: string, f: Pick<DateCodeFormat, 'pattern' | 'extraction'>): DateCodeSegment[] | null {
+  let m: RegExpExecArray | null;
+  try { m = new RegExp(f.pattern, 'd').exec(normalized); } catch { return null; }
+  if (!m || !m.indices) return null;
+  const roles: DateCodeRole[] = Array.from(normalized, () => 'other');
+  const paint = (g: number, role: DateCodeRole) => {
+    const span = m!.indices![g];
+    if (span) for (let i = span[0]; i < span[1]; i++) roles[i] = role;
+  };
+  const x = f.extraction;
+  paint(x.factoryGroup, 'factory');
+  x.periodGroups.forEach((g) => paint(g, 'period'));
+  x.yearGroups.forEach((g) => paint(g, 'year'));
+  const out: DateCodeSegment[] = [];
+  for (let i = 0; i < normalized.length; i++) {
+    const last = out[out.length - 1];
+    if (last && last.role === roles[i] && roles[i] === 'factory') last.text += normalized[i];
+    else out.push({ text: normalized[i], role: roles[i] });
+  }
+  return out;
+}
