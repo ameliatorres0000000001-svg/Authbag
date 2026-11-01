@@ -1,5 +1,6 @@
 import type { Env } from './env.ts';
 import { MAX_AI_MARKS, parseSuggestedMarks, type SuggestedMark } from '../shared/marks.ts';
+import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
 
 export interface ObsDef { key: string; value_type: 'enum' | 'number' | 'boolean' | 'text'; enum_json: string | null; label_en: string }
 export interface Suggestion { key: string; value: string | number | boolean; confidence: number }
@@ -119,4 +120,24 @@ export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: {
     `Model: ${ctx.model}.${ctx.title ? ` Photo: ${ctx.title}.` : ''}${ctx.note ? `\nAdmin teaching note: ${ctx.note}` : ''}${ctx.prompt ? `\nAdmin instructions: ${ctx.prompt}` : ''}`,
     900);
   return parseSuggestedMarks(text);
+}
+
+/**
+ * Describe what a date code LOOKS like: shape, size, font, spacing, alignment, depth, placement.
+ * Image 1 is the photo to describe; any further images are reference date-code photos of the same brand.
+ * Descriptive only, no verdict, no score. Millimetre sizes are kept only when a ruler/scale is visible.
+ */
+export async function analyzeDateCodeAppearance(env: Env, image: VisionImage, refs: VisionImage[], ctx: { brand: string; model?: string | null; typed?: string | null }): Promise<DateCodeAppearance | null> {
+  const text = await callVision(env,
+    `You describe the physical appearance of a luxury-goods date code for a teaching tool. ${NO_VERDICT} Never give scores or percentages. ` +
+    `Image 1 is the date code to describe.${refs.length ? ` Images 2..${refs.length + 1} are reference date-code photos of the same brand for comparison; date codes legitimately vary by era, factory, model and item size, so only point out concrete visible differences.` : ''} ` +
+    `Describe: exact transcription ('?' for unreadable characters); number of characters; number of lines or separate parts; method (heat_stamped, embossed, printed, engraved or unclear); placement on the item; surface material; ` +
+    `font (serif or sans-serif, narrow or wide, stroke thickness, shapes of distinctive digits such as 0, 1, 4, 7); size relative to nearby features; ` +
+    `character height in millimetres ONLY if a ruler or scale is visible (otherwise null and scaleVisible false); spacing between characters; baseline alignment and centring; pressed depth, edge sharpness and any foil or ink fill; ` +
+    `photo problems (blur, glare, angle, crop) that limit what can be seen. Use short, plain sentences a beginner understands. ` +
+    `Reply with JSON only: {"transcription":"","characterCount":0,"lines":1,"method":"","placement":"","surface":"","font":"","size":"","sizeMm":null,"scaleVisible":false,"spacing":"","alignment":"","depthEdges":"","differences":[{"feature":"","inspected":"","reference":"","photoCaveat":""}],"photoIssues":[""],"summary":""}`,
+    [image, ...refs],
+    `Brand: ${ctx.brand}.${ctx.model ? ` Model: ${ctx.model}.` : ''}${ctx.typed ? ` The appraiser typed the code as: ${ctx.typed}.` : ''}`,
+    1800);
+  return parseAppearance(text);
 }

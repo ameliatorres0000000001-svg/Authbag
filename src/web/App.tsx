@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { api } from './api.ts';
 import { useI18n } from './i18n.tsx';
@@ -17,6 +17,7 @@ import Certificates from './pages/Certificates.tsx';
 import Audit from './pages/Audit.tsx';
 import Settings from './pages/Settings.tsx';
 import ModelStudio from './pages/ModelStudio.tsx';
+import AdminPanel from './pages/AdminPanel.tsx';
 
 export interface Me { id: string; email: string; name: string; role: string; locale: 'km' | 'en' }
 export const MeContext = React.createContext<Me | null>(null);
@@ -26,10 +27,21 @@ const NAV: [string, string][] = [
   ['/coverage', 'coverage'], ['/library', 'library'], ['/providers', 'providers'], ['/certificates', 'certificates'], ['/audit', 'audit'], ['/settings', 'settings'],
 ];
 
+/** Hidden entry to the admin panel: 5 taps on the logo within 3 s. Only a shortcut; the server enforces roles. */
+function useSecretTaps(onUnlock: () => void, taps = 5, windowMs = 3000) {
+  const hits = useRef<number[]>([]);
+  return (e: React.MouseEvent) => {
+    const now = Date.now();
+    hits.current = [...hits.current.filter((x) => now - x < windowMs), now];
+    if (hits.current.length >= taps) { e.preventDefault(); hits.current = []; onUnlock(); }
+  };
+}
+
 export default function App() {
   const { t, locale, setLocale } = useI18n();
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const nav = useNavigate();
+  const logoTap = useSecretTaps(() => nav('/admin'));
 
   const refresh = useCallback(() => {
     api.get<Me>('/api/me').then(setMe).catch(() => setMe(null));
@@ -44,7 +56,7 @@ export default function App() {
       <div className="min-h-screen md:flex">
         <aside className="hidden w-60 shrink-0 border-r border-hairline bg-surface-low md:block">
           <div className="px-5 py-5">
-            <Link to="/" className="font-serif text-xl tracking-wide">HENGZ <span className="text-gold">AUTHENTIC</span></Link>
+            <Link to="/" onClick={logoTap} className="select-none font-serif text-xl tracking-wide">HENGZ <span className="text-gold">AUTHENTIC</span></Link>
             <div className="mt-1 font-mono text-[10px] uppercase tracking-widest text-muted">{me.name} · {me.role}</div>
           </div>
           <nav className="flex flex-col px-2 pb-6">
@@ -63,6 +75,10 @@ export default function App() {
             <button className="mt-3 text-xs text-muted underline" onClick={async () => { await api.post('/api/auth/logout'); setMe(null); nav('/'); }}>{t('signOut')}</button>
           </div>
         </aside>
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-hairline bg-surface/95 px-4 py-3 backdrop-blur md:hidden">
+          <Link to="/" onClick={logoTap} className="select-none font-serif text-lg tracking-wide">HENGZ <span className="text-gold">AUTHENTIC</span></Link>
+          <button className="btn-ghost !px-2 !py-0.5 text-xs" onClick={() => { const l = locale === 'km' ? 'en' : 'km'; setLocale(l); api.put('/api/me/locale', { locale: l }).catch(() => {}); }}>{locale === 'km' ? 'EN' : 'ខ្មែរ'}</button>
+        </header>
         <main className="min-w-0 flex-1 pb-24 md:pb-0">
           <Routes>
             <Route path="/" element={<Dashboard />} />
@@ -72,6 +88,7 @@ export default function App() {
             <Route path="/inspections/:id/scan" element={<GuidedScan />} />
             <Route path="/inspections/:id/compare/:captureId" element={<Comparator />} />
             <Route path="/studio/:modelId" element={<ModelStudio />} />
+            <Route path="/admin" element={<AdminPanel />} />
             <Route path="/knowledge" element={<Knowledge />} />
             <Route path="/coverage" element={<Coverage />} />
             <Route path="/library" element={<Library />} />

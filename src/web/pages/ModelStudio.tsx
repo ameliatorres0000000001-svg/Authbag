@@ -5,6 +5,7 @@ import { useI18n } from '../i18n.tsx';
 import { MeContext } from '../App.tsx';
 import { Badge, Field, Notice, Page, errText } from '../ui.tsx';
 import MarkCanvas, { type Mark } from '../MarkCanvas.tsx';
+import DateCodeAppearanceCard from '../DateCodeAppearance.tsx';
 import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, assetImg, uploadReference } from '../studio.ts';
 import type { Studio, StudioModel } from './Dashboard.tsx';
 
@@ -62,8 +63,11 @@ export default function ModelStudio() {
 
 function SlotUpload({ model, slot, onDone, onError }: { model: StudioModel; slot: number; onDone: () => void; onError: (e: string) => void }) {
   const { t } = useI18n();
-  const [f, setF] = useState({ teachingTitle: '', teachingNote: '', aiPrompt: '', labelBasis: 'purchase_receipt', license: 'own', sourceUrl: '' });
+  const [f, setF] = useState({ teachingTitle: '', teachingNote: '', aiPrompt: '', labelBasis: 'purchase_receipt', license: 'own', sourceUrl: '', componentCode: '' });
   const [file, setFile] = useState<File | null>(null);
+  const [comps, setComps] = useState<{ code: string; name_en: string; name_km: string }[]>([]);
+  const { locale } = useI18n();
+  useEffect(() => { api.get('/api/components').then(setComps); }, []);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f, v: string) => setF({ ...f, [k]: v });
 
@@ -87,6 +91,7 @@ function SlotUpload({ model, slot, onDone, onError }: { model: StudioModel; slot
       <Field label={t('studio.basis')}><select className="input" value={f.labelBasis} onChange={(e) => set('labelBasis', e.target.value)}>{BASES.map((x) => <option key={x}>{x}</option>)}</select></Field>
       <Field label={t('studio.licence')}><select className="input" value={f.license} onChange={(e) => set('license', e.target.value)}>{LICENCES.map((x) => <option key={x}>{x}</option>)}</select></Field>
       <Field label={t('studio.source')}><input className="input" value={f.sourceUrl} onChange={(e) => set('sourceUrl', e.target.value)} /></Field>
+      <Field label={t('admin.part')}><select className="input" value={f.componentCode} onChange={(e) => set('componentCode', e.target.value)}><option value="">—</option>{comps.map((c) => <option key={c.code} value={c.code}>{locale === 'km' ? c.name_km : c.name_en}</option>)}</select></Field>
       <div className="flex items-end"><button className="btn-primary w-full" disabled={busy || !file}>{busy ? t('studio.uploading') : t('studio.upload')}</button></div>
     </form>
   );
@@ -135,6 +140,7 @@ function AssetEditor({ assetId, canEdit, canRemove, onChanged, onRemoved }: { as
             {canRemove && <button className="btn-danger" disabled={busy} onClick={() => run(async () => { await api.post(`/api/assets/${a.id}/review`, { decision: 'reject' }); onRemoved(); })}>{t('studio.remove')}</button>}
           </div>
         </div>
+        {a.component_code === 'date_code' && <DateCodeAppearanceCard base={`/api/assets/${a.id}`} canRun={canEdit} askTyped />}
         <p className="text-xs text-muted">{t('studio.notCounted')}</p>
       </div>
     </div>

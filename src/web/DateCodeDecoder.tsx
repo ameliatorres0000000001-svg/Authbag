@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from './api.ts';
 import { useI18n } from './i18n.tsx';
 import { Badge, Notice } from './ui.tsx';
+import { DateCodeGuide } from './DateCodeAppearance.tsx';
 import { dateCodeSegments, decodeDateCode, normalizeDateCode, type DateCodeRole } from '../shared/datecode.ts';
 import type { DateCodeFormat, FactoryCode } from '../shared/types.ts';
 
@@ -105,6 +106,7 @@ export default function DateCodeDecoder() {
             })}
           </div>
           <p className="mt-4 text-xs text-muted">{t('dc.tip')}</p>
+          <div className="mt-3"><DateCodeGuide /></div>
         </>
       )}
     </div>

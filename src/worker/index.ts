@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { aiConfigured, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
+import { aiConfigured, analyzeDateCodeAppearance, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -113,6 +113,16 @@ app.get('/api/taxonomy', async (c) => {
     c.env.DB.prepare('SELECT * FROM eras ORDER BY start_year').all(),
   ]);
   return c.json({ brands: brands.results, models: models.results, eras: eras.results });
+});
+
+app.post('/api/brands', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ name: z.string().trim().min(1).max(80) }));
+  const slug = b.name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (!slug) return c.json({ error: 'invalid_name' }, 400);
+  const id = uid('b_');
+  await c.env.DB.prepare(`INSERT INTO brands (id, slug, name, knowledge_status) VALUES (?, ?, ?, 'NO_DATA')`).bind(id, slug, b.name).run();
+  await audit(c.env, c.get('user').id, 'brand.create', 'brand', id, b);
+  return c.json({ id });
 });
 
 app.post('/api/models', need(ADMINS), async (c) => {
@@ -632,7 +642,7 @@ app.get('/api/studio', async (c) => {
 });
 
 app.get('/api/studio/assets/:id', async (c) => {
-  const a = await c.env.DB.prepare(`SELECT a.id, a.brand_id, a.model_id, a.label, a.label_basis, a.license, a.source_url, a.status, a.purpose, a.slot, a.teaching_title, a.teaching_note, a.ai_prompt, a.created_at, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id WHERE a.id = ?`).bind(c.req.param('id')).first<Record<string, any>>();
+  const a = await c.env.DB.prepare(`SELECT a.id, a.brand_id, a.model_id, a.component_code, a.label, a.label_basis, a.license, a.source_url, a.status, a.purpose, a.slot, a.teaching_title, a.teaching_note, a.ai_prompt, a.created_at, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id WHERE a.id = ?`).bind(c.req.param('id')).first<Record<string, any>>();
   if (!a) return c.json({ error: 'not_found' }, 404);
   const points = (await c.env.DB.prepare('SELECT id, x, y, w, h, label, note, source, created_at FROM reference_points WHERE asset_id = ? ORDER BY created_at').bind(a.id).all()).results;
   return c.json({ ...a, points, aiConfigured: aiConfigured(c.env) });
@@ -685,6 +695,83 @@ app.post('/api/assets/:id/points/suggest', need(STAFF), async (c) => {
   } catch (e) {
     return c.json({ error: 'ai_failed', detail: (e as Error).message }, 502);
   }
+});
+
+
+// ───────────────────────── date-code appearance (AI description of shape / size / font; never a verdict) ─────────────────────────
+const DCA_REFS = 3;
+
+/** Approved KNOWN-GENUINE date-code photos of the same brand (excluding the photo itself), newest first. */
+async function dateCodeReferences(env: AppEnv['Bindings'], brandId: string, excludeAssetId: string | null) {
+  return (await env.DB.prepare(
+    `SELECT id, r2_key FROM reference_assets WHERE brand_id = ? AND component_code = 'date_code' AND label = 'authentic' AND status = 'approved' AND id <> ? ORDER BY created_at DESC LIMIT ?`,
+  ).bind(brandId, excludeAssetId ?? '', DCA_REFS).all<{ id: string; r2_key: string }>()).results;
+}
+
+async function runDateCodeAnalysis(c: any, target: { type: 'asset' | 'capture'; id: string; r2_key: string; mime: string; brand_id: string; brand: string; model: string | null; typed: string | null }) {
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const obj = await c.env.VAULT.get(target.r2_key);
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  const refs = await dateCodeReferences(c.env, target.brand_id, target.type === 'asset' ? target.id : null);
+  const refImgs = [] as { data: ArrayBuffer; mime: string }[];
+  const used: string[] = [];
+  for (const r of refs) {
+    const o = await c.env.VAULT.get(r.r2_key);
+    if (o) { refImgs.push({ data: await o.arrayBuffer(), mime: o.httpMetadata?.contentType ?? 'image/jpeg' }); used.push(r.id); }
+  }
+  try {
+    const out = await analyzeDateCodeAppearance(c.env, { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? target.mime }, refImgs, { brand: target.brand, model: target.model, typed: target.typed });
+    if (!out) return c.json({ error: 'ai_unreadable_reply' }, 502);
+    const id = uid('dca_');
+    await c.env.DB.prepare('INSERT INTO datecode_analyses (id, target_type, target_id, brand_id, reference_ids_json, result_json, model, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, target.type, target.id, target.brand_id, JSON.stringify(used), JSON.stringify(out), c.env.AI_MODEL ?? null, c.get('user').id).run();
+    await audit(c.env, c.get('user').id, 'datecode.ai_appearance', target.type, target.id, { references: used.length });
+    return c.json({ id, referenceIds: used, result: out, created_at: nowIso() });
+  } catch (e) {
+    return c.json({ error: 'ai_failed', detail: (e as Error).message }, 502);
+  }
+}
+
+const latestDca = async (env: AppEnv['Bindings'], type: string, id: string) => {
+  const r = await env.DB.prepare('SELECT id, reference_ids_json, result_json, model, created_at FROM datecode_analyses WHERE target_type = ? AND target_id = ? ORDER BY created_at DESC LIMIT 1').bind(type, id).first<Record<string, any>>();
+  return r ? { id: r.id, referenceIds: JSON.parse(r.reference_ids_json), result: JSON.parse(r.result_json), model: r.model, created_at: r.created_at } : null;
+};
+
+app.get('/api/assets/:id/datecode-analysis', async (c) => c.json({ analysis: await latestDca(c.env, 'asset', c.req.param('id')), aiConfigured: aiConfigured(c.env) }));
+app.get('/api/captures/:id/datecode-analysis', async (c) => c.json({ analysis: await latestDca(c.env, 'capture', c.req.param('id')), aiConfigured: aiConfigured(c.env) }));
+
+app.post('/api/assets/:id/datecode-analysis', need(STAFF), async (c) => {
+  const a = await c.env.DB.prepare('SELECT a.id, a.r2_key, a.brand_id, b.name AS brand, m.name AS model, a.teaching_title FROM reference_assets a JOIN brands b ON b.id = a.brand_id LEFT JOIN models m ON m.id = a.model_id WHERE a.id = ?').bind(c.req.param('id')).first<Record<string, any>>();
+  if (!a) return c.json({ error: 'not_found' }, 404);
+  const { typed } = await parse(c, z.object({ typed: z.string().max(20).optional() }));
+  return runDateCodeAnalysis(c, { type: 'asset', id: a.id, r2_key: a.r2_key, mime: 'image/jpeg', brand_id: a.brand_id, brand: a.brand, model: a.model, typed: typed ?? null });
+});
+
+app.post('/api/captures/:id/datecode-analysis', need(STAFF), async (c) => {
+  const cap = await c.env.DB.prepare(
+    `SELECT c.id, c.r2_key, c.mime, i.id AS inspection_id, i.brand_id, b.name AS brand, m.name AS model FROM captures c JOIN inspections i ON i.id = c.inspection_id JOIN brands b ON b.id = i.brand_id JOIN models m ON m.id = i.model_id WHERE c.id = ?`,
+  ).bind(c.req.param('id')).first<Record<string, any>>();
+  if (!cap) return c.json({ error: 'not_found' }, 404);
+  const typed = await c.env.DB.prepare(`SELECT value_json FROM observations WHERE inspection_id = ? AND key = 'datecode.value' AND source IN ('appraiser','ai_confirmed') ORDER BY created_at DESC LIMIT 1`).bind(cap.inspection_id).first<{ value_json: string }>();
+  let typedStr: string | null = null;
+  try { typedStr = typed ? String(JSON.parse(typed.value_json)) : null; } catch { typedStr = null; }
+  return runDateCodeAnalysis(c, { type: 'capture', id: cap.id, r2_key: cap.r2_key, mime: cap.mime, brand_id: cap.brand_id, brand: cap.brand, model: cap.model, typed: typedStr });
+});
+
+// ───────────────────────── hidden admin panel: multi-brand library (genuine / counterfeit by part) ─────────────────────────
+app.get('/api/admin/library', need(STAFF), async (c) => {
+  const q = c.req.query();
+  const where: string[] = [`a.status <> 'rejected'`]; const args: unknown[] = [];
+  if (q.brandId) { where.push('a.brand_id = ?'); args.push(q.brandId); }
+  if (q.component) { where.push(q.component === 'none' ? 'a.component_code IS NULL' : 'a.component_code = ?'); if (q.component !== 'none') args.push(q.component); }
+  if (q.label) { where.push('a.label = ?'); args.push(q.label); }
+  const [items, matrix] = await Promise.all([
+    c.env.DB.prepare(`SELECT a.id, a.brand_id, b.name AS brand, a.model_id, m.name AS model, a.component_code, a.label, a.label_basis, a.license, a.status, a.purpose, a.teaching_note, a.source_url, a.created_at,
+        (SELECT COUNT(*) FROM datecode_analyses d WHERE d.target_type = 'asset' AND d.target_id = a.id) AS analyses
+      FROM reference_assets a JOIN brands b ON b.id = a.brand_id LEFT JOIN models m ON m.id = a.model_id WHERE ${where.join(' AND ')} ORDER BY a.created_at DESC LIMIT 200`).bind(...args).all(),
+    c.env.DB.prepare(`SELECT a.brand_id, COALESCE(a.component_code, 'none') AS component, a.label, COUNT(*) AS n FROM reference_assets a WHERE a.status <> 'rejected' GROUP BY a.brand_id, component, a.label`).all(),
+  ]);
+  return c.json({ items: items.results, matrix: matrix.results, aiConfigured: aiConfigured(c.env) });
 });
 
 // ───────────────────────── providers & certificates ─────────────────────────
