@@ -1,5 +1,6 @@
 import type { Env } from './env.ts';
 import { MAX_AI_MARKS, parseSuggestedMarks, type SuggestedMark } from '../shared/marks.ts';
+import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
 
 export interface ObsDef { key: string; value_type: 'enum' | 'number' | 'boolean' | 'text'; enum_json: string | null; label_en: string }
 export interface Suggestion { key: string; value: string | number | boolean; confidence: number }
@@ -101,4 +102,42 @@ export async function suggestFocusRegions(env: Env, image: VisionImage, componen
     `Reply with JSON only: [{"label":"...","x":0..1,"y":0..1,"w":0..1,"h":0..1}]`,
     [image], `Component: ${component}. Shot: ${shot}.`, 600);
   return parseSuggestedMarks(text);
+}
+
+/**
+ * Teaching points on a REFERENCE photo: up to 4 boxes, each with a short explanation of what a learner should check
+ * there. The admin's prompt/note steers it (e.g. "point at the date code and explain each character").
+ * Teaching only: stored as source='ai_suggested' reference points, never read by the engine.
+ */
+export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: { model: string; title?: string | null; note?: string | null; prompt?: string | null }): Promise<SuggestedMark[]> {
+  const text = await callVision(env,
+    `You help teach luxury-bag inspection from a reference photo. ${NO_VERDICT} ` +
+    `Return up to ${MAX_AI_MARKS} small rectangles around details a learner should study (stamps, date codes, letter shapes, stitches, hardware engraving, edges). ` +
+    `For each give a neutral label (max 60 characters) and a note (max 300 characters) explaining what to look at there and how to read it; if the admin's instructions explain a code or detail, use that explanation. ` +
+    `Coordinates are fractions of the image width/height (0..1) with the origin at the top-left. ` +
+    `Reply with JSON only: [{"label":"...","note":"...","x":0..1,"y":0..1,"w":0..1,"h":0..1}]`,
+    [image],
+    `Model: ${ctx.model}.${ctx.title ? ` Photo: ${ctx.title}.` : ''}${ctx.note ? `\nAdmin teaching note: ${ctx.note}` : ''}${ctx.prompt ? `\nAdmin instructions: ${ctx.prompt}` : ''}`,
+    900);
+  return parseSuggestedMarks(text);
+}
+
+/**
+ * Describe what a date code LOOKS like: shape, size, font, spacing, alignment, depth, placement.
+ * Image 1 is the photo to describe; any further images are reference date-code photos of the same brand.
+ * Descriptive only, no verdict, no score. Millimetre sizes are kept only when a ruler/scale is visible.
+ */
+export async function analyzeDateCodeAppearance(env: Env, image: VisionImage, refs: VisionImage[], ctx: { brand: string; model?: string | null; typed?: string | null }): Promise<DateCodeAppearance | null> {
+  const text = await callVision(env,
+    `You describe the physical appearance of a luxury-goods date code for a teaching tool. ${NO_VERDICT} Never give scores or percentages. ` +
+    `Image 1 is the date code to describe.${refs.length ? ` Images 2..${refs.length + 1} are reference date-code photos of the same brand for comparison; date codes legitimately vary by era, factory, model and item size, so only point out concrete visible differences.` : ''} ` +
+    `Describe: exact transcription ('?' for unreadable characters); number of characters; number of lines or separate parts; method (heat_stamped, embossed, printed, engraved or unclear); placement on the item; surface material; ` +
+    `font (serif or sans-serif, narrow or wide, stroke thickness, shapes of distinctive digits such as 0, 1, 4, 7); size relative to nearby features; ` +
+    `character height in millimetres ONLY if a ruler or scale is visible (otherwise null and scaleVisible false); spacing between characters; baseline alignment and centring; pressed depth, edge sharpness and any foil or ink fill; ` +
+    `photo problems (blur, glare, angle, crop) that limit what can be seen. Use short, plain sentences a beginner understands. ` +
+    `Reply with JSON only: {"transcription":"","characterCount":0,"lines":1,"method":"","placement":"","surface":"","font":"","size":"","sizeMm":null,"scaleVisible":false,"spacing":"","alignment":"","depthEdges":"","differences":[{"feature":"","inspected":"","reference":"","photoCaveat":""}],"photoIssues":[""],"summary":""}`,
+    [image, ...refs],
+    `Brand: ${ctx.brand}.${ctx.model ? ` Model: ${ctx.model}.` : ''}${ctx.typed ? ` The appraiser typed the code as: ${ctx.typed}.` : ''}`,
+    1800);
+  return parseAppearance(text);
 }

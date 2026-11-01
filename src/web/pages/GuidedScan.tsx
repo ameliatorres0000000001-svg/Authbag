@@ -5,6 +5,7 @@ import { prepareImage } from '../image.ts';
 import { useI18n } from '../i18n.tsx';
 import CameraCapture from '../CameraCapture.tsx';
 import NfcRead from '../NfcRead.tsx';
+import DateCodeAppearanceCard from '../DateCodeAppearance.tsx';
 import MarkCanvas, { type Mark } from '../MarkCanvas.tsx';
 import { ObsForm } from './InspectionDetail.tsx';
 import { buildStages, summarizeStages, type Stage, type StageStatus } from '../../shared/stages.ts';
@@ -212,6 +213,7 @@ export default function GuidedScan() {
                     <MarkCanvas src={`/api/captures/${selCap}/image`} marks={(d.marks as Mark[]).filter((m: any) => m.capture_id === selCap)}
                       locked={locked} aiConfigured={!!refs?.aiConfigured} busy={busy === 'mark'} onAdd={addMark} onDelete={deleteMark} onSuggest={suggestMarks} />
                     <Link className="btn-ghost w-full" to={`/inspections/${id}/compare/${selCap}`}>{t('scan.compare')}</Link>
+                    {stage?.component === 'date_code' && <DateCodeAppearanceCard base={`/api/captures/${selCap}`} canRun={!locked} />}
                   </>
                 ) : <p className="text-sm text-muted">{t('scan.tapPhoto')}</p>}
               </>
