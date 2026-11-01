@@ -584,6 +584,7 @@ app.post('/api/assets', need(STAFF), async (c) => {
     purpose: z.enum(['general', 'model_set', 'study']).default('general'),
     slot: z.coerce.number().int().min(1).max(MODEL_SET_SIZE).optional(),
     teachingTitle: z.string().max(120).optional(), teachingNote: z.string().max(4000).optional(), aiPrompt: z.string().max(2000).optional(),
+    lessonStepId: z.string().optional(),
   }).parse(Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === 'string')));
 
   // A model teaching set holds up to MODEL_SET_SIZE photos of a KNOWN-GENUINE item, one per slot.
@@ -596,6 +597,15 @@ app.post('/api/assets', need(STAFF), async (c) => {
     else if (used.includes(meta.slot)) return c.json({ error: 'slot_taken' }, 409);
   } else if (meta.slot != null) return c.json({ error: 'slot_only_for_model_set' }, 400);
 
+  // A photo attached to a lesson step belongs to that step's model; the part defaults to the step's part.
+  if (meta.lessonStepId) {
+    const step = await c.env.DB.prepare('SELECT s.model_id, s.component_code, m.brand_id FROM lesson_steps s JOIN models m ON m.id = s.model_id WHERE s.id = ?').bind(meta.lessonStepId).first<Record<string, any>>();
+    if (!step) return c.json({ error: 'lesson_step_not_found' }, 404);
+    if (step.brand_id !== meta.brandId || (meta.modelId && meta.modelId !== step.model_id)) return c.json({ error: 'lesson_step_model_mismatch' }, 400);
+    meta.modelId = step.model_id;
+    meta.componentCode ??= step.component_code ?? undefined;
+  }
+
   // Fewer approval steps: an owner / lead authenticator's upload is approved immediately when its provenance already
   // satisfies the database CHECK (known licence, label basis not a seller claim / unverified). Everything else waits in quarantine.
   const provenanceOk = meta.license !== 'unknown' && !['seller_claim', 'unverified'].includes(meta.labelBasis) && meta.label !== 'unknown';
@@ -603,9 +613,9 @@ app.post('/api/assets', need(STAFF), async (c) => {
 
   const id = uid('a_'); const key = `reference/${id}`; const sha = await sha256Hex(buf);
   await c.env.VAULT.put(key, buf, { httpMetadata: { contentType: mime } });
-  await c.env.DB.prepare(`INSERT INTO reference_assets (id, brand_id, model_id, era_id, component_code, r2_key, sha256, label, label_basis, license, consent_ref, source_url, status, created_by, purpose, slot, teaching_title, teaching_note, ai_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  await c.env.DB.prepare(`INSERT INTO reference_assets (id, brand_id, model_id, era_id, component_code, r2_key, sha256, label, label_basis, license, consent_ref, source_url, status, created_by, purpose, slot, teaching_title, teaching_note, ai_prompt, lesson_step_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(id, meta.brandId, meta.modelId ?? null, meta.eraId ?? null, meta.componentCode ?? null, key, sha, meta.label, meta.labelBasis, meta.license, meta.consentRef ?? null, meta.sourceUrl ?? null, status, c.get('user').id,
-      meta.purpose, meta.slot ?? null, meta.teachingTitle || null, meta.teachingNote || null, meta.aiPrompt || null).run();
+      meta.purpose, meta.slot ?? null, meta.teachingTitle || null, meta.teachingNote || null, meta.aiPrompt || null, meta.lessonStepId ?? null).run();
   await audit(c.env, c.get('user').id, status === 'approved' ? 'asset.upload_approved' : 'asset.upload_quarantine', 'asset', id, { label: meta.label, basis: meta.labelBasis, license: meta.license, purpose: meta.purpose, slot: meta.slot ?? null });
   return c.json({ id, status });
 });
@@ -756,6 +766,48 @@ app.post('/api/captures/:id/datecode-analysis', need(STAFF), async (c) => {
   let typedStr: string | null = null;
   try { typedStr = typed ? String(JSON.parse(typed.value_json)) : null; } catch { typedStr = null; }
   return runDateCodeAnalysis(c, { type: 'capture', id: cap.id, r2_key: cap.r2_key, mime: cap.mime, brand_id: cap.brand_id, brand: cap.brand, model: cap.model, typed: typedStr });
+});
+
+
+// ───────────────────────── lessons: step-by-step "how to look" per model (teaching only; never read by the engine) ─────────────────────────
+const parseChecks = (j: string) => { try { const a = JSON.parse(j); return Array.isArray(a) ? a : []; } catch { return []; } };
+
+app.get('/api/lessons', async (c) => {
+  const rows = (await c.env.DB.prepare(
+    `SELECT m.id, m.name, b.id AS brand_id, b.name AS brand,
+            COUNT(DISTINCT s.id) AS steps,
+            COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN s.id END) AS steps_with_photos,
+            COUNT(DISTINCT a.id) AS photos,
+            (SELECT a2.id FROM reference_assets a2 JOIN lesson_steps s2 ON s2.id = a2.lesson_step_id
+              WHERE s2.model_id = m.id AND a2.label = 'authentic' AND a2.status <> 'rejected' ORDER BY s2.sort, a2.created_at LIMIT 1) AS cover_id
+     FROM lesson_steps s JOIN models m ON m.id = s.model_id JOIN brands b ON b.id = m.brand_id
+     LEFT JOIN reference_assets a ON a.lesson_step_id = s.id AND a.status <> 'rejected'
+     WHERE s.status <> 'retired' GROUP BY m.id ORDER BY b.name, m.name`,
+  ).all()).results;
+  return c.json(rows);
+});
+
+app.get('/api/lessons/:modelId', async (c) => {
+  const model = await c.env.DB.prepare('SELECT m.id, m.name, b.id AS brand_id, b.name AS brand FROM models m JOIN brands b ON b.id = m.brand_id WHERE m.id = ?').bind(c.req.param('modelId')).first<Record<string, any>>();
+  if (!model) return c.json({ error: 'not_found' }, 404);
+  const steps = (await c.env.DB.prepare(`SELECT * FROM lesson_steps WHERE model_id = ? AND status <> 'retired' ORDER BY sort`).bind(model.id).all<Record<string, any>>()).results;
+  const assets = (await c.env.DB.prepare(
+    `SELECT a.id, a.lesson_step_id, a.label, a.label_basis, a.status, a.teaching_note, a.source_url, a.created_at FROM reference_assets a
+     JOIN lesson_steps s ON s.id = a.lesson_step_id WHERE s.model_id = ? AND a.status <> 'rejected' ORDER BY a.created_at`,
+  ).bind(model.id).all<Record<string, any>>()).results;
+  const points = assets.length ? (await c.env.DB.prepare(
+    `SELECT p.id, p.asset_id, p.x, p.y, p.w, p.h, p.label, p.note, p.source FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id
+     JOIN lesson_steps s ON s.id = a.lesson_step_id WHERE s.model_id = ? ORDER BY p.created_at`,
+  ).bind(model.id).all<Record<string, any>>()).results : [];
+  return c.json({
+    model,
+    aiConfigured: aiConfigured(c.env),
+    steps: steps.map((s) => ({
+      id: s.id, sort: s.sort, component_code: s.component_code, status: s.status, source_note: s.source_note,
+      title_en: s.title_en, title_km: s.title_km, body_en: s.body_en, body_km: s.body_km, checks: parseChecks(s.checks_json),
+      photos: assets.filter((a) => a.lesson_step_id === s.id).map((a) => ({ ...a, points: points.filter((p) => p.asset_id === a.id) })),
+    })),
+  });
 });
 
 // ───────────────────────── hidden admin panel: multi-brand library (genuine / counterfeit by part) ─────────────────────────
