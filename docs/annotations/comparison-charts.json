@@ -1,0 +1,400 @@
+{
+ "source": "Third-party comparison charts sent by the owner. The COUNTERFEIT / AUTHENTIC labels are the chart maker's and are unverified: upload with label_basis \"unverified\" and licence \"unknown\" (they stay in quarantine) unless better provenance is known.",
+ "how_to_apply": "Each pair = 2 photos cut from one chart (banners removed). Upload both halves with the brand and part shown, then insert the points into reference_points (source ai_suggested). The same number marks the same feature on both halves. Coordinates are fractions of each half (0..1). Descriptive only: no verdict.",
+ "pairs": [
+  {
+   "pair": 1,
+   "brand": "Gucci",
+   "part": "date_code",
+   "title": "Gucci · លេខ serial / style code (92543 212792)",
+   "lesson": "លេខដូចគ្នាទាំងពីរ ដូច្នេះមិនអាចមើលតែលេខបានទេ។ ត្រូវមើល ពុម្ពអក្សរ គម្លាត និងជម្រៅត្រា។",
+   "brand_id": "b_gucci",
+   "counterfeit": {
+    "crop_of_chart": 1,
+    "points": [
+     {
+      "label": "Digit 4",
+      "note": "លេខ 4 រាងខុស ក្បាលតូចបិទ ហើយក្រាស់ដូចដុំ។",
+      "x": 0.52,
+      "y": 0.05,
+      "w": 0.12,
+      "h": 0.36
+     },
+     {
+      "label": "Row 1 spacing",
+      "note": "លេខក្រាស់ មូលដូចហើម គម្លាតមិនស្មើ ហើយបន្ទាត់មិនត្រង់។",
+      "x": 0.22,
+      "y": 0.04,
+      "w": 0.55,
+      "h": 0.38
+     },
+     {
+      "label": "Digits 1, 2, 7",
+      "note": "លេខ 1 និង 7 ទ្រេត ហើយក្រាស់ខុសគ្នា ជួរទីពីរជិតគ្នាពេក។",
+      "x": 0.27,
+      "y": 0.6,
+      "w": 0.3,
+      "h": 0.36
+     },
+     {
+      "label": "Digit 9 & edges",
+      "note": "លេខ 9 ក្បាលធំ ដូចហើម ហើយគែមត្រាព្រិល ដូចចុចដោយពុម្ពទន់។",
+      "x": 0.615,
+      "y": 0.6,
+      "w": 0.115,
+      "h": 0.37
+     }
+    ]
+   },
+   "authentic": {
+    "crop_of_chart": 1,
+    "points": [
+     {
+      "label": "Digit 4",
+      "note": "លេខ 4 មាន serif (ជើងតូច) ក្បាលបើក ខ្សែស្តើងស្មើ។",
+      "x": 0.57,
+      "y": 0.03,
+      "w": 0.11,
+      "h": 0.36
+     },
+     {
+      "label": "Row 1 spacing",
+      "note": "ពុម្ពអក្សរមាន serif ស្អាត កម្ពស់ស្មើ គម្លាតស្មើ បន្ទាត់ត្រង់។",
+      "x": 0.21,
+      "y": 0.02,
+      "w": 0.56,
+      "h": 0.37
+     },
+     {
+      "label": "Digits 1, 2, 7",
+      "note": "លេខ 1 និង 7 ត្រង់ មាន serif ជាប់លាប់ ហើយគម្លាតស្មើ។",
+      "x": 0.3,
+      "y": 0.6,
+      "w": 0.3,
+      "h": 0.37
+     },
+     {
+      "label": "Digit 9 & edges",
+      "note": "លេខ 9 មានរាង serif ច្បាស់ ក្បាលមូលស្អាត ហើយគែមត្រាស្រួច ជម្រៅស្មើ។",
+      "x": 0.595,
+      "y": 0.59,
+      "w": 0.11,
+      "h": 0.38
+     }
+    ]
+   }
+  },
+  {
+   "pair": 2,
+   "brand": "Louis Vuitton",
+   "part": "date_code",
+   "title": "LV · Date code AR4106",
+   "lesson": "AR4106 = AR (បារាំង) · សប្តាហ៍ 40 · 2016។ កូដទាំងពីរត្រឹមត្រូវដូចគ្នា ដូច្នេះកូដត្រឹមត្រូវ មិនបញ្ជាក់អ្វីទេ។ ត្រូវមើលរបៀបបោះត្រា។",
+   "brand_id": "b_lv",
+   "counterfeit": {
+    "crop_of_chart": 2,
+    "points": [
+     {
+      "label": "Letter strokes",
+      "note": "អក្សរស្តើង ដូចគូរ/កោស រាក់ ហើយខ្សែមិនស្មើ។",
+      "x": 0.14,
+      "y": 0.34,
+      "w": 0.75,
+      "h": 0.36
+     },
+     {
+      "label": "Digit 4",
+      "note": "លេខ 4 ចំហ តូចចង្អៀត ហើយកម្ពស់ខុសពីអក្សរផ្សេង។",
+      "x": 0.36,
+      "y": 0.35,
+      "w": 0.1,
+      "h": 0.33
+     },
+     {
+      "label": "Digit 0",
+      "note": "លេខ 0 រាងមូលពងក្រពើ ហើយខ្សែមិនជាប់គ្នា។",
+      "x": 0.66,
+      "y": 0.35,
+      "w": 0.09,
+      "h": 0.33
+     },
+     {
+      "label": "Tab finish",
+      "note": "Tab ស្បែកពណ៌ប្រផេះ ផ្ទៃមានស្នាមកោស គែមមិនស្អាត។",
+      "x": 0.03,
+      "y": 0.13,
+      "w": 0.94,
+      "h": 0.76
+     }
+    ]
+   },
+   "authentic": {
+    "crop_of_chart": 2,
+    "points": [
+     {
+      "label": "Letter strokes",
+      "note": "ត្រាកម្ដៅជ្រៅ ស្មើ អក្សរក្រាស់ស្មើគ្នា គម្លាតស្មើ។",
+      "x": 0.17,
+      "y": 0.32,
+      "w": 0.69,
+      "h": 0.27
+     },
+     {
+      "label": "Digit 4",
+      "note": "លេខ 4 កម្ពស់ស្មើនឹងអក្សរ A R ហើយខ្សែក្រាស់ដូចគ្នា។",
+      "x": 0.41,
+      "y": 0.32,
+      "w": 0.1,
+      "h": 0.27
+     },
+     {
+      "label": "Digit 0",
+      "note": "លេខ 0 រាងចតុកោណមូលជ្រុង (ពុម្ព LV) ខ្សែជាប់គ្នា។",
+      "x": 0.65,
+      "y": 0.32,
+      "w": 0.09,
+      "h": 0.27
+     },
+     {
+      "label": "Tab finish",
+      "note": "Tab ស្បែក vachetta ពណ៌ក្រីម គែមកាត់ស្អាត ហើយ date code នៅកណ្តាល។",
+      "x": 0.03,
+      "y": 0.13,
+      "w": 0.94,
+      "h": 0.75
+     }
+    ]
+   }
+  },
+  {
+   "pair": 3,
+   "brand": "Louis Vuitton",
+   "part": "zipper",
+   "title": "LV · ក្បាល zipper (LV logo)",
+   "lesson": "មើលរបៀបធ្វើ LV លើក្បាល zipper៖ ផុសក្រាស់ ឬឆ្លាក់ស្តើង និងរាង pull។",
+   "brand_id": "b_lv",
+   "counterfeit": {
+    "crop_of_chart": 3,
+    "points": [
+     {
+      "label": "LV logo",
+      "note": "LV ផុសឡើងក្រាស់ (embossed) ខ្សែធំ ហើយ serif ធំខុសធម្មតា។",
+      "x": 0.2,
+      "y": 0.62,
+      "w": 0.56,
+      "h": 0.27
+     },
+     {
+      "label": "Pull neck",
+      "note": "ក ក្បាល pull ខ្លី ហើយស្មាមូលប៉ោង មិនមានជ្រុងច្បាស់។",
+      "x": 0.18,
+      "y": 0.4,
+      "w": 0.6,
+      "h": 0.15
+     },
+     {
+      "label": "Slider top",
+      "note": "ផ្នែកខាងលើ slider មានស្នាម រលាក់ និងរាងមិនស្អាត។ ពណ៌មាសលឿងភ្លឺខ្លាំង ហើយផ្ទៃមានចំណុចតូចៗ។",
+      "x": 0.15,
+      "y": 0.0,
+      "w": 0.75,
+      "h": 0.32
+     }
+    ]
+   },
+   "authentic": {
+    "crop_of_chart": 3,
+    "points": [
+     {
+      "label": "LV logo",
+      "note": "LV ឆ្លាក់ចូល (engraved) ខ្សែស្តើង serif តូចស្អាត ហើយ V ឆ្លងកាត់ L ត្រង់។",
+      "x": 0.22,
+      "y": 0.64,
+      "w": 0.55,
+      "h": 0.25
+     },
+     {
+      "label": "Pull neck",
+      "note": "ក pull វែងជាង ហើយស្មាមានជ្រុងច្បាស់ស្មើទាំងសងខាង។",
+      "x": 0.18,
+      "y": 0.44,
+      "w": 0.62,
+      "h": 0.17
+     },
+     {
+      "label": "Slider top",
+      "note": "Slider និងចិញ្ចៀនរលោង ស្អាត ហើយភ្ជាប់គ្នាល្អ។ ពណ៌មាសទន់ (rose gold បន្តិច) ផ្ទៃរលោងស្មើ។",
+      "x": 0.12,
+      "y": 0.03,
+      "w": 0.7,
+      "h": 0.33
+     }
+    ]
+   }
+  },
+  {
+   "pair": 4,
+   "brand": "Gucci",
+   "part": "heat_stamp",
+   "title": "Gucci · ត្រាខាងក្នុង (GUCCI made in italy)",
+   "lesson": "ត្រា Gucci ពិតមានពុម្ពអក្សរស្តើង ច្បាស់ ហើយគម្លាតធំ។ ប្រៀបធៀបជួរនីមួយៗ។",
+   "brand_id": "b_gucci",
+   "counterfeit": {
+    "crop_of_chart": 4,
+    "points": [
+     {
+      "label": "® symbol",
+      "note": "® ព្រិល ក្រាស់ រង្វង់មិនច្បាស់។",
+      "x": 0.45,
+      "y": 0.07,
+      "w": 0.11,
+      "h": 0.2
+     },
+     {
+      "label": "GUCCI",
+      "note": "អក្សរមូលក្រាស់ ដូចអក្សរតូច (gucci) ហើយគែមព្រិល។",
+      "x": 0.29,
+      "y": 0.33,
+      "w": 0.43,
+      "h": 0.2
+     },
+     {
+      "label": "made in italy",
+      "note": "អក្សរតូចៗប្រឡាក់គ្នា ស្ទើរតែអានមិនបាន។",
+      "x": 0.3,
+      "y": 0.55,
+      "w": 0.39,
+      "h": 0.15
+     },
+     {
+      "label": "Serial digits",
+      "note": "លេខក្រាស់ ជិតគ្នាពេក ហើយ 4 7 6 រាងខុស។",
+      "x": 0.06,
+      "y": 0.71,
+      "w": 0.88,
+      "h": 0.25
+     }
+    ]
+   },
+   "authentic": {
+    "crop_of_chart": 4,
+    "points": [
+     {
+      "label": "® symbol",
+      "note": "® រង្វង់ស្តើង ច្បាស់ អក្សរ R នៅកណ្តាល។",
+      "x": 0.45,
+      "y": 0.01,
+      "w": 0.11,
+      "h": 0.2
+     },
+     {
+      "label": "GUCCI",
+      "note": "អក្សរធំ (GUCCI) ស្តើង គម្លាតធំស្មើគ្នា គែមស្រួច។",
+      "x": 0.3,
+      "y": 0.29,
+      "w": 0.42,
+      "h": 0.21
+     },
+     {
+      "label": "made in italy",
+      "note": "អក្សរតូចស្តើង អានបានច្បាស់ គម្លាតស្មើ។",
+      "x": 0.31,
+      "y": 0.52,
+      "w": 0.4,
+      "h": 0.15
+     },
+     {
+      "label": "Serial digits",
+      "note": "លេខស្តើង មាន serif គម្លាតធំស្មើ ហើយចុងមានចំណុច (·)។",
+      "x": 0.06,
+      "y": 0.7,
+      "w": 0.88,
+      "h": 0.25
+     }
+    ]
+   }
+  },
+  {
+   "pair": 5,
+   "brand": "Prada",
+   "part": "hardware",
+   "title": "Prada · បន្ទះឡូហ្គោ (PRADA MILANO)",
+   "lesson": "មើលពុម្ពអក្សរ PRADA (ជាពិសេសអក្សរ R) ពណ៌អក្សរ និងគែមបន្ទះដែក។",
+   "brand_id": "b_prada",
+   "counterfeit": {
+    "crop_of_chart": 5,
+    "points": [
+     {
+      "label": "PRADA letters",
+      "note": "អក្សរពណ៌ស/ប្រាក់ ធំទូលាយ ក្រាស់ ហើយ serif ធំ។",
+      "x": 0.16,
+      "y": 0.24,
+      "w": 0.71,
+      "h": 0.28
+     },
+     {
+      "label": "Letter R",
+      "note": "ជើង R ត្រង់ មិនមានខ្សែកោងតូច (notch) ដូចពុម្ព Prada។",
+      "x": 0.28,
+      "y": 0.24,
+      "w": 0.14,
+      "h": 0.28
+     },
+     {
+      "label": "MILANO",
+      "note": "MILANO ក្រាស់ និងធំជាង គម្លាតចង្អៀត។",
+      "x": 0.34,
+      "y": 0.57,
+      "w": 0.36,
+      "h": 0.16
+     },
+     {
+      "label": "Plate edge",
+      "note": "គែមបន្ទះមិនស្មើ ជ្រុងមួយធំជាងជ្រុងផ្សេង ហើយពណ៌ប្រាក់ចាំងខ្លាំង។",
+      "x": 0.75,
+      "y": 0.68,
+      "w": 0.24,
+      "h": 0.25
+     }
+    ]
+   },
+   "authentic": {
+    "crop_of_chart": 5,
+    "points": [
+     {
+      "label": "PRADA letters",
+      "note": "អក្សរពណ៌ក្រហមដូចផ្ទៃ (enamel) មានគែមដែកស្តើង ខ្សែស្មើ។",
+      "x": 0.15,
+      "y": 0.23,
+      "w": 0.68,
+      "h": 0.28
+     },
+     {
+      "label": "Letter R",
+      "note": "ជើង R កោងតូច (notch) ជាលក្ខណៈពុម្ព Prada។",
+      "x": 0.26,
+      "y": 0.23,
+      "w": 0.13,
+      "h": 0.28
+     },
+     {
+      "label": "MILANO",
+      "note": "MILANO ស្តើង តូច គម្លាតស្មើ នៅកណ្តាល។",
+      "x": 0.34,
+      "y": 0.56,
+      "w": 0.31,
+      "h": 0.16
+     },
+     {
+      "label": "Plate edge",
+      "note": "គែមបន្ទះស្មើគ្រប់ជ្រុង ផ្ទៃប្រាក់រលោង។",
+      "x": 0.78,
+      "y": 0.62,
+      "w": 0.2,
+      "h": 0.3
+     }
+    ]
+   }
+  }
+ ]
+}
