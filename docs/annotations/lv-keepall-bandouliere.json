@@ -1,0 +1,212 @@
+{
+ "model_id": "m_lv_keepall_b",
+ "brand_id": "b_lv",
+ "date_code": {
+  "photo": 5,
+  "transcription": "SD5119",
+  "reading": "SD (USA, San Dimas) - week 51 - 2019 (2007+ format: digits 1&3 = week, 2&4 = year)"
+ },
+ "how_to_apply": "Upload the 5 photos in this order with the part shown, then insert each photo's points into reference_points (source ai_suggested), set teaching_title / teaching_note, and record the date-code transcription for photo 5 in datecode_analyses. Coordinates are fractions of the photo (0..1). Descriptive only: no verdict.",
+ "photos": [
+  {
+   "order": 1,
+   "part": "canvas",
+   "title": "រាងទាំងមូល · Whole bag (Keepall Bandoulière)",
+   "note": "មើលកាបូបទាំងមូលជាមុន៖ ស្បែក vachetta (ពណ៌ទឹកឃ្មុំ) លើដៃកាន់ និងខ្សែ, លំនាំ Monogram និងដែក។ ស្បែក vachetta ប្តូរពណ៌ទៅជាងងឹតតាមពេលវេលា (patina) ដូច្នេះពណ៌អាចខុសពីកាបូបថ្មី។",
+   "points": [
+    {
+     "label": "Vachetta handles",
+     "note": "ស្បែកដៃកាន់មានពណ៌ patina ស្មើគ្នាទាំងពីរ គែមលាបពណ៌ក្រហមត្នោតស្អាត ហើយរាងមូលស្មើពេញដៃកាន់។",
+     "x": 0.42,
+     "y": 0.03,
+     "w": 0.24,
+     "h": 0.25
+    },
+    {
+     "label": "Vachetta trim",
+     "note": "ខ្សែស្បែកឆ្លងកាត់តួកាបូបត្រង់ ស្របគ្នា ហើយថ្នេរនៅសងខាងស្មើ។",
+     "x": 0.6,
+     "y": 0.27,
+     "w": 0.22,
+     "h": 0.5
+    },
+    {
+     "label": "Monogram canvas",
+     "note": "លំនាំ LV និងផ្កាស្មើគ្នា ពណ៌មិនរលុប។ ប្រៀបធៀបទីតាំងលំនាំជាមួយរូបពិតនៃ Keepall ទំហំដូចគ្នា។",
+     "x": 0.35,
+     "y": 0.42,
+     "w": 0.22,
+     "h": 0.22
+    },
+    {
+     "label": "Strap hardware",
+     "note": "Clasp និង D-ring ពណ៌មាសដូចគ្នានឹងដែកដទៃ ហើយការឆ្លាក់លើ clasp ច្បាស់។",
+     "x": 0.05,
+     "y": 0.32,
+     "w": 0.1,
+     "h": 0.2
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "part": "hardware",
+   "title": "Rivet និងថ្នេរ · Rivet & stitching",
+   "note": "Rivet លើ tab ស្បែក vachetta។ មើលអក្សរជុំវិញ rivet និងថ្នេរពណ៌លឿង។",
+   "points": [
+    {
+     "label": "Rivet engraving",
+     "note": "អក្សរ LOUIS VUITTON ជុំវិញ rivet ស្មើ ច្បាស់ ជម្រៅដូចគ្នា ហើយចន្លោះអក្សរស្មើ។",
+     "x": 0.36,
+     "y": 0.4,
+     "w": 0.24,
+     "h": 0.24
+    },
+    {
+     "label": "Top stitch row",
+     "note": "ថ្នេរពណ៌លឿង (ខ្សែរមួល) ទំហំស្មើ ចន្លោះស្មើ តម្រង់ជួរត្រង់។",
+     "x": 0.2,
+     "y": 0.29,
+     "w": 0.52,
+     "h": 0.07
+    },
+    {
+     "label": "Side stitching",
+     "note": "ថ្នេរចំហៀងមានមុំ (slant) ដូចគ្នាគ្រប់ថ្នេរ ហើយនៅចម្ងាយស្មើពីគែមស្បែក។",
+     "x": 0.18,
+     "y": 0.32,
+     "w": 0.08,
+     "h": 0.66
+    },
+    {
+     "label": "Edge paint",
+     "note": "គែមស្បែក vachetta លាបពណ៌ក្រហមត្នោតស្តើង ស្មើ មិនប៉ោង មិនហៀរ។",
+     "x": 0.12,
+     "y": 0.0,
+     "w": 0.06,
+     "h": 1.0
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "part": "zipper",
+   "title": "ក្បាល zipper ពីរ · Double zipper pulls",
+   "note": "Keepall មាន zipper ពីរក្បាលជួបគ្នានៅកណ្តាល។ ប្រៀបធៀបក្បាលទាំងពីរ៖ គួរដូចគ្នាទាំងរាង និងការឆ្លាក់។",
+   "points": [
+    {
+     "label": "Engraved LV (left)",
+     "note": "LV ឆ្លាក់ស្រួច ជម្រៅស្មើ ហើយ V ឆ្លងកាត់ L ស្អាត។",
+     "x": 0.02,
+     "y": 0.47,
+     "w": 0.13,
+     "h": 0.12
+    },
+    {
+     "label": "Engraved LV (right)",
+     "note": "ប្រៀបធៀបជាមួយក្បាលខាងឆ្វេង៖ ទំហំ ជម្រៅ និងទីតាំង LV គួរដូចគ្នា។",
+     "x": 0.82,
+     "y": 0.47,
+     "w": 0.13,
+     "h": 0.12
+    },
+    {
+     "label": "Sliders",
+     "note": "Slider ទាំងពីររលោង ពណ៌មាសដូចគ្នា ហើយភ្ជាប់នឹង pull ស្អាត។",
+     "x": 0.29,
+     "y": 0.38,
+     "w": 0.43,
+     "h": 0.17
+    },
+    {
+     "label": "Zipper teeth",
+     "note": "ធ្មេញ zipper ពណ៌ដូចគ្នានឹងក្បាល ស្មើ ហើយតម្រង់ជួរត្រង់។",
+     "x": 0.0,
+     "y": 0.4,
+     "w": 0.3,
+     "h": 0.06
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "part": "lining",
+   "title": "ស្លាកខាងក្នុង · Interior label (made in U.S.A.)",
+   "note": "ស្លាកក្រណាត់ \"made in U.S.A. of imported materials\" ជាមួយឡូហ្គោ LV ក្នុងរង្វង់។ ប្រទេសលើស្លាកនេះត្រូវស្របនឹងកូដរោងចក្រក្នុង date code (រូបបន្ទាប់៖ SD = អាមេរិក)។",
+   "points": [
+    {
+     "label": "LV circle logo",
+     "note": "ឡូហ្គោ LV ក្នុងរង្វង់ នៅកណ្តាលពីលើអក្សរ គែមច្បាស់។",
+     "x": 0.44,
+     "y": 0.26,
+     "w": 0.13,
+     "h": 0.12
+    },
+    {
+     "label": "made in U.S.A.",
+     "note": "អក្សរស្មើ ត្រង់ ហើយពាក្យ \"U.S.A.\" មានចំណុចក្រោយអក្សរនីមួយៗ។",
+     "x": 0.29,
+     "y": 0.4,
+     "w": 0.45,
+     "h": 0.1
+    },
+    {
+     "label": "of imported materials",
+     "note": "បន្ទាត់ទីពីរ តម្រង់កណ្តាល អក្សរកម្ពស់ស្មើនឹងបន្ទាត់ខាងលើ។",
+     "x": 0.19,
+     "y": 0.5,
+     "w": 0.6,
+     "h": 0.1
+    },
+    {
+     "label": "Label weave",
+     "note": "ក្រណាត់ស្លាកត្បាញស្មើ ហើយគែមដេរភ្ជាប់ស្អាត។",
+     "x": 0.14,
+     "y": 0.62,
+     "w": 0.66,
+     "h": 0.12
+    }
+   ]
+  },
+  {
+   "order": 5,
+   "part": "date_code",
+   "title": "Date code · SD5119",
+   "note": "SD5119៖ SD = រោងចក្រអាមេរិក (San Dimas), លេខទី 1 និងទី 3 (5, 1) = សប្តាហ៍ 51, លេខទី 2 និងទី 4 (1, 9) = ឆ្នាំ 2019។ ស្របនឹងស្លាក \"made in U.S.A.\"។ ចងចាំ៖ date code ត្រឹមត្រូវ មិនបញ្ជាក់ថាកាបូបពិតទេ។",
+   "points": [
+    {
+     "label": "Factory letters SD",
+     "note": "SD = អាមេរិក។ អក្សរទាំងពីរកម្ពស់ស្មើនឹងលេខ ហើយជម្រៅត្រាស្មើ។",
+     "x": 0.3,
+     "y": 0.32,
+     "w": 0.15,
+     "h": 0.12
+    },
+    {
+     "label": "Digits 5119",
+     "note": "លេខ 1 និង 3 = សប្តាហ៍ 51; លេខ 2 និង 4 = ឆ្នាំ 2019។ គម្លាតលេខស្មើ បន្ទាត់ត្រង់។",
+     "x": 0.43,
+     "y": 0.32,
+     "w": 0.3,
+     "h": 0.12
+    },
+    {
+     "label": "Rivet",
+     "note": "Rivet LOUIS VUITTON លើ tab date code អក្សរច្បាស់ ស្មើ។",
+     "x": 0.4,
+     "y": 0.66,
+     "w": 0.2,
+     "h": 0.2
+    },
+    {
+     "label": "Tab shape",
+     "note": "Tab ស្បែកនេះ គែមកាត់ស្អាត ហើយ date code នៅកណ្តាល។",
+     "x": 0.2,
+     "y": 0.08,
+     "w": 0.6,
+     "h": 0.2
+    }
+   ]
+  }
+ ]
+}
