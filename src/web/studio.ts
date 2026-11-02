@@ -16,3 +16,12 @@ export async function uploadReference(file: File, fields: Record<string, string 
 }
 
 export const assetImg = (id: string) => `/api/assets/${id}/image`;
+
+/**
+ * After an upload, ask the AI to draw "look here" points and, for a date-code photo, to read the code.
+ * Best effort: when AI is not configured (501) or fails, the photo is simply posted without them.
+ */
+export async function annotateAfterUpload(assetId: string, part?: string | null): Promise<void> {
+  await api.post(`/api/assets/${assetId}/points/suggest`).catch(() => {});
+  if (part === 'date_code') await api.post(`/api/assets/${assetId}/datecode-analysis`, {}).catch(() => {});
+}

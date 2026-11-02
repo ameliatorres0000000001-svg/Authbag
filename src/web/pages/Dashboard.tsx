@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
 import { MeContext } from '../App.tsx';
-import { Badge, OutcomeBadge } from '../ui.tsx';
+import { OutcomeBadge } from '../ui.tsx';
 import DateCodeDecoder from '../DateCodeDecoder.tsx';
 import LessonCard, { type LessonSummary } from '../LessonCard.tsx';
+import Feed from '../Feed.tsx';
 import { STAFF_ROLES, assetImg } from '../studio.ts';
 
 export interface StudioModel {
@@ -85,6 +86,13 @@ export default function Dashboard() {
         {showDate && <div className="mt-3"><DateCodeDecoder /></div>}
       </section>
 
+      {/* feed */}
+      <section>
+        <SectionHead title={t('feed.title')} />
+        <p className="-mt-1 mb-3 text-xs text-muted">{t('feed.help')}</p>
+        <div className="mx-auto max-w-xl md:mx-0"><Feed brandId={brand || undefined} /></div>
+      </section>
+
       {/* stats */}
       <section className="grid grid-cols-2 overflow-hidden rounded-2xl bg-charcoal text-white md:grid-cols-4">
         <Stat k={t('lesson.photos')} v={lessonPhotos ?? '—'} />
@@ -100,24 +108,6 @@ export default function Dashboard() {
         {studio && shownSets.length === 0 ? <p className="text-sm text-muted">{t('studio.noModels')}</p> : (
           <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-3 md:px-0">
             {shownSets.map((m) => <ModelSetCard key={m.id} m={m} size={size} />)}
-          </div>
-        )}
-      </section>
-
-      {/* study photos */}
-      <section>
-        <SectionHead title={t('study.recent')} />
-        {!studio || studio.recentStudy.length === 0 ? <p className="text-sm text-muted">{t('noData')}</p> : (
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:px-0">
-            {studio.recentStudy.filter((a) => !brand || studio.models.find((m) => m.id === a.model_id)?.brand_id === brand).map((a) => (
-              <figure key={a.id} className="w-28 shrink-0 overflow-hidden rounded-xl border border-hairline bg-surface-card">
-                <img src={assetImg(a.id)} alt="" loading="lazy" className="aspect-square w-full bg-surface-high object-cover" />
-                <figcaption className="space-y-0.5 p-1.5">
-                  <Badge tone={a.label === 'authentic' ? 'ok' : 'bad'}>{a.label === 'authentic' ? t('study.genuineShort') : t('study.counterfeitShort')}</Badge>
-                  <div className="truncate text-[11px] text-muted">{a.model ?? t('study.anyModel')}</div>
-                </figcaption>
-              </figure>
-            ))}
           </div>
         )}
       </section>

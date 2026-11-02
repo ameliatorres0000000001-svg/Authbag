@@ -8,17 +8,17 @@ export interface Point { id: string; x: number; y: number; w: number; h: number;
  */
 export default function AnnotatedPhoto({ src, points, active, onPick, tone = 'neutral', caption, sub, footer, className = '' }: {
   src: string; points: Point[]; active?: number | null; onPick?: (i: number) => void;
-  tone?: 'genuine' | 'counterfeit' | 'neutral'; caption: React.ReactNode; sub?: React.ReactNode; footer?: React.ReactNode; className?: string;
+  tone?: 'genuine' | 'counterfeit' | 'neutral'; caption?: React.ReactNode; sub?: React.ReactNode; footer?: React.ReactNode; className?: string;
 }) {
   const dot = { genuine: 'bg-verified', counterfeit: 'bg-counterfeit', neutral: 'bg-gold' }[tone];
   return (
     <figure className={`overflow-hidden rounded-xl border border-hairline bg-surface-card ${className}`}>
-      <figcaption className="flex items-start justify-between gap-2 px-3 py-2.5">
+{caption != null && (<figcaption className="flex items-start justify-between gap-2 px-3 py-2.5">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 font-serif text-base leading-tight"><span className={`inline-block h-2 w-2 shrink-0 rounded-full ${dot}`} />{caption}</div>
           {sub && <div className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wider text-muted">{sub}</div>}
         </div>
-      </figcaption>
+      </figcaption>)}
       <div className="relative overflow-hidden bg-charcoal">
         <img src={src} alt="" draggable={false} className="block h-auto w-full select-none" />
         {points.map((p, i) => {
