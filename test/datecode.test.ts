@@ -68,3 +68,13 @@ test('1980s formats: 8612TH and 833 decode year then month', () => {
   assert.deepEqual([b.factory, b.year, b.period, b.periodValid], ['', 1983, 3, true]);
   assert.deepEqual(dateCodeSegments('8612TH', fmt80s)!.map((s) => s.role), ['year', 'year', 'period', 'period', 'factory']);
 });
+
+test('PL0241 is week 4 of 2021: outside 2007–2020, read by the 2021 format', () => {
+  const f2021: DateCodeFormat = { ...fmt2007, id: 'f21', name: '2021', startYear: 2021, endYear: 2021 };
+  const pl: FactoryCode = { code: 'PL', country: 'Italy', location: null, status: 'draft' };
+  const r = decodeDateCode('PL0241', [fmt2007, f2021], [pl]);
+  const old = r.candidates.find((c) => c.formatId === 'f07')!;
+  const now = r.candidates.find((c) => c.formatId === 'f21')!;
+  assert.equal(old.yearInFormatRange, false);
+  assert.deepEqual([now.country, now.period, now.year, now.yearInFormatRange, now.periodValid], ['Italy', 4, 2021, true, true]);
+});

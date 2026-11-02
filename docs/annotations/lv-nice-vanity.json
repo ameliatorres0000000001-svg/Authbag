@@ -1,0 +1,156 @@
+{
+ "model_id": "m_lv_nice",
+ "brand_id": "b_lv",
+ "date_code": {
+  "photo": 3,
+  "transcription": "PL0241",
+  "reading": "PL (Italy) - week 4 - 2021 (digits 1&3 = week, 2&4 = year); matches the made in Italy stamp"
+ },
+ "how_to_apply": "Upload the 3 photos in this order with the part shown, then insert each photo's points into reference_points (source ai_suggested), set teaching_title / teaching_note, and record the date-code transcription for photo 3 in datecode_analyses. Coordinates are fractions of the photo (0..1). Descriptive only: no verdict.",
+ "photos": [
+  {
+   "order": 1,
+   "part": "zipper",
+   "title": "ខាងមុខ និង zipper ពីរ · Front & double zipper",
+   "note": "កាបូប Nice (vanity case) មាន zipper ពីរក្បាលជួបគ្នាកណ្តាល ស្បែក vachetta ព័ទ្ធជុំវិញ និងលំនាំ Monogram ធំ។",
+   "points": [
+    {
+     "label": "Pull (left)",
+     "note": "LV ឆ្លាក់ស្រួច ជម្រៅស្មើ។ ប្រៀបធៀបជាមួយក្បាលខាងស្តាំ៖ រាង និងទំហំគួរដូចគ្នា។",
+     "x": 0.39,
+     "y": 0.47,
+     "w": 0.07,
+     "h": 0.12
+    },
+    {
+     "label": "Pull (right)",
+     "note": "ក្បាល zipper ទីពីរ ពណ៌មាស និងការឆ្លាក់ដូចក្បាលទីមួយ។",
+     "x": 0.54,
+     "y": 0.47,
+     "w": 0.07,
+     "h": 0.12
+    },
+    {
+     "label": "Zipper teeth",
+     "note": "ធ្មេញ zipper ពណ៌មាសស្មើ តម្រង់ជួរត្រង់ពេញខ្សែ។",
+     "x": 0.08,
+     "y": 0.39,
+     "w": 0.84,
+     "h": 0.06
+    },
+    {
+     "label": "Vachetta piping",
+     "note": "ស្បែក vachetta ព័ទ្ធគែម មានទំហំស្មើ ហើយគែមលាបពណ៌ស្អាត។",
+     "x": 0.08,
+     "y": 0.22,
+     "w": 0.84,
+     "h": 0.05
+    },
+    {
+     "label": "Monogram placement",
+     "note": "LV ធំនៅសងខាងស៊ីមេទ្រី ហើយផ្កានៅកណ្តាលរវាង zipper។ ប្រៀបធៀបទីតាំងជាមួយរូបពិត។",
+     "x": 0.18,
+     "y": 0.54,
+     "w": 0.16,
+     "h": 0.17
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "part": "heat_stamp",
+   "title": "ត្រាខាងក្នុង · Heat stamp (made in Italy)",
+   "note": "Patch ស្បែក vachetta \"® LOUIS VUITTON PARIS made in Italy\" ដេរដោយខ្សែពណ៌លឿង។ ប្រទេស Italy ត្រូវស្របនឹងកូដ PL ក្នុង date code។",
+   "points": [
+    {
+     "label": "® symbol",
+     "note": "តូច មូល នៅកណ្តាលពីលើ។",
+     "x": 0.46,
+     "y": 0.32,
+     "w": 0.08,
+     "h": 0.08
+    },
+    {
+     "label": "LOUIS VUITTON",
+     "note": "O មូល, T ទាំងពីរជិតគ្នា, ជើង L ខ្លី; គម្លាត និងជម្រៅស្មើ។",
+     "x": 0.23,
+     "y": 0.4,
+     "w": 0.54,
+     "h": 0.1
+    },
+    {
+     "label": "PARIS",
+     "note": "នៅកណ្តាលក្រោម LOUIS VUITTON តម្រង់ជួរត្រង់។",
+     "x": 0.4,
+     "y": 0.5,
+     "w": 0.2,
+     "h": 0.08
+    },
+    {
+     "label": "made in Italy",
+     "note": "\"made in\" ជាអក្សរតូច។ ប្រទេសត្រូវស្របនឹងកូដរោងចក្រ (PL = Italy)។",
+     "x": 0.28,
+     "y": 0.59,
+     "w": 0.45,
+     "h": 0.08
+    },
+    {
+     "label": "Yellow stitching",
+     "note": "ថ្នេរពណ៌លឿងជុំវិញ patch ស្មើ ចន្លោះស្មើ ហើយមុំដូចគ្នាគ្រប់ថ្នេរ។",
+     "x": 0.09,
+     "y": 0.22,
+     "w": 0.83,
+     "h": 0.06
+    },
+    {
+     "label": "Edge paint",
+     "note": "គែម patch លាបពណ៌ក្រហមត្នោតស្តើង ស្មើ។",
+     "x": 0.05,
+     "y": 0.2,
+     "w": 0.04,
+     "h": 0.6
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "part": "date_code",
+   "title": "ខាងក្នុង និង date code · Interior & date code PL0241",
+   "note": "Date code នៅលើ tab ស្បែកតូចខាងក្នុង៖ PL0241 = PL (Italy), លេខទី 1 និង 3 (0, 4) = សប្តាហ៍ទី 4, លេខទី 2 និង 4 (2, 1) = ឆ្នាំ 2021 (ខែមករា 2021 មុនពេល LV ប្តូរទៅ chip NFC ប្រហែលខែមីនា 2021)។ ចងចាំ៖ កូដត្រឹមត្រូវ មិនបញ្ជាក់ថាកាបូបពិតទេ។",
+   "points": [
+    {
+     "label": "Date code tab",
+     "note": "Tab ស្បែកតូចមានកូដ PL0241។ អក្សរ និងលេខកម្ពស់ស្មើ ជម្រៅស្មើ ហើយ tab ដេរជាប់ត្រង់។",
+     "x": 0.66,
+     "y": 0.33,
+     "w": 0.09,
+     "h": 0.13
+    },
+    {
+     "label": "Interior lining",
+     "note": "ក្រណាត់/ស្បែកខាងក្នុងពណ៌ស្មើ ផ្ទៃមិនមានស្នាមកាវ ហើយជ្រុងរាងមូលស្អាត។",
+     "x": 0.2,
+     "y": 0.45,
+     "w": 0.6,
+     "h": 0.35
+    },
+    {
+     "label": "Zipper ends",
+     "note": "ក្បាល zipper ទាំងពីរ ពណ៌មាសដូចគ្នា ហើយធ្មេញបិទជិតជុំវិញ។",
+     "x": 0.15,
+     "y": 0.17,
+     "w": 0.13,
+     "h": 0.09
+    },
+    {
+     "label": "Center panel seams",
+     "note": "ថ្នេរបន្ទះកណ្តាលត្រង់ ស្មើ ហើយភ្ជាប់នឹងមូលដ្ឋានស្អាត។",
+     "x": 0.27,
+     "y": 0.08,
+     "w": 0.45,
+     "h": 0.38
+    }
+   ]
+  }
+ ]
+}
