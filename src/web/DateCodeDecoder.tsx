@@ -3,10 +3,8 @@ import { api } from './api.ts';
 import { useI18n } from './i18n.tsx';
 import { Badge, Notice } from './ui.tsx';
 import { DateCodeGuide } from './DateCodeAppearance.tsx';
-import { dateCodeSegments, decodeDateCode, normalizeDateCode, type DateCodeRole } from '../shared/datecode.ts';
-import type { DateCodeFormat, FactoryCode } from '../shared/types.ts';
-
-interface Tables { formats: (DateCodeFormat & { brandId: string })[]; factories: (FactoryCode & { brandId: string })[] }
+import { dateCodeSegments, type DateCodeRole } from '../shared/datecode.ts';
+import { readDateCode, useDateTables } from './datecodeTables.ts';
 
 const ROLE_STYLE: Record<DateCodeRole, string> = {
   factory: 'bg-gold-light text-charcoal border-gold',
@@ -21,34 +19,19 @@ const ROLE_STYLE: Record<DateCodeRole, string> = {
  */
 export default function DateCodeDecoder() {
   const { t } = useI18n();
-  const [tables, setTables] = useState<Tables | null>(null);
-  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
-  const [brandId, setBrandId] = useState('');
+  const tables = useDateTables();
+  const [taxBrands, setTaxBrands] = useState<{ id: string; name: string }[] | null>(null);
+  const [pick, setPick] = useState('');
   const [code, setCode] = useState('');
 
-  useEffect(() => {
-    Promise.all([api.get('/api/datecode'), api.get('/api/taxonomy')]).then(([d, tax]) => {
-      const formats = (d.formats as any[]).map((f) => ({
-        id: f.id, brandId: f.brand_id, name: f.name, startYear: f.start_year, endYear: f.end_year, pattern: f.pattern,
-        extraction: JSON.parse(f.extraction_json), status: f.status,
-      }));
-      const factories = (d.factories as any[]).map((f) => ({ brandId: f.brand_id, code: f.code, country: f.country, location: f.location, status: f.status }));
-      const withTables = (tax.brands as any[]).filter((b) => formats.some((f) => f.brandId === b.id));
-      setTables({ formats, factories });
-      setBrands(withTables);
-      if (withTables[0]) setBrandId(withTables[0].id);
-    }).catch(() => setTables({ formats: [], factories: [] }));
-  }, []);
+  useEffect(() => { api.get('/api/taxonomy').then((tax) => setTaxBrands(tax.brands)).catch(() => setTaxBrands([])); }, []);
+  const brands = useMemo(() => (taxBrands ?? []).filter((b) => tables?.formats.some((f) => f.brandId === b.id)), [taxBrands, tables]);
+  const brandId = pick || brands[0]?.id || '';
 
   const result = useMemo(() => {
-    if (!tables || !brandId || normalizeDateCode(code).length < 3) return null;
-    const formats = tables.formats.filter((f) => f.brandId === brandId);
-    const factories = tables.factories.filter((f) => f.brandId === brandId);
-    const r = decodeDateCode(code, formats, factories);
-    // When some format reads the code with a year inside its own period, readings outside their period are noise.
-    const inRange = r.candidates.filter((c) => c.yearInFormatRange);
-    return (inRange.length ? inRange : r.candidates)
-      .map((c) => ({ c, segs: dateCodeSegments(r.normalized, formats.find((f) => f.id === c.formatId)!) }));
+    if (!tables || !brandId) return null;
+    const r = readDateCode(tables, brandId, code);
+    return r ? r.candidates.map((c) => ({ c, segs: dateCodeSegments(r.normalized, r.formats.find((f) => f.id === c.formatId)!) })) : null;
   }, [tables, brandId, code]);
 
   const periodName = (u: string) => (u === 'week' ? t('dc.week') : u === 'month' ? t('dc.month') : t('dc.period'));
@@ -58,13 +41,13 @@ export default function DateCodeDecoder() {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-2xl">{t('dc.title')}</h2>
         {brands.length > 1 && (
-          <select className="input !w-auto !py-1 text-xs" value={brandId} onChange={(e) => setBrandId(e.target.value)} aria-label={t('dc.brand')}>
+          <select className="input !w-auto !py-1 text-xs" value={brandId} onChange={(e) => setPick(e.target.value)} aria-label={t('dc.brand')}>
             {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         )}
       </div>
       <p className="mb-3 text-sm text-muted">{t('dc.help')}</p>
-      {tables && brands.length === 0 ? <Notice>{t('dc.noTables')}</Notice> : (
+      {tables && taxBrands && brands.length === 0 ? <Notice>{t('dc.noTables')}</Notice> : (
         <>
           <input className="input font-mono text-lg uppercase tracking-widest" value={code} maxLength={12} placeholder={t('dc.placeholder')}
             onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" spellCheck={false} />
@@ -79,6 +62,7 @@ export default function DateCodeDecoder() {
                     <span className="font-mono text-[11px] text-muted">{c.formatName}</span>
                     {c.formatStatus !== 'approved' && <Badge tone="warn">{t('dc.draft')}</Badge>}
                     {!c.yearInFormatRange && <Badge>{t('dc.outOfRange')}</Badge>}
+                    {!c.periodValid && <Badge tone="bad">{c.periodUnit === 'month' ? t('dc.badMonth') : t('dc.badWeek')}</Badge>}
                   </div>
                   {segs && (
                     <div className="mb-3 flex flex-wrap gap-1.5">

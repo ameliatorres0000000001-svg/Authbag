@@ -688,20 +688,30 @@ app.delete('/api/reference-points/:id', need(STAFF), async (c) => {
 });
 
 app.post('/api/assets/:id/points/suggest', need(STAFF), async (c) => {
-  const a = await c.env.DB.prepare('SELECT a.id, a.r2_key, a.teaching_title, a.teaching_note, a.ai_prompt, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id WHERE a.id = ?').bind(c.req.param('id')).first<Record<string, any>>();
+  const a = await c.env.DB.prepare(`SELECT a.id, a.r2_key, a.brand_id, a.model_id, a.component_code, a.label, a.teaching_title, a.teaching_note, a.ai_prompt, m.name AS model, cp.name_en AS part
+    FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id LEFT JOIN components cp ON cp.code = a.component_code WHERE a.id = ?`).bind(c.req.param('id')).first<Record<string, any>>();
   if (!a) return c.json({ error: 'not_found' }, 404);
   if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
   const obj = await c.env.VAULT.get(a.r2_key);
   if (!obj) return c.json({ error: 'not_found' }, 404);
+  // A counterfeit-labelled photo is compared with an approved genuine photo of the same brand and part (same model first).
+  let reference: { data: ArrayBuffer; mime: string } | null = null;
+  let referenceId: string | null = null;
+  if (a.label === 'counterfeit' && a.component_code) {
+    const ref = await c.env.DB.prepare(`SELECT id, r2_key FROM reference_assets WHERE brand_id = ? AND component_code = ? AND label = 'authentic' AND status = 'approved' AND id <> ?
+      ORDER BY (model_id IS ?) DESC, created_at DESC LIMIT 1`).bind(a.brand_id, a.component_code, a.id, a.model_id).first<{ id: string; r2_key: string }>();
+    const ro = ref && (await c.env.VAULT.get(ref.r2_key));
+    if (ro) { reference = { data: await ro.arrayBuffer(), mime: ro.httpMetadata?.contentType ?? 'image/jpeg' }; referenceId = ref!.id; }
+  }
   try {
     const sugg = await suggestTeachingPoints(c.env, { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? 'image/jpeg' },
-      { model: a.model ?? 'unspecified', title: a.teaching_title, note: a.teaching_note, prompt: a.ai_prompt });
+      { model: a.model ?? 'unspecified', part: a.part, title: a.teaching_title, note: a.teaching_note, prompt: a.ai_prompt, label: a.label, reference });
     for (const s of sugg) {
       await c.env.DB.prepare(`INSERT INTO reference_points (id, asset_id, x, y, w, h, label, note, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ai_suggested')`)
         .bind(uid('rp_'), a.id, s.x, s.y, s.w, s.h, s.label, s.note ?? null).run();
     }
-    await audit(c.env, c.get('user').id, 'reference_point.ai_suggest', 'asset', a.id, { count: sugg.length });
-    return c.json({ suggestions: sugg.length });
+    await audit(c.env, c.get('user').id, 'reference_point.ai_suggest', 'asset', a.id, { count: sugg.length, comparedWith: referenceId });
+    return c.json({ suggestions: sugg.length, comparedWith: referenceId });
   } catch (e) {
     return c.json({ error: 'ai_failed', detail: (e as Error).message }, 502);
   }
@@ -810,6 +820,43 @@ app.get('/api/lessons/:modelId', async (c) => {
   });
 });
 
+
+// ───────────────────────── feed: uploaded photos as posts (newest first), with points and the latest date-code reading ─────────────────────────
+app.get('/api/feed', async (c) => {
+  const q = c.req.query();
+  const limit = Math.min(30, Math.max(1, Number(q.limit) || 10));
+  const where: string[] = [`a.status <> 'rejected'`]; const args: unknown[] = [];
+  if (q.brandId) { where.push('a.brand_id = ?'); args.push(q.brandId); }
+  if (q.before) { where.push('a.created_at < ?'); args.push(q.before); }
+  const posts = (await c.env.DB.prepare(
+    `SELECT a.id, a.brand_id, b.name AS brand, a.model_id, m.name AS model, a.component_code, cp.name_en AS part_en, cp.name_km AS part_km,
+            a.label, a.label_basis, a.status, a.purpose, a.teaching_title, a.teaching_note, a.lesson_step_id, a.created_at, u.name AS author
+     FROM reference_assets a JOIN brands b ON b.id = a.brand_id LEFT JOIN models m ON m.id = a.model_id
+     LEFT JOIN components cp ON cp.code = a.component_code LEFT JOIN users u ON u.id = a.created_by
+     WHERE ${where.join(' AND ')} ORDER BY a.created_at DESC LIMIT ?`,
+  ).bind(...args, limit + 1).all<Record<string, any>>()).results;
+  const more = posts.length > limit;
+  const page = posts.slice(0, limit);
+  const ids = page.map((p) => p.id);
+  const marks = ids.length ? `(${ids.map(() => '?').join(',')})` : '(NULL)';
+  const [points, readings, refs] = await Promise.all([
+    ids.length ? c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, source FROM reference_points WHERE asset_id IN ${marks} ORDER BY created_at`).bind(...ids).all<Record<string, any>>() : null,
+    ids.length ? c.env.DB.prepare(`SELECT target_id, result_json, created_at FROM datecode_analyses WHERE target_type = 'asset' AND target_id IN ${marks} ORDER BY created_at DESC`).bind(...ids).all<Record<string, any>>() : null,
+    // one approved genuine photo per brand + part, to show beside counterfeit-labelled posts
+    c.env.DB.prepare(`SELECT a.id, a.brand_id, a.component_code, a.model_id FROM reference_assets a WHERE a.label = 'authentic' AND a.status = 'approved' AND a.component_code IS NOT NULL ORDER BY a.created_at DESC LIMIT 200`).all<Record<string, any>>(),
+  ]);
+  const out = page.map((p) => {
+    const reading = readings?.results.find((r) => r.target_id === p.id);
+    let transcription: string | null = null;
+    try { transcription = reading ? (JSON.parse(reading.result_json).transcription || null) : null; } catch { transcription = null; }
+    const pick = p.label === 'counterfeit' && p.component_code
+      ? (refs.results.find((r) => r.brand_id === p.brand_id && r.component_code === p.component_code && r.model_id === p.model_id && r.id !== p.id)
+        ?? refs.results.find((r) => r.brand_id === p.brand_id && r.component_code === p.component_code && r.id !== p.id))
+      : null;
+    return { ...p, points: points?.results.filter((x) => x.asset_id === p.id) ?? [], transcription, genuineRefId: pick?.id ?? null };
+  });
+  return c.json({ posts: out, next: more ? page[page.length - 1].created_at : null, aiConfigured: aiConfigured(c.env) });
+});
 // ───────────────────────── hidden admin panel: multi-brand library (genuine / counterfeit by part) ─────────────────────────
 app.get('/api/admin/library', need(STAFF), async (c) => {
   const q = c.req.query();

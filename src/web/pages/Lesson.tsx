@@ -7,7 +7,7 @@ import { Badge, Field, Notice, errText } from '../ui.tsx';
 import AnnotatedPhoto, { PointCards, type Point } from '../AnnotatedPhoto.tsx';
 import MarkCanvas from '../MarkCanvas.tsx';
 import DateCodeAppearanceCard, { DateCodeGuide } from '../DateCodeAppearance.tsx';
-import { BASES, LICENCES, STAFF_ROLES, assetImg, uploadReference } from '../studio.ts';
+import { BASES, LICENCES, STAFF_ROLES, annotateAfterUpload, assetImg, uploadReference } from '../studio.ts';
 
 interface Photo { id: string; label: string; label_basis: string; status: string; teaching_note: string | null; source_url: string | null; points: Point[] }
 interface Step {
@@ -185,7 +185,7 @@ function AdminTools({ step, model, ai, onChanged }: { step: Step; model: LessonD
     <details className="rounded-xl border border-hairline bg-surface-low">
       <summary className="cursor-pointer select-none px-4 py-3 font-mono text-[11px] uppercase tracking-widest">{t('lesson.admin')}</summary>
       <div className="space-y-5 px-4 pb-4">
-        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (file) run(async () => { const r = await uploadReference(file, { ...f, brandId: model.brand_id, modelId: model.id, purpose: 'study', lessonStepId: step.id }); setFile(null); setSel(r.id); (e.target as HTMLFormElement).reset(); }); }}>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (file) run(async () => { const r = await uploadReference(file, { ...f, brandId: model.brand_id, modelId: model.id, purpose: 'study', lessonStepId: step.id }); await annotateAfterUpload(r.id, step.component_code); setFile(null); setSel(r.id); (e.target as HTMLFormElement).reset(); }); }}>
           <div className="label">{t('lesson.addPhoto')}</div>
           <div className="grid grid-cols-2 gap-2">
             {(['authentic', 'counterfeit'] as const).map((l) => (

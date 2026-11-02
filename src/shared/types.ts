@@ -66,6 +66,8 @@ export interface DateCodeCandidate {
   formatId: string; formatName: string; formatStatus: DateCodeFormat['status'];
   factory: string; factoryKnown: boolean; factoryStatus: FactoryCode['status'] | null; country: string | null;
   period: number; periodUnit: DateCodeExtraction['periodUnit']; year: number; yearInFormatRange: boolean;
+  /** false when the period cannot exist: week outside 1–53, month outside 1–12, or 0 for an unconfirmed unit. */
+  periodValid: boolean;
 }
 export type DateCodeState = 'consistent' | 'inconsistent' | 'unknown';
 export interface DateCodeResult {

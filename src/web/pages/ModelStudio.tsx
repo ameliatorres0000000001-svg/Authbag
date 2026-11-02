@@ -6,7 +6,7 @@ import { MeContext } from '../App.tsx';
 import { Badge, Field, Notice, Page, errText } from '../ui.tsx';
 import MarkCanvas, { type Mark } from '../MarkCanvas.tsx';
 import DateCodeAppearanceCard from '../DateCodeAppearance.tsx';
-import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, assetImg, uploadReference } from '../studio.ts';
+import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, annotateAfterUpload, assetImg, uploadReference } from '../studio.ts';
 import type { Studio, StudioModel } from './Dashboard.tsx';
 
 /** One model's teaching set: up to 5 known-genuine photos, each with a teaching note, an AI instruction and "look here" points. */
@@ -76,7 +76,8 @@ function SlotUpload({ model, slot, onDone, onError }: { model: StudioModel; slot
     if (!file) return;
     setBusy(true);
     try {
-      await uploadReference(file, { brandId: model.brand_id, modelId: model.id, purpose: 'model_set', slot, label: 'authentic', ...f });
+      const r = await uploadReference(file, { brandId: model.brand_id, modelId: model.id, purpose: 'model_set', slot, label: 'authentic', ...f });
+      await annotateAfterUpload(r.id, f.componentCode);
       onDone();
     } catch (err) { onError(errText(err)); } finally { setBusy(false); }
   }

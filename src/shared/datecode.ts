@@ -1,4 +1,4 @@
-import type { DateCodeCandidate, DateCodeFormat, DateCodeResult, FactoryCode } from './types.ts';
+import type { DateCodeCandidate, DateCodeExtraction, DateCodeFormat, DateCodeResult, FactoryCode } from './types.ts';
 
 export interface DateCodeContext {
   claimedYear?: number | null;
@@ -8,6 +8,12 @@ export interface DateCodeContext {
 
 export function normalizeDateCode(raw: string): string {
   return raw.toUpperCase().replace(/[\s\-_.]/g, '');
+}
+
+/** A week must be 1–53 and a month 1–12; an unconfirmed unit only rules out 0 and values above 53. */
+export function periodIsValid(period: number, unit: DateCodeExtraction['periodUnit']): boolean {
+  if (!Number.isInteger(period) || period < 1) return false;
+  return period <= (unit === 'month' ? 12 : 53);
 }
 
 function twoDigitYear(yy: number, pivot: number): number {
@@ -43,18 +49,22 @@ export function decodeDateCode(
       factory, factoryKnown: fc !== null, factoryStatus: fc?.status ?? null, country: fc?.country ?? null,
       period, periodUnit: x.periodUnit, year,
       yearInFormatRange: (f.startYear == null || year >= f.startYear) && (f.endYear == null || year <= f.endYear),
+      periodValid: periodIsValid(period, x.periodUnit),
     });
   }
 
   const usableCands = candidates.filter(
-    (c) => c.formatStatus === 'approved' && c.factoryStatus === 'approved' && c.yearInFormatRange,
+    (c) => c.formatStatus === 'approved' && c.factoryStatus === 'approved' && c.yearInFormatRange && c.periodValid,
   );
   const usable = usableCands.length > 0;
 
   if (!usable) {
+    const impossible = candidates.some((c) => c.yearInFormatRange && !c.periodValid);
     const why = candidates.length === 0
       ? 'No known date-code format matches this value.'
-      : 'Only draft (unapproved) tables or an unknown factory code matched; shown as candidates, not counted.';
+      : impossible
+        ? 'The decoded week/month cannot exist (week 1–53, month 1–12); shown for review, not counted.'
+        : 'Only draft (unapproved) tables or an unknown factory code matched; shown as candidates, not counted.';
     return { raw, normalized, candidates, usable: false, state: 'unknown', reason: why };
   }
 

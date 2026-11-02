@@ -5,7 +5,7 @@ import { useI18n } from '../i18n.tsx';
 import { MeContext } from '../App.tsx';
 import { Badge, Field, Notice, Page, errText } from '../ui.tsx';
 import DateCodeAppearanceCard, { DateCodeGuide } from '../DateCodeAppearance.tsx';
-import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, assetImg, uploadReference } from '../studio.ts';
+import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, annotateAfterUpload, assetImg, uploadReference } from '../studio.ts';
 
 interface Tax { brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] }
 interface Comp { code: string; name_en: string; name_km: string }
@@ -182,6 +182,7 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
       let approved = 0;
       for (const file of files) {
         const r = await uploadReference(file, { ...f, purpose: 'study' });
+        await annotateAfterUpload(r.id, f.componentCode);
         if (r.status === 'approved') approved++;
       }
       setMsg({ tone: 'ok', text: `${t('study.uploaded')} ${files.length} · ${t('study.approved')} ${approved} · ${t('study.quarantine')} ${files.length - approved}` });

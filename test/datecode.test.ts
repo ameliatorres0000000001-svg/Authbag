@@ -29,3 +29,42 @@ test('segments colour factory letters, period digits and year digits', () => {
   assert.equal(dateCodeSegments('XYZ', fmt2007), null);
   assert.equal(dateCodeSegments('CA4109', { ...fmt2007, pattern: '(' }), null);
 });
+
+const fmt80s: DateCodeFormat = {
+  id: 'f80', name: 'Year + month + factory (late 1980s)', startYear: 1986, endYear: 1989,
+  pattern: '^(\\d)(\\d)(\\d)(\\d?)([A-Z]{2})$',
+  extraction: { factoryGroup: 5, periodGroups: [3, 4], yearGroups: [1, 2], periodUnit: 'month', yearPivot: 80 },
+  status: 'draft',
+};
+const fmt82: DateCodeFormat = {
+  id: 'f82', name: 'Digits only (1982–mid 1980s)', startYear: 1982, endYear: 1986,
+  pattern: '^(\\d)(\\d)(\\d)(\\d?)()$',
+  extraction: { factoryGroup: 5, periodGroups: [3, 4], yearGroups: [1, 2], periodUnit: 'month', yearPivot: 80 },
+  status: 'draft',
+};
+const sl: FactoryCode = { code: 'SL', country: 'France', location: null, status: 'draft' };
+const th: FactoryCode = { code: 'TH', country: 'France', location: null, status: 'draft' };
+
+test('SL4107 decodes to France, week 40, 2017', () => {
+  const c = decodeDateCode('SL4107', [fmt2007], [sl]).candidates[0];
+  assert.equal(c.country, 'France'); assert.equal(c.period, 40); assert.equal(c.year, 2017); assert.equal(c.periodValid, true);
+});
+
+test('impossible weeks and months are flagged and never usable', () => {
+  const approved = { ...fmt2007, status: 'approved' as const };
+  const r = decodeDateCode('SL6107', [approved], [{ ...sl, status: 'approved' }]); // week 60
+  assert.equal(r.candidates[0].period, 60);
+  assert.equal(r.candidates[0].periodValid, false);
+  assert.equal(r.usable, false);
+  assert.match(r.reason, /cannot exist/);
+  const ok = decodeDateCode('SL5133', [approved], [{ ...sl, status: 'approved' }]); // week 53 of 2013
+  assert.equal(ok.usable, true);
+});
+
+test('1980s formats: 8612TH and 833 decode year then month', () => {
+  const a = decodeDateCode('8612TH', [fmt80s], [th]).candidates[0];
+  assert.deepEqual([a.factory, a.country, a.year, a.period, a.periodValid, a.yearInFormatRange], ['TH', 'France', 1986, 12, true, true]);
+  const b = decodeDateCode('833', [fmt82], []).candidates[0];
+  assert.deepEqual([b.factory, b.year, b.period, b.periodValid], ['', 1983, 3, true]);
+  assert.deepEqual(dateCodeSegments('8612TH', fmt80s)!.map((s) => s.role), ['year', 'year', 'period', 'period', 'factory']);
+});
