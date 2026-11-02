@@ -137,6 +137,8 @@ const D: Record<string, { km: string; en: string }> = {
   'study.help': { km: 'ដាក់រូបដែលអ្នកដឹងច្បាស់ថា ពិត ឬ ក្លែង (មានភស្តុតាង) ដើម្បីប្រៀបធៀប និងពន្យល់ភាពខុសគ្នា។ ស្លាកនេះជារបស់អ្នក មិនមែនការសម្រេចរបស់ប្រព័ន្ធទេ។', en: 'Add photos you already know are genuine or counterfeit (with proof) so differences can be compared and explained. The label is yours, never a system decision.' },
   'study.knownGenuine': { km: 'គំរូពិត (ស្លាករបស់អ្នក)', en: 'Known genuine (your label)' },
   'study.knownCounterfeit': { km: 'គំរូក្លែង (ស្លាករបស់អ្នក)', en: 'Known counterfeit (your label)' },
+  'study.unlabelled': { km: 'មិនទាន់ដាក់ស្លាក', en: 'Not labelled yet' },
+  'study.unlabelledHelp': { km: 'ប្រើពេលមិនទាន់មានភស្តុតាងថាពិត ឬក្លែង។ រូបនឹងរង់ចាំក្នុង quarantine ហើយនៅតែបង្ហាញក្នុង feed សម្រាប់រៀនមើល។', en: 'Use this when there is no proof yet. The photo waits in quarantine and still shows in the feed for learning.' },
   'study.genuineShort': { km: 'ពិត', en: 'Genuine' },
   'study.counterfeitShort': { km: 'ក្លែង', en: 'Counterfeit' },
   'study.labelAs': { km: 'ស្លាក', en: 'Label' },

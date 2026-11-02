@@ -230,14 +230,15 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
         </div>
       </Field>
       <Field label={t('study.labelAs')}>
-        <div className="grid grid-cols-2 gap-2">
-          {(['authentic', 'counterfeit'] as const).map((l) => (
+        <div className="grid grid-cols-3 gap-2">
+          {(['authentic', 'counterfeit', 'unknown'] as const).map((l) => (
             <button type="button" key={l} onClick={() => set('label', l)}
-              className={`rounded border px-3 py-2 text-left text-xs font-semibold ${f.label === l ? (l === 'authentic' ? 'border-verified bg-verified-bg text-verified' : 'border-counterfeit bg-counterfeit-bg text-counterfeit') : 'border-strong bg-white'}`}>
-              {l === 'authentic' ? t('study.knownGenuine') : t('study.knownCounterfeit')}
+              className={`rounded border px-2 py-2 text-left text-xs font-semibold ${f.label === l ? (l === 'authentic' ? 'border-verified bg-verified-bg text-verified' : l === 'counterfeit' ? 'border-counterfeit bg-counterfeit-bg text-counterfeit' : 'border-charcoal bg-surface-high text-charcoal') : 'border-strong bg-white'}`}>
+              {l === 'authentic' ? t('study.knownGenuine') : l === 'counterfeit' ? t('study.knownCounterfeit') : t('study.unlabelled')}
             </button>
           ))}
         </div>
+        {f.label === 'unknown' && <p className="text-xs text-muted">{t('study.unlabelledHelp')}</p>}
       </Field>
       <div className="grid grid-cols-2 gap-2">
         <Field label={t('studio.basis')}><select className="input" value={f.labelBasis} onChange={(e) => set('labelBasis', e.target.value)}>{BASES.map((x) => <option key={x}>{x}</option>)}</select></Field>
