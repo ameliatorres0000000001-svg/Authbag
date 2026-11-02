@@ -8,6 +8,8 @@ INSERT OR IGNORE INTO datecode_formats (id, brand_id, name, start_year, end_year
   '{"factoryGroup":1,"periodGroups":[2,4],"yearGroups":[3,5],"periodUnit":"week","yearPivot":100}',
   'lvcodecalc ("2007 – present (2021)") and resale guides: date codes until the switch to NFC chips around March 2021. Example PL0241 = week 4, 2021. CONFIRM before approving.','draft');
 
--- Model stub for the Monogram "Nice" vanity case (Nano / Mini sizes look alike in photos: confirm by size).
+-- Model stubs used by the teaching annotations in docs/annotations/.
+-- "Nice" vanity case: Nano / Mini sizes look alike in photos, confirm by size.
 INSERT OR IGNORE INTO models (id, brand_id, slug, name, silhouette, status) VALUES
- ('m_lv_nice', 'b_lv', 'nice-vanity', 'Nice (vanity case)', 'Vanity', 'STUB');
+ ('m_lv_nice', 'b_lv', 'nice-vanity', 'Nice (vanity case)', 'Vanity', 'STUB'),
+ ('m_lv_josh', 'b_lv', 'josh-backpack', 'Josh Backpack', 'Backpack', 'STUB');

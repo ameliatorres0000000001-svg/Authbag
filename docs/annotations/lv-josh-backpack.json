@@ -1,0 +1,296 @@
+{
+ "model_id": "m_lv_josh",
+ "brand_id": "b_lv",
+ "date_code": null,
+ "how_to_apply": "Upload the 7 photos in this order with the part shown, then insert each photo's points into reference_points (source ai_suggested) and set teaching_title / teaching_note. No date code is visible in these photos. Coordinates are fractions of the photo (0..1). Descriptive only: no verdict.",
+ "photos": [
+  {
+   "order": 1,
+   "part": "canvas",
+   "title": "ខាងមុខ · Front (Damier Graphite)",
+   "note": "Josh Backpack ក្រណាត់ Damier Graphite (ក្រឡាអុកពណ៌ប្រផេះ-ខ្មៅ) និងដែកពណ៌ប្រាក់។ មើលហោប៉ៅមុខ zipper ត្រា និង buckle ខ្សែ។",
+   "points": [
+    {
+     "label": "Pocket zipper",
+     "note": "ធ្មេញ zipper ពណ៌ប្រាក់ ត្រង់ ស្មើ ហើយនៅកណ្តាលហោប៉ៅ។",
+     "x": 0.27,
+     "y": 0.535,
+     "w": 0.46,
+     "h": 0.05
+    },
+    {
+     "label": "Zipper pull",
+     "note": "ក្បាល zipper ពណ៌ប្រាក់ដូចដែកដទៃ មានអក្សរ LOUIS VUITTON ឆ្លាក់ (មើលរូបទី 3)។",
+     "x": 0.25,
+     "y": 0.55,
+     "w": 0.05,
+     "h": 0.1
+    },
+    {
+     "label": "Front stamp tab",
+     "note": "Tab ស្បែកខ្មៅរាង V នៅកណ្តាលក្រោម zipper។ មើលត្រាជិតៗក្នុងរូបទី 4។",
+     "x": 0.42,
+     "y": 0.575,
+     "w": 0.15,
+     "h": 0.07
+    },
+    {
+     "label": "Damier alignment",
+     "note": "ក្រឡាអុកលើហោប៉ៅ និងតួកាបូប គួរតម្រង់ជួរស្របគ្នា ហើយក្រឡានីមួយៗទំហំស្មើ។",
+     "x": 0.3,
+     "y": 0.66,
+     "w": 0.4,
+     "h": 0.2
+    },
+    {
+     "label": "Strap buckles",
+     "note": "Buckle ពណ៌ប្រាក់ទាំងពីរ រាងដូចគ្នា ផ្ទៃរលោង គ្មានស្នាមផ្សារ។",
+     "x": 0.03,
+     "y": 0.81,
+     "w": 0.1,
+     "h": 0.11
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "part": "handles",
+   "title": "ខាងក្រោយ · Back & straps",
+   "note": "មើលខ្សែស្មា ដៃកាន់ និង tab ស្បែកដែលភ្ជាប់ខ្សែខាងលើ។",
+   "points": [
+    {
+     "label": "Top handle & tab",
+     "note": "ដៃកាន់ និង tab ស្បែកខ្មៅ គែមលាបពណ៌ស្មើ ហើយមានត្រា LOUIS VUITTON PARIS (រូបទី 5)។",
+     "x": 0.31,
+     "y": 0.06,
+     "w": 0.37,
+     "h": 0.17
+    },
+    {
+     "label": "Strap anchors",
+     "note": "ចុងខ្សែស្មាទាំងពីរ ភ្ជាប់នៅកណ្តាលស៊ីមេទ្រី ហើយស្បែកគ្របចុងខ្សែស្អាត។",
+     "x": 0.4,
+     "y": 0.12,
+     "w": 0.2,
+     "h": 0.15
+    },
+    {
+     "label": "Shoulder straps",
+     "note": "ខ្សែ webbing ត្បាញស្មើ គែមមិនរបូត ហើយទាំងពីរមានទទឹងដូចគ្នា។",
+     "x": 0.07,
+     "y": 0.27,
+     "w": 0.3,
+     "h": 0.5
+    },
+    {
+     "label": "Back panel",
+     "note": "ក្រឡា Damier ខាងក្រោយស្មើ ហើយតម្រង់ជួរត្រង់ពីលើដល់ក្រោម។",
+     "x": 0.38,
+     "y": 0.45,
+     "w": 0.24,
+     "h": 0.3
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "part": "zipper",
+   "title": "ក្បាល zipper · Zipper pulls",
+   "note": "ក្បាល zipper ពីរ ឆ្លាក់ \"LOUIS VUITTON\" ពីរបន្ទាត់។ ប្រៀបធៀបក្បាលទាំងពីរ៖ គួរដូចគ្នា។",
+   "points": [
+    {
+     "label": "Engraving (left)",
+     "note": "អក្សរ LOUIS / VUITTON ស្រួច ជម្រៅស្មើ គម្លាតស្មើ ហើយនៅកណ្តាល pull។",
+     "x": 0.21,
+     "y": 0.42,
+     "w": 0.24,
+     "h": 0.14
+    },
+    {
+     "label": "Engraving (right)",
+     "note": "ទំហំ និងទីតាំងអក្សរដូចក្បាលខាងឆ្វេង។ ស្នាមកោសតូចៗជាការប្រើប្រាស់ធម្មតា។",
+     "x": 0.51,
+     "y": 0.4,
+     "w": 0.24,
+     "h": 0.14
+    },
+    {
+     "label": "Sliders",
+     "note": "Slider ទាំងពីររលោង ពណ៌ប្រាក់ដូចគ្នា ភ្ជាប់ pull ស្អាត។",
+     "x": 0.14,
+     "y": 0.08,
+     "w": 0.62,
+     "h": 0.2
+    },
+    {
+     "label": "Pull cut-out",
+     "note": "រន្ធ pull កាត់ស្អាត ជ្រុងកាត់ (octagon) ស្មើ គែមរលោង។",
+     "x": 0.18,
+     "y": 0.58,
+     "w": 0.27,
+     "h": 0.27
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "part": "heat_stamp",
+   "title": "ត្រាហោប៉ៅមុខ · Front heat stamp",
+   "note": "ត្រា \"® LOUIS VUITTON PARIS\" ចុចចូល (blind/debossed) លើ tab ស្បែកខ្មៅរាង V។",
+   "points": [
+    {
+     "label": "® symbol",
+     "note": "តូច មូល នៅកណ្តាលពីលើ។",
+     "x": 0.45,
+     "y": 0.32,
+     "w": 0.08,
+     "h": 0.08
+    },
+    {
+     "label": "LOUIS VUITTON",
+     "note": "O មូល, TT ជិតគ្នា, ជើង L ខ្លី។ ជម្រៅត្រាស្មើគ្រប់អក្សរ។",
+     "x": 0.13,
+     "y": 0.41,
+     "w": 0.73,
+     "h": 0.1
+    },
+    {
+     "label": "PARIS",
+     "note": "នៅកណ្តាលក្រោម LOUIS VUITTON តម្រង់ជួរត្រង់។",
+     "x": 0.36,
+     "y": 0.54,
+     "w": 0.27,
+     "h": 0.09
+    },
+    {
+     "label": "Top stitching",
+     "note": "ថ្នេរខ្មៅតាមគែមខាងលើ ស្មើ ត្រង់។",
+     "x": 0.0,
+     "y": 0.255,
+     "w": 1.0,
+     "h": 0.05
+    },
+    {
+     "label": "V-shaped edge",
+     "note": "គែមរាង V លាបពណ៌ស្មើ ស៊ីមេទ្រីទាំងសងខាង។",
+     "x": 0.0,
+     "y": 0.6,
+     "w": 1.0,
+     "h": 0.14
+    }
+   ]
+  },
+  {
+   "order": 5,
+   "part": "heat_stamp",
+   "title": "ត្រាខាងក្រោយ · Back tab heat stamp",
+   "note": "ត្រាលើ tab ខាងក្រោយ (ក្រោមដៃកាន់)។ ប្រៀបធៀបជាមួយត្រាហោប៉ៅមុខ៖ ពុម្ពអក្សរដូចគ្នា។",
+   "points": [
+    {
+     "label": "® symbol",
+     "note": "មូល ច្បាស់ នៅកណ្តាលពីលើ។",
+     "x": 0.46,
+     "y": 0.33,
+     "w": 0.09,
+     "h": 0.09
+    },
+    {
+     "label": "LOUIS VUITTON",
+     "note": "ពុម្ពអក្សរ និងគម្លាតដូចត្រាខាងមុខ (រូបទី 4)។",
+     "x": 0.11,
+     "y": 0.44,
+     "w": 0.77,
+     "h": 0.1
+    },
+    {
+     "label": "PARIS",
+     "note": "នៅកណ្តាលក្រោម LOUIS VUITTON។",
+     "x": 0.37,
+     "y": 0.57,
+     "w": 0.27,
+     "h": 0.09
+    },
+    {
+     "label": "Stitching",
+     "note": "ថ្នេរខាងលើ និងខាងក្រោម ស្មើ ចន្លោះស្មើ។",
+     "x": 0.13,
+     "y": 0.22,
+     "w": 0.72,
+     "h": 0.06
+    }
+   ]
+  },
+  {
+   "order": 6,
+   "part": "heat_stamp",
+   "title": "ត្រាខាងក្នុង · Interior stamp (silver foil)",
+   "note": "ត្រាខាងក្នុងចុចដោយ foil ពណ៌ប្រាក់។ មើលថា foil ស្មើ គ្មានប្រឡាក់ ហើយអក្សរគែមច្បាស់។",
+   "points": [
+    {
+     "label": "® symbol",
+     "note": "Foil ពេញ មូល នៅកណ្តាល។",
+     "x": 0.46,
+     "y": 0.35,
+     "w": 0.08,
+     "h": 0.07
+    },
+    {
+     "label": "LOUIS VUITTON",
+     "note": "Foil ពណ៌ប្រាក់ស្មើគ្រប់អក្សរ គ្មានរបក ឬហៀរចេញក្រៅគែមអក្សរ។",
+     "x": 0.24,
+     "y": 0.41,
+     "w": 0.53,
+     "h": 0.1
+    },
+    {
+     "label": "PARIS",
+     "note": "កម្ពស់អក្សរ និង foil ដូចបន្ទាត់ខាងលើ។",
+     "x": 0.4,
+     "y": 0.51,
+     "w": 0.2,
+     "h": 0.08
+    },
+    {
+     "label": "Patch stitching",
+     "note": "ថ្នេរជុំវិញ patch ស្មើ ចន្លោះស្មើ។",
+     "x": 0.09,
+     "y": 0.2,
+     "w": 0.83,
+     "h": 0.06
+    }
+   ]
+  },
+  {
+   "order": 7,
+   "part": "lining",
+   "title": "ស្លាកខាងក្នុង · Interior label (made in U.S.A.)",
+   "note": "ស្លាកក្រណាត់ \"made in U.S.A. of imported materials\" ជាមួយឡូហ្គោ LV ក្នុងរង្វង់ (ដូចស្លាកលើ Keepall ប៉ុន្តែពណ៌ខ្មៅ)។ កាបូបនេះមិនមាន date code ក្នុងរូបទេ៖ ស្វែងរក tab កូដ ឬ chip NFC (ក្រោយឆ្នាំ 2021)។",
+   "points": [
+    {
+     "label": "LV circle logo",
+     "note": "ឡូហ្គោ LV ក្នុងរង្វង់ នៅកណ្តាលពីលើ គែមច្បាស់។",
+     "x": 0.44,
+     "y": 0.33,
+     "w": 0.12,
+     "h": 0.12
+    },
+    {
+     "label": "made in U.S.A.",
+     "note": "អក្សរស្មើ ត្រង់ ហើយ \"U.S.A.\" មានចំណុចក្រោយអក្សរនីមួយៗ។",
+     "x": 0.24,
+     "y": 0.43,
+     "w": 0.5,
+     "h": 0.07
+    },
+    {
+     "label": "of imported materials",
+     "note": "បន្ទាត់ទីពីរកម្ពស់អក្សរស្មើនឹងបន្ទាត់ខាងលើ។",
+     "x": 0.12,
+     "y": 0.5,
+     "w": 0.69,
+     "h": 0.09
+    }
+   ]
+  }
+ ]
+}
