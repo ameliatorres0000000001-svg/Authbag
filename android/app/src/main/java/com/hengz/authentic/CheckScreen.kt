@@ -43,6 +43,7 @@ fun CheckScreen() {
     val scope = rememberCoroutineScope()
     val entrupy = remember { EntrupyApp.sharedInstance() }
 
+    var backend by remember { mutableStateOf(Backend.HENGZ) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var authorized by remember { mutableStateOf(entrupy.isAuthorizationValid()) }
@@ -90,9 +91,9 @@ fun CheckScreen() {
             busy = true; error = null
             try {
                 val authRequest = entrupy.generateSDKAuthorizationRequest()
-                val token = PartnerApiClient.api.login(LoginRequest(email.trim(), password)).token
+                val token = PartnerApiClient.api(backend).login(LoginRequest(email.trim(), password)).token
                     ?: throw IllegalStateException(context.getString(R.string.err_login))
-                val signed = PartnerApiClient.api.authorizeSdkUser("Token $token", AuthorizationRequest(authRequest)).signed_authorization_request
+                val signed = PartnerApiClient.api(backend).authorizeSdkUser("Token $token", AuthorizationRequest(authRequest)).signed_authorization_request
                     ?: throw IllegalStateException(context.getString(R.string.err_sign))
                 entrupy.loginUser(signedRequest = signed, callback = object : SdkLoginCallback {
                     override fun onLoginStarted() {}
@@ -118,9 +119,18 @@ fun CheckScreen() {
         if (!authorized) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(stringResource(R.string.server), style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = backend == Backend.HENGZ, onClick = { backend = Backend.HENGZ },
+                            label = { Text(stringResource(R.string.server_hengz)) }, modifier = Modifier.weight(1f))
+                        FilterChip(selected = backend == Backend.ENTRUPY_SAMPLE, onClick = { backend = Backend.ENTRUPY_SAMPLE },
+                            label = { Text(stringResource(R.string.server_sample)) }, modifier = Modifier.weight(1f))
+                    }
+                    Text(stringResource(if (backend == Backend.HENGZ) R.string.server_hengz_help else R.string.server_sample_help),
+                        style = MaterialTheme.typography.bodySmall)
                     Text(stringResource(R.string.signin_title), style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.email)) },
-                        singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                    OutlinedTextField(email, { email = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(if (backend == Backend.HENGZ) R.string.email else R.string.username)) },
+                        singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = if (backend == Backend.HENGZ) KeyboardType.Email else KeyboardType.Text))
                     OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.password)) },
                         singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
                     Button(onClick = { signIn() }, enabled = !busy && email.isNotBlank() && password.isNotBlank(), modifier = Modifier.fillMaxWidth()) {

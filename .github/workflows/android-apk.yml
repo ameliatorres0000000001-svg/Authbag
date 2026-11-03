@@ -1,0 +1,70 @@
+# Builds the HENGZ Android app (Entrupy SDK) and uploads a debug APK you can install on a phone.
+# Needs repository secrets (Settings → Secrets and variables → Actions):
+#   GPR_USER  – GitHub username
+#   GPR_TOKEN – GitHub token with read:packages (Entrupy's SDK is on GitHub Packages)
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      application_id:
+        description: Package name registered with Entrupy
+        default: com.hengz.authentic
+        required: true
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android-apk.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+        run: |
+          if [ -z "$GPR_USER" ] || [ -z "$GPR_TOKEN" ]; then
+            echo "::error::Add repository secrets GPR_USER and GPR_TOKEN (a GitHub token with read:packages) so Gradle can download Entrupy's SDK."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android platform 36
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: local.properties
+        working-directory: android
+        env:
+          APP_ID: ${{ github.event.inputs.application_id || 'com.hengz.authentic' }}
+        run: |
+          printf 'sdk.dir=%s\napplication.id=%s\n' "$ANDROID_HOME" "$APP_ID" > local.properties
+
+      - name: Build debug APK
+        working-directory: android
+        env:
+          GITHUB_USER: ${{ secrets.GPR_USER }}
+          GITHUB_TOKEN: ${{ secrets.GPR_TOKEN }}
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hengz-authentic-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14

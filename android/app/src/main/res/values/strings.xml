@@ -21,4 +21,10 @@
     <string name="err_login">Sign-in failed: check your email and password.</string>
     <string name="err_sign">The HENGZ server could not authorize Entrupy. Try again later.</string>
     <string name="note">The capture screens and the result are Entrupy\'s own. HENGZ never shows or creates a result.</string>
+    <string name="server">Server</string>
+    <string name="server_hengz">HENGZ</string>
+    <string name="server_sample">Entrupy sample</string>
+    <string name="server_hengz_help">Sign in with your HENGZ account (staff). Works once HENGZ has its Entrupy API key.</string>
+    <string name="server_sample_help">Entrupy\'s own sample server, to try the SDK before HENGZ has its key. Use the sample credentials Entrupy gave you.</string>
+    <string name="username">Username</string>
 </resources>

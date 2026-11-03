@@ -23,11 +23,17 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // Partner backend that signs the SDK authorization request (the API key never ships in the app).
-        // Default: the HENGZ Worker. For Entrupy's review you can point it at Entrupy's sample backend instead.
+        // Partner backends that sign the SDK authorization request (the Entrupy API key never ships in the app).
+        // HENGZ: the HENGZ Worker (needs ENTRUPY_API_KEY on the server).
+        // Entrupy sample: Entrupy's own sample partner server, for trying the SDK before HENGZ has its key
+        // (sign in with the sample credentials Entrupy gives you).
         buildConfigField(
-            "String", "PARTNER_BACKEND_URL",
+            "String", "HENGZ_BACKEND_URL",
             "\"${localProperties.getProperty("partner.backend.url", "https://authbag.pangsokheng5.workers.dev/api/entrupy/partner/")}\"",
+        )
+        buildConfigField(
+            "String", "ENTRUPY_SAMPLE_BACKEND_URL",
+            "\"${localProperties.getProperty("entrupy.sample.backend.url", "https://sample-partner-sdk-server.entrupy.com/")}\"",
         )
     }
 
