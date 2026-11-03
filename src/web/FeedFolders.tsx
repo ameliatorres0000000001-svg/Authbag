@@ -13,8 +13,21 @@ export interface Folder {
  * An album-style folder: one large cover photo with two "paper" layers behind it,
  * the name over a soft gradient and the photo count as a badge.
  */
-function Album({ to, cover, kicker, title, count, when }: { to: string; cover: string | null; kicker: string; title: string; count: number; when: string | null }) {
+function Album({ to, cover, kicker, title, count, when, small }: { to: string; cover: string | null; kicker: string; title: string; count: number; when: string | null; small?: boolean }) {
   const { t, locale } = useI18n();
+  if (small) return (
+    <Link to={to} className="group block w-[104px] shrink-0 snap-start pt-1.5">
+      <div className="relative">
+        <div className="absolute inset-x-2 -top-1.5 h-4 rounded-lg bg-charcoal/20" aria-hidden />
+        <div className="relative aspect-square overflow-hidden rounded-lg bg-charcoal ring-1 ring-black/5">
+          {cover ? <img src={assetImg(cover)} alt="" loading="lazy" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-2xl text-gold" aria-hidden>▤</div>}
+          <span className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 font-mono text-[10px] text-white">{count}</span>
+        </div>
+      </div>
+      <div className="mt-1 truncate text-[12px] font-semibold leading-tight">{title}</div>
+      <div className="truncate text-[10px] text-muted">{kicker}</div>
+    </Link>
+  );
   return (
     <Link to={to} className="group block pt-2">
       <div className="relative">
@@ -38,12 +51,12 @@ function Album({ to, cover, kicker, title, count, when }: { to: string; cover: s
   );
 }
 
-export function FolderCard({ f }: { f: Folder }) {
-  return <Album to={`/posts/${f.id}`} cover={f.covers[0] ?? null} kicker={f.brand} title={f.model} count={f.photos} when={f.latest} />;
+export function FolderCard({ f, small }: { f: Folder; small?: boolean }) {
+  return <Album small={small} to={`/posts/${f.id}`} cover={f.covers[0] ?? null} kicker={f.brand} title={f.model} count={f.photos} when={f.latest} />;
 }
 
 /** The "other photos" folder: posts not tied to one model (e.g. comparison pairs). */
-export function LooseFolderCard({ n, cover, latest, brandId }: { n: number; cover: string | null; latest: string | null; brandId?: string }) {
+export function LooseFolderCard({ n, cover, latest, brandId, small }: { n: number; cover: string | null; latest: string | null; brandId?: string; small?: boolean }) {
   const { t } = useI18n();
-  return <Album to={`/posts/other${brandId ? `?brandId=${brandId}` : ''}`} cover={cover} kicker={t('folder.compareKicker')} title={t('folder.other')} count={n} when={latest} />;
+  return <Album small={small} to={`/posts/other${brandId ? `?brandId=${brandId}` : ''}`} cover={cover} kicker={t('folder.compareKicker')} title={t('folder.other')} count={n} when={latest} />;
 }
