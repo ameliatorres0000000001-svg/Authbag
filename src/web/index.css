@@ -14,7 +14,8 @@
   .btn-primary { @apply btn bg-charcoal text-white hover:bg-black; }
   .btn-ghost { @apply btn border border-strong bg-white text-charcoal hover:bg-surface-low; }
   .btn-danger { @apply btn border border-counterfeit text-counterfeit bg-white hover:bg-counterfeit-bg; }
-  .input { @apply w-full rounded border border-strong bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold; }
+  /* min-w-0: a select with a long option must not widen its grid cell past the phone screen */
+  .input { @apply w-full min-w-0 max-w-full rounded border border-strong bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gold; }
   .label { @apply mb-1 block font-mono text-[10px] uppercase tracking-widest text-muted; }
   .card { @apply rounded-xl border border-hairline bg-surface-card p-4; }
 }

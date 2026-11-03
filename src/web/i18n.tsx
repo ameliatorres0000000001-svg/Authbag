@@ -247,6 +247,12 @@ const D: Record<string, { km: string; en: string }> = {
   'admin.close': { km: 'បិទ', en: 'Close' },
   'admin.autoList': { km: 'ប្រព័ន្ធបំពេញម៉ាក ម៉ូដែល ផ្នែក និងស្លាក ពីឈ្មោះ file ដោយស្វ័យប្រវត្តិ — ពិនិត្យ ហើយកែបាន', en: 'Brand, model, part and label are filled from each file name — check and change if needed' },
   'admin.needBrand': { km: 'រូបខ្លះមិនទាន់មានម៉ាក — ជ្រើសម៉ាកខាងលើ ឬក្នុងបញ្ជី', en: 'Some photos have no brand yet — pick one above or in the list' },
+  'admin.cut': { km: 'AI កាត់រូប', en: 'AI cut' },
+  'admin.cutHelp': { km: 'រូបដែលមានរូបច្រើនក្នុងមួយ (ឧ. តារាង Counterfeit / Authentic)៖ ចុច "✂ AI កាត់រូប" ដើម្បីបំបែកជារូបតូចៗ ហើយពិនិត្យមុនដាក់។', en: 'A photo that holds several photos (e.g. a Counterfeit / Authentic chart): tap "✂ AI cut" to split it, then review before uploading.' },
+  'admin.cutDone': { km: 'AI កាត់បានរូប', en: 'AI cut out photos:' },
+  'admin.cutNone': { km: 'AI រកមិនឃើញរូបដាច់ៗក្នុងរូបនេះទេ។ អាចដាក់រូបទាំងមូលបាន។', en: 'The AI found no separate photos in this image. You can upload it whole.' },
+  'admin.cutNoAi': { km: 'AI មិនទាន់ភ្ជាប់ (ដាក់ ANTHROPIC_API_KEY ជា Secret ក្នុង Cloudflare)។', en: 'AI is not connected (add ANTHROPIC_API_KEY as a Secret in Cloudflare).' },
+  'admin.removeRow': { km: 'ដករូបនេះចេញ', en: 'Remove this photo' },
   'admin.preview': { km: 'រូបដែលបានជ្រើស', en: 'Selected photos' },
   // lessons (step-by-step how to look)
   learn: { km: 'រៀន', en: 'Learn' },

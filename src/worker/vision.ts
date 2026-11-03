@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { Env } from './env.ts';
 import { MAX_AI_MARKS, parseSuggestedMarks, type SuggestedMark } from '../shared/marks.ts';
 import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
+import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
 
 export interface ObsDef { key: string; value_type: 'enum' | 'number' | 'boolean' | 'text'; enum_json: string | null; label_en: string }
 export interface Suggestion { key: string; value: string | number | boolean; confidence: number }
@@ -181,4 +182,21 @@ export async function analyzeDateCodeAppearance(env: Env, image: VisionImage, re
     `Brand: ${ctx.brand}.${ctx.model ? ` Model: ${ctx.model}.` : ''}${ctx.typed ? ` The appraiser typed the code as: ${ctx.typed}.` : ''}`,
     1800);
   return parseAppearance(text);
+}
+
+/**
+ * Find the separate photos inside one composite image (comparison chart, collage) so each can become its own post.
+ * Only geometry plus the printed caption next to each photo, transcribed as written: never a judgement of the item.
+ */
+export async function findPhotoRegions(env: Env, image: VisionImage, partCodes: string[]): Promise<CropRegion[]> {
+  const text = await callVision(env,
+    `You split a composite image into its separate photos. ${NO_VERDICT} ` +
+    `Return one rectangle per distinct photograph (up to ${MAX_CROPS}); skip text-only areas, arrows, logos and borders. ` +
+    `Each rectangle should tightly contain the photo itself, without the surrounding caption. ` +
+    `"caption" is the printed text that labels that photo in the image (e.g. a heading above or below it), copied exactly, or "" if none - do not invent one. ` +
+    `"part" is the bag part the photo shows, one of: ${partCodes.join(', ')}; or null if unclear. ` +
+    `Coordinates are fractions of the image width/height (0..1), origin top-left. ` +
+    `Reply with JSON only: [{"x":0..1,"y":0..1,"w":0..1,"h":0..1,"caption":"...","part":"..."}]`,
+    [image], 'Find each photo in this image.', 1500);
+  return parseCropRegions(text, partCodes);
 }
