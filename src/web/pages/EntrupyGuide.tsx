@@ -4,11 +4,12 @@ import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
 import { MeContext } from '../App.tsx';
 import { Badge } from '../ui.tsx';
+import EntrupyLogo from '../EntrupyLogo.tsx';
 
 /**
- * HENGZ's own explainer of how an official third-party service (Entrupy) works, so users understand it before using it.
- * Not Entrupy's UI, no Entrupy branding, no sample results: it only describes the publicly documented process
- * and shows the real connection status from /api/providers.
+ * Explainer of how an Entrupy check works, so users understand it before using it (Entrupy asked partners to use its
+ * official name and logo; the logo file comes from Entrupy's brand kit). No sample results: it describes the publicly
+ * documented process, links to the clickable demo, and shows the real connection status from /api/providers.
  */
 export default function EntrupyGuide() {
   const { t } = useI18n();
@@ -21,8 +22,10 @@ export default function EntrupyGuide() {
     <div className="mx-auto max-w-2xl space-y-5 px-4 pb-10 pt-5 md:px-8">
       <Link to="/check" className="font-mono text-[10px] uppercase tracking-widest text-muted">← {t('check.title')}</Link>
       <header>
+        <div className="mb-2"><EntrupyLogo className="h-7" /></div>
         <h1 className="text-[28px] leading-tight">{t('ent.title')}</h1>
         <p className="mt-1 text-sm text-muted">{t('ent.subtitle')}</p>
+        <Link to="/verify/entrupy/demo" className="btn-primary mt-3 w-full !py-3">{t('demo.open')} →</Link>
       </header>
 
       <section className="flex items-start justify-between gap-3 rounded-2xl border border-hairline bg-surface-card p-4">
