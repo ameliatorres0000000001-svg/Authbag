@@ -8,7 +8,8 @@ import NfcRead from '../NfcRead.tsx';
 import DateCodeAppearanceCard from '../DateCodeAppearance.tsx';
 import MarkCanvas, { type Mark } from '../MarkCanvas.tsx';
 import { ObsForm } from './InspectionDetail.tsx';
-import { buildStages, summarizeStages, type Stage, type StageStatus } from '../../shared/stages.ts';
+import { buildStages, evidenceCompleteness, summarizeStages, type Stage, type StageStatus } from '../../shared/stages.ts';
+import EvidenceMeter from '../EvidenceMeter.tsx';
 import type { Rect } from '../../shared/marks.ts';
 import { Badge, Notice, OutcomeBadge, Page, errText } from '../ui.tsx';
 
@@ -45,6 +46,7 @@ export default function GuidedScan() {
     return buildStages(tpls, new Set(d.captures.map((c: any) => c.template_code)), ev?.ruleResults ?? []);
   }, [d, ev]);
   const summary = useMemo(() => summarizeStages(stages), [stages]);
+  const evidence = useMemo(() => evidenceCompleteness(stages), [stages]);
 
   useEffect(() => { // default to the first stage that still needs photos
     if (stages.length && (!cur || !stages.find((s) => s.component === cur))) setCur((stages.find((s) => s.status === 'pending') ?? stages[0]).component);
@@ -124,6 +126,7 @@ export default function GuidedScan() {
       {err && <div className="mb-3"><Notice tone="bad">{err}</Notice></div>}
 
       <div className="mx-auto max-w-2xl space-y-4">
+        {stages.length > 0 && <EvidenceMeter e={evidence} />}
         <div className="card space-y-3">
           <div className="flex items-baseline justify-between gap-2">
             <div className="font-mono text-[10px] uppercase tracking-widest text-muted">{t('scan.step')} {Math.max(1, stages.findIndex((s) => s.component === cur) + 1)} / {stages.length}</div>

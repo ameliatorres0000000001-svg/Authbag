@@ -73,7 +73,7 @@ app.post('/api/auth/login', async (c) => {
 // everything below requires a session
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
-  if (p === '/api/health' || p.startsWith('/api/auth/')) return next();
+  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/')) return next();
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
   if (!user) return c.json({ error: 'unauthenticated' }, 401);
   c.set('user', user);
@@ -871,6 +871,46 @@ app.get('/api/admin/library', need(STAFF), async (c) => {
     c.env.DB.prepare(`SELECT a.brand_id, COALESCE(a.component_code, 'none') AS component, a.label, COUNT(*) AS n FROM reference_assets a WHERE a.status <> 'rejected' GROUP BY a.brand_id, component, a.label`).all(),
   ]);
   return c.json({ items: items.results, matrix: matrix.results, aiConfigured: aiConfigured(c.env) });
+});
+
+
+// ───────────────────────── Entrupy SDK partner backend (used by the HENGZ Android app) ─────────────────────────
+// Same contract as Entrupy's sample partner backend: POST login → { token }, then
+// POST authorize-entrupy-sdk-user (Authorization: Token <token>) → { signed_authorization_request }.
+// The Entrupy API key stays in the Worker secret ENTRUPY_API_KEY and never reaches the phone.
+const ENTRUPY_ROLES: Role[] = ['owner', 'lead_authenticator', 'appraiser'];
+
+app.post('/api/entrupy/partner/login', async (c) => {
+  const body = await parse(c, z.object({ username: z.string().email(), password: z.string().min(1).max(200) }));
+  const u = await c.env.DB.prepare('SELECT * FROM users WHERE email = ? AND active = 1').bind(body.username.toLowerCase()).first<Record<string, any>>();
+  const ok = u ? await verifyPassword(body.password, u.pw_hash, u.pw_salt, u.pw_iter) : false;
+  if (!u || !ok) { await audit(c.env, null, 'entrupy.partner_login_failed', 'user', null, { email: body.username }); return c.json({ error: 'invalid_credentials' }, 401); }
+  if (!ENTRUPY_ROLES.includes(u.role)) return c.json({ error: 'forbidden' }, 403);
+  const token = await createSession(c.env, u.id);
+  await audit(c.env, u.id, 'entrupy.partner_login', 'user', u.id);
+  return c.json({ token });
+});
+
+app.post('/api/entrupy/partner/authorize-entrupy-sdk-user', async (c) => {
+  const header = c.req.header('Authorization') ?? '';
+  const user = await userFromToken(c.env, header.startsWith('Token ') ? header.slice(6).trim() : undefined);
+  if (!user) return c.json({ error: 'unauthenticated' }, 401);
+  if (!ENTRUPY_ROLES.includes(user.role)) return c.json({ error: 'forbidden' }, 403);
+  if (!c.env.ENTRUPY_API_KEY) return c.json({ error: 'entrupy_not_configured', detail: 'Set it with: wrangler secret put ENTRUPY_API_KEY' }, 501);
+  const b = await parse(c, z.object({ sdk_authorization_request: z.string().min(1).max(20000) }).passthrough());
+  const [first, ...rest] = user.name.trim().split(/\s+/);
+  const res = await fetch(new URL('/v2/integrations/authorize-user', c.env.ENTRUPY_API_BASE || 'https://api.entrupy.com'), {
+    method: 'POST',
+    headers: { Authorization: `Token ${c.env.ENTRUPY_API_KEY}`, 'Accept-Language': 'en', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sdk_authorization_request: b.sdk_authorization_request, unique_user_id: user.id.slice(0, 40), first_name: first || undefined, last_name: rest.join(' ') || undefined }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { signed_authorization_request?: string; username?: string };
+  if (!res.ok || !data.signed_authorization_request) {
+    await audit(c.env, user.id, 'entrupy.authorize_failed', 'user', user.id, { status: res.status });
+    return c.json({ error: 'entrupy_authorize_failed', status: res.status }, 502);
+  }
+  await audit(c.env, user.id, 'entrupy.authorize', 'user', user.id, { entrupyUsername: data.username ?? null });
+  return c.json({ signed_authorization_request: data.signed_authorization_request });
 });
 
 // ───────────────────────── providers & certificates ─────────────────────────

@@ -49,7 +49,7 @@ export function PointCards({ points, active, onPick, empty }: { points: Point[];
             <span className="font-mono text-[10px] font-semibold text-gold">{String(i + 1).padStart(2, '0')}</span>
             <span className="font-mono text-[11px] font-semibold uppercase tracking-wider">{p.label}</span>
           </div>
-          {p.note && <p className="mt-1 text-sm leading-snug">{p.note}</p>}
+          {p.note && <p className="mt-1 whitespace-pre-line text-sm leading-snug">{p.note}</p>}
         </button>
       ))}
     </div>

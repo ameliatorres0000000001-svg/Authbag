@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="title">ពិនិត្យជាមួយ Entrupy</string>
+    <string name="subtitle">ចូលដោយគណនី HENGZ ជ្រើសម៉ាក រួចធ្វើតាមអេក្រង់របស់ Entrupy។ ត្រូវការឧបករណ៍ Entrupy ភ្ជាប់នឹងទូរស័ព្ទនេះ។</string>
+    <string name="signin_title">គណនី HENGZ</string>
+    <string name="email">អ៊ីមែល</string>
+    <string name="password">ពាក្យសម្ងាត់</string>
+    <string name="signin">ចូល</string>
+    <string name="signout">ចាកចេញ</string>
+    <string name="brand">ម៉ាក</string>
+    <string name="item_id">លេខយោងទំនិញរបស់អ្នក</string>
+    <string name="start">ចាប់ផ្តើមពិនិត្យជាមួយ Entrupy</string>
+    <string name="status_ready">បានចូល។ ត្រៀមចាប់ផ្តើម។</string>
+    <string name="status_started">ការថតរបស់ Entrupy បានចាប់ផ្តើម។</string>
+    <string name="status_submitted">បានផ្ញើទៅ Entrupy។ លទ្ធផលមកពី Entrupy។</string>
+    <string name="err_no_config">Entrupy មិនទាន់មានការកំណត់ថតសម្រាប់ម៉ាកនេះទេ។</string>
+    <string name="err_expired">វគ្គ Entrupy ផុតកំណត់។ សូមចូលម្តងទៀត។</string>
+    <string name="err_timeout">វគ្គថតផុតកំណត់។ សូមចាប់ផ្តើមការពិនិត្យថ្មី។</string>
+    <string name="err_camera">ត្រូវការសិទ្ធិកាមេរ៉ា សម្រាប់ការពិនិត្យ Entrupy។</string>
+    <string name="err_login">ចូលមិនបាន៖ សូមពិនិត្យអ៊ីមែល និងពាក្យសម្ងាត់។</string>
+    <string name="err_sign">Server HENGZ មិនអាចផ្តល់សិទ្ធិ Entrupy បានទេ។ សូមសាកម្តងទៀតពេលក្រោយ។</string>
+    <string name="note">អេក្រង់ថត និងលទ្ធផល ជារបស់ Entrupy ផ្ទាល់។ HENGZ មិនបង្ហាញ ឬបង្កើតលទ្ធផលទេ។</string>
+</resources>

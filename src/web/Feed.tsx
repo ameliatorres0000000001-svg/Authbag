@@ -112,7 +112,7 @@ function FeedPost({ post: p, ai, tables, onChange }: { post: Post; ai: boolean; 
           </div>
         </div>
         <Badge tone={isFake ? 'bad' : p.label === 'authentic' ? 'ok' : 'muted'}>
-          {isFake ? t('study.knownCounterfeit') : p.label === 'authentic' ? t('study.knownGenuine') : p.label}
+          {isFake ? t('study.knownCounterfeit') : p.label === 'authentic' ? t('study.knownGenuine') : t('study.unlabelled')}
         </Badge>
       </header>
 
