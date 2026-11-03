@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { aiConfigured, aiModel, analyzeDateCodeAppearance, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
+import { aiConfigured, aiModel, analyzeDateCodeAppearance, findPhotoRegions, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -568,6 +568,25 @@ app.post('/api/inspections/:id/signoff', need(ADMINS.concat(['appraiser'])), asy
 // ───────────────────────── reference library (quarantine → review → approved) ─────────────────────────
 app.get('/api/assets', async (c) =>
   c.json((await c.env.DB.prepare('SELECT id, brand_id, model_id, era_id, component_code, label, label_basis, license, status, created_at FROM reference_assets ORDER BY created_at DESC LIMIT 300').all()).results));
+
+// ───────────────────────── AI: cut one composite image (comparison chart) into its separate photos ─────────────────────────
+// Returns rectangles only; the browser crops, and the admin reviews every piece before anything is uploaded.
+app.post('/api/ai/crop-regions', need(STAFF), async (c) => {
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const form = await c.req.formData();
+  const file = form.get('file');
+  if (!(file instanceof File)) return c.json({ error: 'file_required' }, 400);
+  if (file.size > MAX_IMAGE_BYTES) return c.json({ error: 'file_too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffImage(new Uint8Array(buf, 0, 16));
+  if (!mime) return c.json({ error: 'not_a_supported_image' }, 415);
+  const parts = (await c.env.DB.prepare('SELECT code FROM components').all<{ code: string }>()).results.map((r) => r.code);
+  try {
+    return c.json({ regions: await findPhotoRegions(c.env, { data: buf, mime }, parts), model: aiModel(c.env) });
+  } catch (e) {
+    return c.json({ error: 'ai_failed', detail: String((e as Error).message ?? e).slice(0, 200) }, 502);
+  }
+});
 
 app.post('/api/assets', need(STAFF), async (c) => {
   const form = await c.req.formData();

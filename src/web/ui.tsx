@@ -36,7 +36,7 @@ export function Notice({ tone = 'info', children }: { tone?: 'info' | 'warn' | '
 }
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="label">{label}</span>{children}</label>;
+  return <label className="block min-w-0"><span className="label">{label}</span>{children}</label>;
 }
 
 export function Empty({ children }: { children?: React.ReactNode }) {

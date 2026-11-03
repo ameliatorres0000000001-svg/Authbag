@@ -6,6 +6,9 @@ import { MeContext } from '../App.tsx';
 import { Badge, Field, Notice, Page, errText } from '../ui.tsx';
 import DateCodeAppearanceCard, { DateCodeGuide } from '../DateCodeAppearance.tsx';
 import { guessFromFilename, type UploadGuess } from '../../shared/uploadGuess.ts';
+import { labelFromCaption } from '../../shared/crop.ts';
+import { aiCropPhotos } from '../cropImage.ts';
+import { ApiError } from '../api.ts';
 import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, annotateAfterUpload, assetImg, uploadReference } from '../studio.ts';
 
 interface Tax { brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] }
@@ -40,12 +43,12 @@ export default function AdminPanel() {
   return (
     <Page title={t('admin.title')} subtitle={t('admin.subtitle')} actions={<Link to="/" className="btn-ghost">{t('admin.close')}</Link>}>
       <p className="-mt-4 mb-4 font-mono text-[10px] uppercase tracking-widest text-muted">{t('admin.hint')}</p>
-      <div className="grid gap-4 lg:grid-cols-5">
-        <div className="space-y-4 lg:col-span-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-5">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           <UploadForm tax={tax} comps={comps} compName={compName} canAddTaxonomy={ADMIN_ROLES.includes(me.role)} onTax={loadTax} onDone={loadLib} />
           <DateCodeGuide />
         </div>
-        <div className="space-y-4 lg:col-span-3">
+        <div className="min-w-0 space-y-4 lg:col-span-3">
           <Matrix lib={lib} tax={tax} compName={compName} onPick={(brandId, component) => setFilter({ brandId, component, label: '' })} />
           <div className="card">
             <div className="mb-3 flex flex-wrap items-end gap-2">
@@ -145,7 +148,8 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
   const { t } = useI18n();
   const [f, setF] = useState({ brandId: '', modelId: '', componentCode: 'date_code', label: 'authentic', labelBasis: 'purchase_receipt', license: 'own', sourceUrl: '', teachingNote: '' });
   // one row per photo; `pick` holds what was read from the file name or changed in the list, the form fills the rest
-  const [rows, setRows] = useState<{ file: File; pick: UploadGuess }[]>([]);
+  const [rows, setRows] = useState<{ file: File; pick: UploadGuess; caption?: string; cut?: boolean }[]>([]);
+  const [cutting, setCutting] = useState<number | null>(null);
   const files = rows.map((r) => r.file);
   const [previews, setPreviews] = useState<string[]>([]);
   const [adding, setAdding] = useState<'brand' | 'model' | null>(null);
@@ -168,6 +172,31 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
   const setPick = (i: number, k: keyof UploadGuess, v: string) => setRows((all) => all.map((r, j) => j !== i ? r
     : { ...r, pick: { ...r.pick, [k]: v, ...(k === 'brandId' ? { modelId: '' } : {}) } as UploadGuess }));
   const missingBrand = rows.some((r) => !eff(r).brandId);
+  const removeRow = (i: number) => setRows((all) => all.filter((_, j) => j !== i));
+  /** AI finds the separate photos in one composite image; each piece replaces it as its own row, to review before upload. */
+  async function cut(i: number) {
+    const row = rows[i];
+    setCutting(i); setMsg(null);
+    try {
+      const pieces = await aiCropPhotos(row.file);
+      if (pieces.length === 0) { setMsg({ tone: 'warn', text: t('admin.cutNone') }); return; }
+      setRows((all) => {
+        const at = all.indexOf(row);
+        if (at < 0) return all;
+        const made = pieces.map(({ file, region }) => {
+          const label = labelFromCaption(region.caption);
+          return {
+            file, caption: region.caption, cut: true,
+            pick: { ...row.pick, ...(region.part ? { componentCode: region.part } : {}), ...(label !== 'unknown' ? { label } : {}) } as UploadGuess,
+          };
+        });
+        return [...all.slice(0, at), ...made, ...all.slice(at + 1)];
+      });
+      setMsg({ tone: 'ok', text: `${t('admin.cutDone')} ${pieces.length}` });
+    } catch (e) {
+      setMsg({ tone: 'bad', text: e instanceof ApiError && e.status === 501 ? t('admin.cutNoAi') : errText(e) });
+    } finally { setCutting(null); }
+  }
   function choose(list: File[]) {
     const imgs = list.filter((x) => x.type.startsWith('image/'));
     const codes = comps.map((c) => c.code);
@@ -200,7 +229,9 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
       let approved = 0;
       for (const row of rows) {
         const e = eff(row);
-        const r = await uploadReference(row.file, { ...f, ...e, purpose: 'study' });
+        // pieces cut from a composite (usually a third-party chart) are never claimed as own, receipted references
+        const prov = row.cut ? { labelBasis: 'unverified', license: 'unknown' } : {};
+        const r = await uploadReference(row.file, { ...f, ...e, ...prov, purpose: 'study' });
         await annotateAfterUpload(r.id, e.componentCode);
         if (r.status === 'approved') approved++;
       }
@@ -269,6 +300,7 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
       {rows.length > 0 && (
         <div>
           <div className="label">{t('admin.preview')} ({rows.length}) · {t('admin.autoList')}</div>
+          <p className="mb-1 text-[11px] text-muted">{t('admin.cutHelp')}</p>
           <ul className="divide-y divide-hairline rounded-lg border border-hairline">
             {rows.map((r, i) => {
               const e = eff(r);
@@ -276,20 +308,26 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
                 <li key={i} className="flex gap-2 p-2">
                   <img src={previews[i]} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
                   <div className="min-w-0 flex-1 space-y-1">
-                    <div className="truncate font-mono text-[10px] text-muted">{r.file.name}</div>
-                    <div className="grid grid-cols-2 gap-1">
-                      <select className={`input !py-1 text-xs ${!e.brandId ? '!border-counterfeit' : ''}`} value={e.brandId} onChange={(x) => setPick(i, 'brandId', x.target.value)}>
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted">{r.file.name}{r.caption ? ` · “${r.caption}”` : ''}{r.cut ? ' · unverified · unknown' : ''}</div>
+                      <button type="button" className="shrink-0 rounded border border-strong px-2 py-0.5 text-[11px] font-semibold disabled:opacity-40" disabled={busy || cutting !== null} onClick={() => cut(i)}>
+                        {cutting === i ? '…' : `✂ ${t('admin.cut')}`}
+                      </button>
+                      <button type="button" aria-label={t('admin.removeRow')} className="shrink-0 px-1 text-muted hover:text-counterfeit" disabled={busy || cutting !== null} onClick={() => removeRow(i)}>✕</button>
+                    </div>
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-1">
+                      <select className={`input w-full min-w-0 !py-1 text-xs ${!e.brandId ? '!border-counterfeit' : ''}`} value={e.brandId} onChange={(x) => setPick(i, 'brandId', x.target.value)}>
                         <option value="">{t('brand')} —</option>
                         {tax?.brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
-                      <select className="input !py-1 text-xs" value={e.modelId} onChange={(x) => setPick(i, 'modelId', x.target.value)} disabled={!e.brandId}>
+                      <select className="input w-full min-w-0 !py-1 text-xs" value={e.modelId} onChange={(x) => setPick(i, 'modelId', x.target.value)} disabled={!e.brandId}>
                         <option value="">{t('model')} —</option>
                         {tax?.models.filter((m) => m.brand_id === e.brandId).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
-                      <select className="input !py-1 text-xs" value={e.componentCode} onChange={(x) => setPick(i, 'componentCode', x.target.value)}>
+                      <select className="input w-full min-w-0 !py-1 text-xs" value={e.componentCode} onChange={(x) => setPick(i, 'componentCode', x.target.value)}>
                         {comps.map((c) => <option key={c.code} value={c.code}>{compName(c.code)}</option>)}
                       </select>
-                      <select className={`input !py-1 text-xs ${e.label === 'authentic' ? 'text-verified' : e.label === 'counterfeit' ? 'text-counterfeit' : ''}`} value={e.label} onChange={(x) => setPick(i, 'label', x.target.value)}>
+                      <select className={`input w-full min-w-0 !py-1 text-xs ${e.label === 'authentic' ? 'text-verified' : e.label === 'counterfeit' ? 'text-counterfeit' : ''}`} value={e.label} onChange={(x) => setPick(i, 'label', x.target.value)}>
                         <option value="authentic">{t('study.knownGenuine')}</option>
                         <option value="counterfeit">{t('study.knownCounterfeit')}</option>
                         <option value="unknown">{t('study.unlabelled')}</option>
