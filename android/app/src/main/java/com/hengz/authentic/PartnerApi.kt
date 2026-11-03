@@ -23,10 +23,17 @@ data class LoginResponse(val token: String?)
 data class AuthorizationRequest(val sdk_authorization_request: String)
 data class AuthorizationResponse(val signed_authorization_request: String?)
 
+/** Which partner backend signs the SDK authorization. */
+enum class Backend(val url: String) {
+    HENGZ(BuildConfig.HENGZ_BACKEND_URL),
+    ENTRUPY_SAMPLE(BuildConfig.ENTRUPY_SAMPLE_BACKEND_URL),
+}
+
 object PartnerApiClient {
-    val api: PartnerApi by lazy {
+    private val apis = mutableMapOf<Backend, PartnerApi>()
+    fun api(backend: Backend): PartnerApi = apis.getOrPut(backend) {
         Retrofit.Builder()
-            .baseUrl(BuildConfig.PARTNER_BACKEND_URL)
+            .baseUrl(backend.url)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(PartnerApi::class.java)

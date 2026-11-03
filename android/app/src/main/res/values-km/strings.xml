@@ -20,4 +20,10 @@
     <string name="err_login">ចូលមិនបាន៖ សូមពិនិត្យអ៊ីមែល និងពាក្យសម្ងាត់។</string>
     <string name="err_sign">Server HENGZ មិនអាចផ្តល់សិទ្ធិ Entrupy បានទេ។ សូមសាកម្តងទៀតពេលក្រោយ។</string>
     <string name="note">អេក្រង់ថត និងលទ្ធផល ជារបស់ Entrupy ផ្ទាល់។ HENGZ មិនបង្ហាញ ឬបង្កើតលទ្ធផលទេ។</string>
+    <string name="server">Server</string>
+    <string name="server_hengz">HENGZ</string>
+    <string name="server_sample">Entrupy sample</string>
+    <string name="server_hengz_help">ចូលដោយគណនី HENGZ (បុគ្គលិក)។ ដំណើរការពេល HENGZ មាន API key របស់ Entrupy។</string>
+    <string name="server_sample_help">Server sample របស់ Entrupy ផ្ទាល់ សម្រាប់សាក SDK មុនពេល HENGZ មាន key។ ប្រើគណនី sample ដែល Entrupy ផ្តល់ឲ្យ។</string>
+    <string name="username">ឈ្មោះអ្នកប្រើ</string>
 </resources>
