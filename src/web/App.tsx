@@ -23,7 +23,6 @@ import Lesson from './pages/Lesson.tsx';
 import Check from './pages/Check.tsx';
 import NfcCheck from './pages/NfcCheck.tsx';
 import EntrupyGuide from './pages/EntrupyGuide.tsx';
-import EntrupyDemo from './pages/EntrupyDemo.tsx';
 
 export interface Me { id: string; email: string; name: string; role: string; locale: 'km' | 'en' }
 export const MeContext = React.createContext<Me | null>(null);
@@ -111,7 +110,6 @@ export default function App() {
             <Route path="/check" element={<Check />} />
             <Route path="/check/nfc" element={<NfcCheck />} />
             <Route path="/verify/entrupy" element={<EntrupyGuide />} />
-            <Route path="/verify/entrupy/demo" element={<EntrupyDemo />} />
             <Route path="/learn/:modelId" element={<Lesson />} />
             <Route path="/knowledge" element={<Knowledge />} />
             <Route path="/coverage" element={<Coverage />} />

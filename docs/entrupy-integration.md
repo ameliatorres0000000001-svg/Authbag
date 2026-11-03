@@ -1,13 +1,15 @@
 # Entrupy integration: what is in place and what is still needed
 
-## In place (web app)
-- `/verify/entrupy` explains how an Entrupy check works and shows the real connection status
-  (`providers` row `entrupy`; it only shows "connected" after a successful real API call).
-- `/verify/entrupy/demo` is a clickable walkthrough of the six steps. It is labelled DEMO,
-  shows no result, no score and no certificate.
-- `EntrupyLogo` shows Entrupy's official logo from `/brand/entrupy-logo.svg`.
-  **Add the file from Entrupy's brand kit at `src/web/public/brand/entrupy-logo.svg`**
-  (follow their brand guidelines; do not redraw it). Until then the name shows as text.
+## In place
+- **Web:** `/verify/entrupy` explains how an Entrupy check works and shows the real connection status.
+  No mock screens and no logo: Entrupy's SDK supplies its own screens and branding.
+- **Backend (Worker):** `POST /api/entrupy/partner/login` and
+  `POST /api/entrupy/partner/authorize-entrupy-sdk-user` — same contract as Entrupy's sample partner
+  backend. Signing calls `https://api.entrupy.com/v2/integrations/authorize-user` with
+  `Authorization: Token <ENTRUPY_API_KEY>`; returns 501 until the secret is set.
+- **Android app:** `android/` (see `android/README.md`), Entrupy SDK 2.5.0, capture with
+  `showResultScreen = true`. Not compiled in CI yet (needs the Android SDK and a GitHub token with
+  `read:packages`).
 
 ## Needed for real checks (from Entrupy's developer docs)
 1. **API key with SDK support** from Entrupy (store with `wrangler secret put ENTRUPY_API_KEY`;

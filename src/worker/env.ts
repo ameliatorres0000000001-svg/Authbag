@@ -4,6 +4,8 @@ export interface Env {
   ASSETS: Fetcher;
   /** Optional secrets / vars — never required for the app to run */
   ENTRUPY_API_KEY?: string;
+  /** Optional override of Entrupy's API base (e.g. a sandbox host Entrupy gives you). Defaults to https://api.entrupy.com */
+  ENTRUPY_API_BASE?: string;
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
   AI_MODEL?: string;

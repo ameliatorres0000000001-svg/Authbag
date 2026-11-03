@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HENGZ Authentic</string>
+    <string name="title">Check with Entrupy</string>
+    <string name="subtitle">Sign in with your HENGZ account, choose the brand, then follow Entrupy\'s screens. You need an Entrupy device attached to this phone.</string>
+    <string name="signin_title">HENGZ account</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="signin">Sign in</string>
+    <string name="signout">Sign out</string>
+    <string name="brand">Brand</string>
+    <string name="item_id">Your item reference</string>
+    <string name="start">Start Entrupy check</string>
+    <string name="status_ready">Signed in. Ready to start.</string>
+    <string name="status_started">Entrupy capture started.</string>
+    <string name="status_submitted">Sent to Entrupy. The result comes from Entrupy.</string>
+    <string name="err_no_config">Entrupy has no capture setup for this brand.</string>
+    <string name="err_expired">Your Entrupy session expired. Sign in again.</string>
+    <string name="err_timeout">The capture session expired. Start a new check.</string>
+    <string name="err_camera">Camera permission is needed for the Entrupy check.</string>
+    <string name="err_login">Sign-in failed: check your email and password.</string>
+    <string name="err_sign">The HENGZ server could not authorize Entrupy. Try again later.</string>
+    <string name="note">The capture screens and the result are Entrupy\'s own. HENGZ never shows or creates a result.</string>
+</resources>
