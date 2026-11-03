@@ -17,7 +17,7 @@ export interface Post {
 }
 
 /** Newest uploaded photos as posts. Labels are the uploader's; the system never decides authentic vs counterfeit. */
-export default function Feed({ brandId, pageSize = 6 }: { brandId?: string; pageSize?: number }) {
+export default function Feed({ brandId, modelId, noModel, pageSize = 6 }: { brandId?: string; modelId?: string; noModel?: boolean; pageSize?: number }) {
   const { t } = useI18n();
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
@@ -28,9 +28,11 @@ export default function Feed({ brandId, pageSize = 6 }: { brandId?: string; page
   const fetchPage = useCallback(async (before?: string | null) => {
     const q = new URLSearchParams({ limit: String(pageSize) });
     if (brandId) q.set('brandId', brandId);
+    if (modelId) q.set('modelId', modelId);
+    if (noModel) q.set('noModel', '1');
     if (before) q.set('before', before);
     return api.get<{ posts: Post[]; next: string | null; aiConfigured: boolean }>(`/api/feed?${q}`);
-  }, [brandId, pageSize]);
+  }, [brandId, modelId, noModel, pageSize]);
 
   useEffect(() => {
     let on = true;
@@ -56,7 +58,7 @@ export default function Feed({ brandId, pageSize = 6 }: { brandId?: string; page
   );
 }
 
-function timeAgo(iso: string, locale: string, justNow: string): string {
+export function timeAgo(iso: string, locale: string, justNow: string): string {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
   if (s < 60) return justNow;
   const rtf = new Intl.RelativeTimeFormat(locale === 'km' ? 'km' : 'en', { numeric: 'auto' });

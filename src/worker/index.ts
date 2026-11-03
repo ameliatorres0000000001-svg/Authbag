@@ -827,6 +827,8 @@ app.get('/api/feed', async (c) => {
   const limit = Math.min(30, Math.max(1, Number(q.limit) || 10));
   const where: string[] = [`a.status <> 'rejected'`]; const args: unknown[] = [];
   if (q.brandId) { where.push('a.brand_id = ?'); args.push(q.brandId); }
+  if (q.modelId) { where.push('a.model_id = ?'); args.push(q.modelId); }
+  if (q.noModel) where.push('a.model_id IS NULL');
   if (q.before) { where.push('a.created_at < ?'); args.push(q.before); }
   const posts = (await c.env.DB.prepare(
     `SELECT a.id, a.brand_id, b.name AS brand, a.model_id, m.name AS model, a.component_code, cp.name_en AS part_en, cp.name_km AS part_km,
@@ -856,6 +858,37 @@ app.get('/api/feed', async (c) => {
     return { ...p, points: points?.results.filter((x) => x.asset_id === p.id) ?? [], transcription, genuineRefId: pick?.id ?? null };
   });
   return c.json({ posts: out, next: more ? page[page.length - 1].created_at : null, aiConfigured: aiConfigured(c.env) });
+});
+// ───────────────────────── feed folders: one folder per model (photos grouped), newest activity first ─────────────────────────
+app.get('/api/feed/folders', async (c) => {
+  const brandId = c.req.query('brandId');
+  const args: unknown[] = brandId ? [brandId] : [];
+  const folders = (await c.env.DB.prepare(
+    `SELECT a.model_id AS id, m.name AS model, a.brand_id, b.name AS brand, COUNT(*) AS photos, MAX(a.created_at) AS latest,
+            COUNT(DISTINCT a.component_code) AS parts,
+            SUM(a.label = 'authentic') AS genuine, SUM(a.label = 'counterfeit') AS counterfeit,
+            EXISTS (SELECT 1 FROM lesson_steps s WHERE s.model_id = a.model_id AND s.status <> 'retired') AS has_lesson
+     FROM reference_assets a JOIN models m ON m.id = a.model_id JOIN brands b ON b.id = a.brand_id
+     WHERE a.status <> 'rejected' AND a.model_id IS NOT NULL ${brandId ? 'AND a.brand_id = ?' : ''}
+     GROUP BY a.model_id ORDER BY latest DESC LIMIT 60`,
+  ).bind(...args).all<Record<string, any>>()).results;
+  const ids = folders.map((f) => f.id);
+  // up to four cover photos per folder, earliest first so the overview photo leads
+  const covers = ids.length ? (await c.env.DB.prepare(
+    `SELECT id, model_id FROM (SELECT a.id, a.model_id, ROW_NUMBER() OVER (PARTITION BY a.model_id ORDER BY a.created_at) AS n
+       FROM reference_assets a WHERE a.status <> 'rejected' AND a.model_id IN (${ids.map(() => '?').join(',')})) WHERE n <= 4`,
+  ).bind(...ids).all<Record<string, any>>()).results : [];
+  const loose = (await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM reference_assets a WHERE a.status <> 'rejected' AND a.model_id IS NULL ${brandId ? 'AND a.brand_id = ?' : ''}`,
+  ).bind(...args).first<{ n: number }>())?.n ?? 0;
+  // brands that have any post, for the filter chips (independent of the chosen brand)
+  const brands = (await c.env.DB.prepare(
+    `SELECT DISTINCT b.id, b.name FROM reference_assets a JOIN brands b ON b.id = a.brand_id WHERE a.status <> 'rejected' ORDER BY b.name`,
+  ).all<{ id: string; name: string }>()).results;
+  return c.json({
+    folders: folders.map((f) => ({ ...f, has_lesson: !!f.has_lesson, covers: covers.filter((x) => x.model_id === f.id).map((x) => x.id) })),
+    loose, brands,
+  });
 });
 // ───────────────────────── hidden admin panel: multi-brand library (genuine / counterfeit by part) ─────────────────────────
 app.get('/api/admin/library', need(STAFF), async (c) => {

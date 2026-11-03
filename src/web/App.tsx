@@ -4,6 +4,7 @@ import { api } from './api.ts';
 import { useI18n } from './i18n.tsx';
 import Login from './pages/Login.tsx';
 import Dashboard from './pages/Dashboard.tsx';
+import FolderPosts from './pages/FolderPosts.tsx';
 import NewInspection from './pages/NewInspection.tsx';
 import Inspections from './pages/Inspections.tsx';
 import InspectionDetail from './pages/InspectionDetail.tsx';
@@ -99,6 +100,7 @@ export default function App() {
         <main className="min-w-0 flex-1 pb-24 md:pb-0">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/posts/:modelId" element={<FolderPosts />} />
             <Route path="/inspections" element={<Inspections />} />
             <Route path="/inspections/new" element={<NewInspection />} />
             <Route path="/inspections/:id" element={<InspectionDetail />} />
