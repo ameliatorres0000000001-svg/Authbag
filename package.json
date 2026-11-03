@@ -6,13 +6,14 @@
   "scripts": {
     "dev": "vite build && wrangler dev",
     "build": "vite build",
-    "test": "node --experimental-strip-types --test test/engine.test.ts test/stages.test.ts test/marks.test.ts test/lens.test.ts test/datecode.test.ts test/appearance.test.ts",
+    "test": "node --experimental-strip-types --test test/engine.test.ts test/stages.test.ts test/marks.test.ts test/lens.test.ts test/datecode.test.ts test/appearance.test.ts test/uploadGuess.test.ts",
     "typecheck": "tsc --noEmit",
     "db:local": "wrangler d1 migrations apply hengz-authentic --local",
     "db:remote": "wrangler d1 migrations apply hengz-authentic --remote",
     "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "hono": "^4.6.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -21,8 +22,8 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261019.1",
-    "@types/react": "^18.3.3",
     "@types/node": "^22.0.0",
+    "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",

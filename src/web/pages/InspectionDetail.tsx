@@ -77,7 +77,7 @@ export default function InspectionDetail() {
                       <div className="font-mono text-muted">{c.width}×{c.height}</div>
                       {q?.warnings?.length > 0 && <div className="text-review">{t('qualityWarn')}: {q.warnings.join(', ')}</div>}
                       <Link className="mr-3 mt-1 inline-block underline" to={`/inspections/${id}/compare/${c.id}`}>{locale === 'km' ? 'ប្រៀបធៀប' : 'Compare'}</Link>
-                      <button className="mt-1 underline disabled:opacity-40" disabled={!!busy || locked} onClick={() => run('ai' + c.id, async () => { try { await api.post(`/api/captures/${c.id}/suggest`); } catch (e: any) { if (e?.status === 501) throw new Error('AI is not configured (GEMINI_API_KEY or ANTHROPIC_API_KEY, plus AI_MODEL). Manual observation still works.'); throw e; } })}>{t('aiSuggest')}</button>
+                      <button className="mt-1 underline disabled:opacity-40" disabled={!!busy || locked} onClick={() => run('ai' + c.id, async () => { try { await api.post(`/api/captures/${c.id}/suggest`); } catch (e: any) { if (e?.status === 501) throw new Error('AI is not configured (ANTHROPIC_API_KEY or GEMINI_API_KEY). Manual observation still works.'); throw e; } })}>{t('aiSuggest')}</button>
                     </div>
                   </div>
                 );

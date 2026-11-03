@@ -187,7 +187,8 @@ const D: Record<string, { km: string; en: string }> = {
   'dca.rerun': { km: 'វិភាគម្តងទៀត', en: 'Analyse again' },
   'dca.typed': { km: 'កូដដែលអ្នកអានឃើញ (ស្រេចចិត្ត)', en: 'Code as you read it (optional)' },
   'dca.none': { km: 'មិនទាន់មានការវិភាគទេ។', en: 'No analysis yet.' },
-  'dca.aiOff': { km: 'AI មិនទាន់កំណត់ (AI_MODEL + API key) ដូច្នេះមិនអាចវិភាគបានទេ។', en: 'AI is not configured (AI_MODEL + API key), so no analysis can run.' },
+  'study.onlyImages': { km: 'ដាក់បានតែរូបភាព (JPG/PNG/WebP)។ ឯកសារ .zip ត្រូវពន្លា (Extract) ជាមុនសិន រួចជ្រើសរូបពីក្នុង folder។', en: 'Only photos can be uploaded (JPG/PNG/WebP). Extract a .zip first, then pick the photos from the folder.' },
+  'dca.aiOff': { km: 'AI មិនទាន់កំណត់ (API key) ដូច្នេះមិនអាចវិភាគបានទេ។', en: 'AI is not configured (API key), so no analysis can run.' },
   'dca.honest': { km: 'AI ពិពណ៌នាតែអ្វីដែលឃើញក្នុងរូប។ វាមិនប្រាប់ថាពិត ឬក្លែង ហើយមិនប៉ះពាល់លទ្ធផលទេ។ date code មានទំហំ/ពុម្ពអក្សរខុសគ្នាតាមឆ្នាំ រោងចក្រ និងម៉ូដែល។', en: 'AI only describes what the photo shows. It never says authentic or counterfeit and never affects outcomes. Date codes vary in size and font by era, factory and model.' },
   'dca.refs': { km: 'ប្រៀបធៀបជាមួយរូប date code ពិត (អនុម័ត) ចំនួន', en: 'Compared with approved genuine date-code photos:' },
   'dca.noRefs': { km: 'មិនទាន់មានរូប date code ពិតដែលអនុម័ត សម្រាប់ប្រៀបធៀបទេ (ដាក់ក្នុង Admin → ផ្នែក Date code)។', en: 'No approved genuine date-code photo to compare with yet (add one in Admin → part Date code).' },
@@ -244,6 +245,8 @@ const D: Record<string, { km: string; en: string }> = {
   'admin.all': { km: 'ទាំងអស់', en: 'All' },
   'admin.noPart': { km: 'មិនបញ្ជាក់ផ្នែក', en: 'No part' },
   'admin.close': { km: 'បិទ', en: 'Close' },
+  'admin.autoList': { km: 'ប្រព័ន្ធបំពេញម៉ាក ម៉ូដែល ផ្នែក និងស្លាក ពីឈ្មោះ file ដោយស្វ័យប្រវត្តិ — ពិនិត្យ ហើយកែបាន', en: 'Brand, model, part and label are filled from each file name — check and change if needed' },
+  'admin.needBrand': { km: 'រូបខ្លះមិនទាន់មានម៉ាក — ជ្រើសម៉ាកខាងលើ ឬក្នុងបញ្ជី', en: 'Some photos have no brand yet — pick one above or in the list' },
   'admin.preview': { km: 'រូបដែលបានជ្រើស', en: 'Selected photos' },
   // lessons (step-by-step how to look)
   learn: { km: 'រៀន', en: 'Learn' },
