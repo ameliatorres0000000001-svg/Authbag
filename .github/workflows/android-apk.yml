@@ -1,5 +1,5 @@
 # Builds the HENGZ Android app (Entrupy SDK) and uploads a debug APK you can install on a phone.
-# Needs repository secrets (Settings → Secrets and variables → Actions):
+# Reads its secrets from the "Entrupy SDK" environment (Settings → Environments → Entrupy SDK):
 #   GPR_USER  – GitHub username
 #   GPR_TOKEN – GitHub token with read:packages (Entrupy's SDK is on GitHub Packages)
 name: Android APK
@@ -22,6 +22,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: Entrupy SDK
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +32,7 @@ jobs:
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
         run: |
           if [ -z "$GPR_USER" ] || [ -z "$GPR_TOKEN" ]; then
-            echo "::error::Add repository secrets GPR_USER and GPR_TOKEN (a GitHub token with read:packages) so Gradle can download Entrupy's SDK."
+            echo "::error::Add GPR_USER and GPR_TOKEN to the Entrupy SDK environment (Settings → Environments) (a GitHub token with read:packages) so Gradle can download Entrupy's SDK."
             exit 1
           fi
 
