@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import type { Env } from './env.ts';
 import { MAX_AI_MARKS, parseSuggestedMarks, type SuggestedMark } from '../shared/marks.ts';
 import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
@@ -13,40 +14,66 @@ function b64(buf: ArrayBuffer): string {
   return btoa(bin);
 }
 
-/** Provider: Gemini if GEMINI_API_KEY + AI_MODEL are set, otherwise Anthropic if ANTHROPIC_API_KEY + AI_MODEL are set. */
-export const aiConfigured = (env: Env) => !!env.AI_MODEL && !!(env.GEMINI_API_KEY || env.ANTHROPIC_API_KEY);
+/** Default model per provider when the AI_MODEL var is left empty. */
+const DEFAULT_MODEL = { anthropic: 'claude-sonnet-5-5', gemini: 'gemini-3.8-flash' } as const;
 
-/** One vision call returning raw text. Images are sent in order; the caller's prompt says which is which. */
+/** Provider: Anthropic (Claude) if ANTHROPIC_API_KEY is set, otherwise Gemini if GEMINI_API_KEY is set. */
+export const aiProvider = (env: Env): 'anthropic' | 'gemini' | null =>
+  env.ANTHROPIC_API_KEY ? 'anthropic' : env.GEMINI_API_KEY ? 'gemini' : null;
+
+/** The model id actually used: AI_MODEL if set, else the provider's default. Recorded with every AI result. */
+export const aiModel = (env: Env): string | null => {
+  const p = aiProvider(env);
+  return p ? (env.AI_MODEL?.trim() || DEFAULT_MODEL[p]) : null;
+};
+
+export const aiConfigured = (env: Env) => aiProvider(env) !== null;
+
+type ImageMime = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+const toImageMime = (m: string): ImageMime => (['image/png', 'image/gif', 'image/webp'].includes(m) ? m as ImageMime : 'image/jpeg');
+
+/**
+ * One vision call returning raw text. Images are sent in order; the caller's prompt says which is which.
+ * `maxTokens` is the caller's expected answer size; Claude also thinks before answering, so the request allows more.
+ */
 export async function callVision(env: Env, system: string, images: VisionImage[], userText: string, maxTokens = 1500): Promise<string> {
-  if (!aiConfigured(env)) throw new Error('ai_not_configured');
-  if (env.GEMINI_API_KEY) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.AI_MODEL!)}:generateContent`, {
+  const provider = aiProvider(env);
+  const model = aiModel(env);
+  if (!provider || !model) throw new Error('ai_not_configured');
+  if (provider === 'gemini') {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
-      headers: { 'x-goog-api-key': env.GEMINI_API_KEY, 'content-type': 'application/json' },
+      headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [...images.map((i) => ({ inline_data: { mime_type: i.mime, data: b64(i.data) } })), { text: userText }] }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+        generationConfig: { responseMimeType: 'application/json' },
       }),
     });
     if (!res.ok) throw new Error(`ai_http_${res.status}`);
     const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
   }
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: env.AI_MODEL, max_tokens: maxTokens, system,
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  let msg: Anthropic.Message;
+  try {
+    msg = await client.messages.create({
+      model,
+      // Thinking is on by default for current Claude models and counts toward max_tokens.
+      max_tokens: Math.max(16000, maxTokens),
+      output_config: { effort: 'medium' },
+      system,
       messages: [{ role: 'user', content: [
-        ...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mime, data: b64(i.data) } })),
-        { type: 'text', text: userText },
+        ...images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: toImageMime(i.mime), data: b64(i.data) } })),
+        { type: 'text' as const, text: userText },
       ] }],
-    }),
-  });
-  if (!res.ok) throw new Error(`ai_http_${res.status}`);
-  const data = (await res.json()) as { content: { type: string; text?: string }[] };
-  return data.content.find((c) => c.type === 'text')?.text ?? '';
+    });
+  } catch (e) {
+    if (e instanceof Anthropic.APIError) throw new Error(`ai_http_${e.status ?? 0}`);
+    throw e;
+  }
+  if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
+  return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
 }
 
 const NO_VERDICT = 'Never state or imply whether an item is authentic or counterfeit. Describe only what is visibly present. If something is not clearly visible, omit it.';

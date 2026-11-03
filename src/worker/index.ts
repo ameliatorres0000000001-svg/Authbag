@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { aiConfigured, analyzeDateCodeAppearance, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
+import { aiConfigured, aiModel, analyzeDateCodeAppearance, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -541,7 +541,7 @@ app.post('/api/captures/:id/compare', need(STAFF), async (c) => {
     const out = await explainDifferences(c.env, { data: await insp.arrayBuffer(), mime: r.cap.mime }, refImgs, r.cap.component_code ?? 'unspecified');
     const id = uid('cmp_');
     await c.env.DB.prepare('INSERT INTO comparisons (id, inspection_id, capture_id, asset_ids_json, result_json, model, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, r.cap.inspection_id, r.cap.id, JSON.stringify(chosen), JSON.stringify(out), c.env.AI_MODEL ?? null, c.get('user').id).run();
+      .bind(id, r.cap.inspection_id, r.cap.id, JSON.stringify(chosen), JSON.stringify(out), aiModel(c.env), c.get('user').id).run();
     await audit(c.env, c.get('user').id, 'capture.ai_compare', 'capture', r.cap.id, { references: chosen.length, differences: out.differences.length });
     return c.json({ id, assetIds: chosen, ...out });
   } catch (e) {
@@ -744,7 +744,7 @@ async function runDateCodeAnalysis(c: any, target: { type: 'asset' | 'capture'; 
     if (!out) return c.json({ error: 'ai_unreadable_reply' }, 502);
     const id = uid('dca_');
     await c.env.DB.prepare('INSERT INTO datecode_analyses (id, target_type, target_id, brand_id, reference_ids_json, result_json, model, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, target.type, target.id, target.brand_id, JSON.stringify(used), JSON.stringify(out), c.env.AI_MODEL ?? null, c.get('user').id).run();
+      .bind(id, target.type, target.id, target.brand_id, JSON.stringify(used), JSON.stringify(out), aiModel(c.env), c.get('user').id).run();
     await audit(c.env, c.get('user').id, 'datecode.ai_appearance', target.type, target.id, { references: used.length });
     return c.json({ id, referenceIds: used, result: out, created_at: nowIso() });
   } catch (e) {

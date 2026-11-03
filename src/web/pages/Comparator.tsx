@@ -23,7 +23,7 @@ const TXT = {
   feature: { km: 'ចំណុច', en: 'Feature' }, insp: { km: 'រូបពិនិត្យ', en: 'Inspected' }, ref: { km: 'Reference', en: 'Reference' },
   caveat: { km: 'ប្រយ័ត្នអំពីរូប', en: 'Photo caveat' },
   notAi: { km: 'AI មិនកំណត់ថា ពិត ឬ ក្លែង។ ភាពខុសគ្នាខាងលើអាចមកពីពន្លឺ មុំ ឬគុណភាពរូប។ សូមអ្នកជំនាញបញ្ជាក់ ហើយបញ្ចូលជាការសង្កេតក្នុងទំព័រការត្រួតពិនិត្យ។', en: 'The AI does not decide authentic or counterfeit. Differences may come from lighting, angle or image quality. An appraiser must confirm and record them as observations on the inspection page.' },
-  cfg: { km: 'AI មិនទាន់កំណត់ (GEMINI_API_KEY ឬ ANTHROPIC_API_KEY និង AI_MODEL)។', en: 'AI is not configured (GEMINI_API_KEY or ANTHROPIC_API_KEY, plus AI_MODEL).' },
+  cfg: { km: 'AI មិនទាន់កំណត់ (ANTHROPIC_API_KEY ឬ GEMINI_API_KEY)។', en: 'AI is not configured (ANTHROPIC_API_KEY or GEMINI_API_KEY).' },
   back: { km: '← ត្រឡប់ទៅការត្រួតពិនិត្យ', en: '← Back to inspection' },
 } as const;
 

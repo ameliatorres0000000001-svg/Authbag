@@ -148,7 +148,7 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
   const [adding, setAdding] = useState<'brand' | 'model' | null>(null);
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ tone: 'ok' | 'bad' | 'warn'; text: string } | null>(null);
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v, ...(k === 'brandId' ? { modelId: '' } : {}) }));
 
   useEffect(() => {
@@ -246,7 +246,12 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
       </div>
       <Field label={t('study.whatDiffers')}><textarea className="input" rows={2} maxLength={4000} value={f.teachingNote} onChange={(e) => set('teachingNote', e.target.value)} /></Field>
       <Field label={t('studio.source')}><input className="input" value={f.sourceUrl} onChange={(e) => set('sourceUrl', e.target.value)} /></Field>
-      <Field label={t('study.files')}><input className="input" type="file" accept="image/*" multiple onChange={(e) => setFiles([...(e.target.files ?? [])])} /></Field>
+      <Field label={t('study.files')}><input className="input" type="file" accept="image/*" multiple onChange={(e) => {
+        const all = [...(e.target.files ?? [])];
+        const imgs = all.filter((x) => x.type.startsWith('image/'));
+        setFiles(imgs);
+        setMsg(imgs.length < all.length ? { tone: 'warn', text: t('study.onlyImages') } : null);
+      }} /></Field>
       {previews.length > 0 && (
         <div>
           <div className="label">{t('admin.preview')} ({previews.length})</div>
