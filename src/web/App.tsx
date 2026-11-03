@@ -20,12 +20,15 @@ import ModelStudio from './pages/ModelStudio.tsx';
 import AdminPanel from './pages/AdminPanel.tsx';
 import Learn from './pages/Learn.tsx';
 import Lesson from './pages/Lesson.tsx';
+import Check from './pages/Check.tsx';
+import NfcCheck from './pages/NfcCheck.tsx';
+import EntrupyGuide from './pages/EntrupyGuide.tsx';
 
 export interface Me { id: string; email: string; name: string; role: string; locale: 'km' | 'en' }
 export const MeContext = React.createContext<Me | null>(null);
 
 const NAV: [string, string][] = [
-  ['/', 'dashboard'], ['/learn', 'learn'], ['/inspections/new', 'newInspection'], ['/inspections', 'inspections'], ['/knowledge', 'knowledge'],
+  ['/', 'dashboard'], ['/learn', 'learn'], ['/check', 'check.title'], ['/inspections/new', 'newInspection'], ['/inspections', 'inspections'], ['/knowledge', 'knowledge'],
   ['/coverage', 'coverage'], ['/library', 'library'], ['/providers', 'providers'], ['/certificates', 'certificates'], ['/audit', 'audit'], ['/settings', 'settings'],
 ];
 
@@ -43,7 +46,7 @@ function useSecretTaps(onUnlock: () => void, taps = 5, windowMs = 3000) {
 const TABS: [string, string, string][] = [
   ['/', 'home', 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z'],
   ['/learn', 'learn', 'M12 4 2 9l10 5 8-4v6M6 11.2V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-4.8'],
-  ['/inspections/new', 'scan', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8'],
+  ['/check', 'scan', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8'],
   ['/inspections', 'inspections', 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01'],
   ['/knowledge', 'knowledge', 'M5 4h11l3 3v13H5zM9 9h6M9 13h6M9 17h4'],
 ];
@@ -104,6 +107,9 @@ export default function App() {
             <Route path="/studio/:modelId" element={<ModelStudio />} />
             <Route path="/admin" element={<AdminPanel />} />
             <Route path="/learn" element={<Learn />} />
+            <Route path="/check" element={<Check />} />
+            <Route path="/check/nfc" element={<NfcCheck />} />
+            <Route path="/verify/entrupy" element={<EntrupyGuide />} />
             <Route path="/learn/:modelId" element={<Lesson />} />
             <Route path="/knowledge" element={<Knowledge />} />
             <Route path="/coverage" element={<Coverage />} />
@@ -115,7 +121,7 @@ export default function App() {
           </Routes>
         </main>
         <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-end border-t border-hairline bg-surface/95 px-1 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-1.5 backdrop-blur md:hidden">
-          {TABS.map(([to, key, icon]) => to === '/inspections/new' ? (
+          {TABS.map(([to, key, icon]) => to === '/check' ? (
             <NavLink key={to} to={to} className="flex flex-col items-center gap-0.5 text-[10px] font-semibold text-charcoal">
               <span className="-mt-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-surface bg-charcoal text-gold shadow-lg"><TabIcon d={icon} /></span>{t(key)}
             </NavLink>

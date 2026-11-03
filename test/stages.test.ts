@@ -56,3 +56,15 @@ test('auto-capture gate needs consecutive good frames and resets on any bad fram
   assert.equal(createGate().push({ sharpness: 10, brightness: 120, motion: 0 }).hint, 'blurry');
   assert.equal(createGate().push({ sharpness: 100, brightness: 20, motion: 0 }).hint, 'too_dark');
 });
+
+test('evidence completeness counts photos and assessed parts, nothing else', async () => {
+  const { buildStages, evidenceCompleteness } = await import('../src/shared/stages.ts');
+  const tpl = [
+    { code: 'a', componentCode: 'stitching', required: true }, { code: 'b', componentCode: 'stitching', required: true },
+    { code: 'c', componentCode: 'zipper', required: true }, { code: 'd', componentCode: 'zipper', required: false },
+  ];
+  const rr = [{ ruleId: 'r', code: 'R', titleEn: '', titleKm: '', componentCode: 'stitching', polarity: 'authentic_indicator', severity: 'minor', required: false, state: 'supported', counted: true }] as any;
+  const e = evidenceCompleteness(buildStages(tpl, ['a', 'b'], rr));
+  assert.deepEqual(e, { photosRequired: 3, photosDone: 2, photosPercent: 67, partsTotal: 2, partsAssessed: 1, partsPercent: 50 });
+  assert.equal(evidenceCompleteness([]).photosPercent, 0);
+});

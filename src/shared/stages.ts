@@ -49,3 +49,22 @@ export function summarizeStages(stages: Stage[]): StageSummary {
     concerns: pick('concern'), pending: pick('pending'), insufficient: pick('insufficient'),
   };
 }
+
+export interface EvidenceCompleteness {
+  photosRequired: number; photosDone: number; photosPercent: number;
+  partsTotal: number; partsAssessed: number; partsPercent: number;
+}
+
+/**
+ * How much evidence has been collected — NOT a probability of authenticity.
+ * photos: required photos taken / required photos. parts: stages an approved rule could assess
+ * (status concern or consistent) / all stages. Both are plain counts the user can verify.
+ */
+export function evidenceCompleteness(stages: Stage[]): EvidenceCompleteness {
+  const photosRequired = stages.reduce((n, s) => n + s.templates.filter((t) => t.required).length, 0);
+  const photosDone = photosRequired - stages.reduce((n, s) => n + s.missingRequired.length, 0);
+  const partsTotal = stages.length;
+  const partsAssessed = stages.filter((s) => s.status === 'concern' || s.status === 'consistent').length;
+  const pct = (a: number, b: number) => (b === 0 ? 0 : Math.round((a / b) * 100));
+  return { photosRequired, photosDone, photosPercent: pct(photosDone, photosRequired), partsTotal, partsAssessed, partsPercent: pct(partsAssessed, partsTotal) };
+}
