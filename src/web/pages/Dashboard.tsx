@@ -10,7 +10,7 @@ export interface StudioModel {
 }
 export interface Studio { setSize: number; models: StudioModel[]; recentStudy: any[]; aiConfigured: boolean }
 
-interface Folders { folders: Folder[]; loose: number; brands: { id: string; name: string }[] }
+interface Folders { folders: Folder[]; loose: number; looseCover: string | null; looseLatest: string | null; brands: { id: string; name: string }[] }
 
 /**
  * Home = the latest posts, grouped into one folder per model. Lessons, the scan hub, inspections and
@@ -26,7 +26,7 @@ export default function Dashboard() {
     setD(null);
     api.get<Folders>(`/api/feed/folders${brand ? `?brandId=${brand}` : ''}`)
       .then((r) => on && setD(r))
-      .catch(() => on && setD({ folders: [], loose: 0, brands: [] }));
+      .catch(() => on && setD({ folders: [], loose: 0, looseCover: null, looseLatest: null, brands: [] }));
     return () => { on = false; };
   }, [brand]);
   const [brands, setBrands] = useState<Folders['brands']>([]);
@@ -45,16 +45,18 @@ export default function Dashboard() {
       )}
 
       <section>
-        <h1 className="text-[26px] leading-tight md:text-3xl">{t('feed.title')}</h1>
-        <p className="mb-3 text-xs text-muted">{t('folder.help')}</p>
+        <div className="mb-3 flex items-baseline justify-between gap-2">
+          <h1 className="text-2xl leading-tight md:text-3xl">{t('feed.title')}</h1>
+          {d && !empty && <span className="font-mono text-[10px] uppercase tracking-widest text-muted">{d.folders.length + (d.loose > 0 ? 1 : 0)} {t('folder.folders')}</span>}
+        </div>
         {!d ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="aspect-[4/5] animate-pulse rounded-2xl bg-surface-low" />)}</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-5 md:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="aspect-[4/5] animate-pulse rounded-xl bg-surface-low" />)}</div>
         ) : empty ? (
           <p className="rounded-2xl border border-dashed border-strong p-5 text-sm text-muted">{t('feed.none')}</p>
         ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-5 md:grid-cols-4">
             {d.folders.map((f) => <FolderCard key={f.id} f={f} />)}
-            {d.loose > 0 && <LooseFolderCard n={d.loose} brandId={brand || undefined} />}
+            {d.loose > 0 && <LooseFolderCard n={d.loose} cover={d.looseCover} latest={d.looseLatest} brandId={brand || undefined} />}
           </div>
         )}
       </section>

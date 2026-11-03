@@ -878,16 +878,18 @@ app.get('/api/feed/folders', async (c) => {
     `SELECT id, model_id FROM (SELECT a.id, a.model_id, ROW_NUMBER() OVER (PARTITION BY a.model_id ORDER BY a.created_at) AS n
        FROM reference_assets a WHERE a.status <> 'rejected' AND a.model_id IN (${ids.map(() => '?').join(',')})) WHERE n <= 4`,
   ).bind(...ids).all<Record<string, any>>()).results : [];
-  const loose = (await c.env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM reference_assets a WHERE a.status <> 'rejected' AND a.model_id IS NULL ${brandId ? 'AND a.brand_id = ?' : ''}`,
-  ).bind(...args).first<{ n: number }>())?.n ?? 0;
+  const looseRow = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n, MAX(a.created_at) AS latest, (SELECT x.id FROM reference_assets x WHERE x.status <> 'rejected' AND x.model_id IS NULL ${brandId ? 'AND x.brand_id = ?' : ''} ORDER BY x.created_at DESC LIMIT 1) AS cover
+     FROM reference_assets a WHERE a.status <> 'rejected' AND a.model_id IS NULL ${brandId ? 'AND a.brand_id = ?' : ''}`,
+  ).bind(...args, ...args).first<{ n: number; latest: string | null; cover: string | null }>();
+  const loose = looseRow?.n ?? 0;
   // brands that have any post, for the filter chips (independent of the chosen brand)
   const brands = (await c.env.DB.prepare(
     `SELECT DISTINCT b.id, b.name FROM reference_assets a JOIN brands b ON b.id = a.brand_id WHERE a.status <> 'rejected' ORDER BY b.name`,
   ).all<{ id: string; name: string }>()).results;
   return c.json({
     folders: folders.map((f) => ({ ...f, has_lesson: !!f.has_lesson, covers: covers.filter((x) => x.model_id === f.id).map((x) => x.id) })),
-    loose, brands,
+    loose, looseCover: looseRow?.cover ?? null, looseLatest: looseRow?.latest ?? null, brands,
   });
 });
 // ───────────────────────── hidden admin panel: multi-brand library (genuine / counterfeit by part) ─────────────────────────

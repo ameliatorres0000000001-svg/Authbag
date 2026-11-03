@@ -9,42 +9,41 @@ export interface Folder {
   genuine: number; counterfeit: number; has_lesson: boolean; covers: string[];
 }
 
-/** One folder per model: a 2×2 cover of its first photos, the photo count and when it was last updated. */
-export function FolderCard({ f }: { f: Folder }) {
+/**
+ * An album-style folder: one large cover photo with two "paper" layers behind it,
+ * the name over a soft gradient and the photo count as a badge.
+ */
+function Album({ to, cover, kicker, title, count, when }: { to: string; cover: string | null; kicker: string; title: string; count: number; when: string | null }) {
   const { t, locale } = useI18n();
-  const cells = [0, 1, 2, 3];
   return (
-    <Link to={`/posts/${f.id}`} className="group block overflow-hidden rounded-2xl border border-hairline bg-surface-card transition hover:border-strong">
-      <div className="grid aspect-square grid-cols-2 gap-0.5 bg-charcoal">
-        {cells.map((i) => f.covers[i]
-          ? <img key={i} src={assetImg(f.covers[i])} alt="" loading="lazy" className={`h-full w-full object-cover ${f.covers.length === 1 ? 'col-span-2 row-span-2' : ''}`} />
-          : f.covers.length > 1 ? <div key={i} className="bg-surface-low/10" /> : null)}
-      </div>
-      <div className="space-y-0.5 px-3 py-2.5">
-        <div className="font-mono text-[10px] uppercase tracking-widest text-gold">{f.brand}</div>
-        <div className="truncate font-serif text-lg leading-tight">{f.model}</div>
-        <div className="flex items-center gap-1.5 text-xs text-muted">
-          <span aria-hidden>▤</span>
-          <span>{f.photos} {t('folder.photos')}</span>
-          <span>·</span>
-          <span className="truncate">{timeAgo(f.latest, locale, t('feed.justNow'))}</span>
+    <Link to={to} className="group block pt-2">
+      <div className="relative">
+        {/* stacked sheets behind the cover */}
+        <div className="absolute inset-x-3 -top-2 h-6 rounded-xl bg-charcoal/15" aria-hidden />
+        <div className="absolute inset-x-1.5 -top-1 h-6 rounded-xl bg-charcoal/30" aria-hidden />
+        <div className="relative aspect-[4/5] overflow-hidden rounded-xl bg-charcoal shadow-sm ring-1 ring-black/5">
+          {cover
+            ? <img src={assetImg(cover)} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" />
+            : <div className="flex h-full items-center justify-center text-4xl text-gold" aria-hidden>▤</div>}
+          <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 font-mono text-[11px] text-white backdrop-blur">▤ {count}</span>
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3 pb-2.5 pt-10">
+            {/* letter-spacing breaks Khmer clusters, so only Latin kickers are tracked */}
+            <div className={`text-gold ${/[ក-៿]/.test(kicker) ? 'text-[11px]' : 'font-mono text-[9px] uppercase tracking-[0.18em]'}`}>{kicker}</div>
+            <div className="line-clamp-2 font-serif text-[17px] leading-tight text-white">{title}</div>
+          </div>
         </div>
       </div>
+      {when && <div className="mt-1.5 px-0.5 text-[11px] text-muted">{count} {t('folder.photos')} · {timeAgo(when, locale, t('feed.justNow'))}</div>}
     </Link>
   );
 }
 
-/** The "other photos" folder: posts that are not tied to one model (e.g. comparison pairs). */
-export function LooseFolderCard({ n, brandId }: { n: number; brandId?: string }) {
+export function FolderCard({ f }: { f: Folder }) {
+  return <Album to={`/posts/${f.id}`} cover={f.covers[0] ?? null} kicker={f.brand} title={f.model} count={f.photos} when={f.latest} />;
+}
+
+/** The "other photos" folder: posts not tied to one model (e.g. comparison pairs). */
+export function LooseFolderCard({ n, cover, latest, brandId }: { n: number; cover: string | null; latest: string | null; brandId?: string }) {
   const { t } = useI18n();
-  return (
-    <Link to={`/posts/other${brandId ? `?brandId=${brandId}` : ''}`} className="block overflow-hidden rounded-2xl border border-dashed border-strong bg-surface-card transition hover:border-charcoal">
-      <div className="flex aspect-square items-center justify-center bg-surface-low text-5xl text-gold" aria-hidden>▤</div>
-      <div className="space-y-0.5 px-3 py-2.5">
-        <div className="font-mono text-[10px] uppercase tracking-widest text-muted">{t('folder.mixed')}</div>
-        <div className="truncate font-serif text-lg leading-tight">{t('folder.other')}</div>
-        <div className="text-xs text-muted">{n} {t('folder.photos')}</div>
-      </div>
-    </Link>
-  );
+  return <Album to={`/posts/other${brandId ? `?brandId=${brandId}` : ''}`} cover={cover} kicker={t('folder.compareKicker')} title={t('folder.other')} count={n} when={latest} />;
 }

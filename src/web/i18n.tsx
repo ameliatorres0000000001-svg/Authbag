@@ -294,6 +294,8 @@ const D: Record<string, { km: string; en: string }> = {
   // feed (uploaded photos as posts)
   'folder.photos': { km: 'រូប', en: 'photos' },
   'folder.help': { km: 'រូបដែល admin upload ដាក់ជា folder តាមម៉ូដែល។ ចុចលើ folder ដើម្បីមើលរូប ប្រអប់លេខ និងការពន្យល់។', en: 'Uploaded photos, one folder per model. Open a folder to see the photos, numbered boxes and explanations.' },
+  'folder.folders': { km: 'folder', en: 'folders' },
+  'folder.compareKicker': { km: 'ប្រៀបធៀប', en: 'Comparisons' },
   'folder.other': { km: 'រូបផ្សេងៗ', en: 'Other photos' },
   'folder.mixed': { km: 'ប្រៀបធៀប និងរូបមិនមានម៉ូដែល', en: 'Comparisons & photos without a model' },
   'feed.title': { km: 'ការបង្ហោះថ្មីៗ', en: 'Latest posts' },
