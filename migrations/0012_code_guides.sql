@@ -1,0 +1,160 @@
+-- Date-code / serial-number guides for many brands (teaching only; never read by the rules engine).
+-- Sources are resale & authentication guides (tier 4): Fashionphile, intoarchive, Libas Collective, LegitApp,
+-- Yoogi's Closet, Rebag, Labellov, LDJ, Lollipuff, MCM/Gucci/Fendi/Bottega guides. Brands do not publish these tables.
+-- Everything is DRAFT until a lead authenticator approves it. A code that reads correctly never proves authenticity.
+
+INSERT OR IGNORE INTO brands (id, slug, name, knowledge_status, notes) VALUES
+ ('b_mcm','mcm','MCM','LIMITED_DATA','Added for the date-code guide.'),
+ ('b_ysl','saint-laurent','Saint Laurent','LIMITED_DATA','Added for the date-code guide.'),
+ ('b_fendi','fendi','Fendi','LIMITED_DATA','Added for the date-code guide.'),
+ ('b_bottega','bottega-veneta','Bottega Veneta','LIMITED_DATA','Added for the date-code guide.');
+
+-- One "how to read" card per brand. gives_year: exact | month_year | week_year | window | none
+CREATE TABLE code_guides (
+  id            TEXT PRIMARY KEY,
+  brand_id      TEXT NOT NULL REFERENCES brands(id),
+  sort          INTEGER NOT NULL DEFAULT 0,
+  title_en      TEXT NOT NULL,
+  title_km      TEXT NOT NULL,
+  example       TEXT,
+  gives_year    TEXT NOT NULL CHECK (gives_year IN ('exact','month_year','week_year','window','none')),
+  where_en      TEXT,
+  where_km      TEXT,
+  body_en       TEXT NOT NULL,
+  body_km       TEXT NOT NULL,
+  sources_json  TEXT NOT NULL DEFAULT '[]',
+  status        TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved','retired')),
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX idx_code_guides_brand ON code_guides(brand_id, sort);
+
+-- Lookup rows for codes that map to a year WINDOW rather than week/month + year (Chanel serial series, Hermès letters).
+-- pattern is a JS regex tested against the normalized code (upper case, no spaces/dashes/dots).
+CREATE TABLE code_lookups (
+  id         TEXT PRIMARY KEY,
+  brand_id   TEXT NOT NULL REFERENCES brands(id),
+  guide_id   TEXT REFERENCES code_guides(id) ON DELETE SET NULL,
+  pattern    TEXT NOT NULL,
+  year_from  INTEGER,
+  year_to    INTEGER,
+  label_en   TEXT NOT NULL,
+  label_km   TEXT NOT NULL,
+  notes      TEXT,
+  sort       INTEGER NOT NULL DEFAULT 0,
+  status     TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved','retired')),
+  CHECK (year_from IS NULL OR year_to IS NULL OR year_from <= year_to)
+);
+CREATE INDEX idx_code_lookups_brand ON code_lookups(brand_id, sort);
+
+INSERT INTO code_guides (id, brand_id, sort, title_en, title_km, example, gives_year, where_en, where_km, body_en, body_km, sources_json, status) VALUES
+ ('cg_lv','b_lv',1,'Louis Vuitton date code','Date code Louis Vuitton','CA4109','month_year','Small leather tab or heat-stamped inside a pocket / lining seam. From March 2021 most items have an NFC chip instead.','ផ្ទាំងស្បែកតូច ឬត្រាក្នុងហោប៉ៅ / ថ្នេរក្រណាត់ខាងក្នុង។ ចាប់ពីខែមីនា 2021 ភាគច្រើនប្រើ chip NFC ជំនួស។','Two factory letters + four digits. Read the digits alternately: 1st & 3rd = month (1990–2006) or week (2007+), 2nd & 4th = year. Example CA4109: CA = Spain/Italy factory, week 40, 2019. The factory country must match the "made in" stamp.','អក្សររោងចក្រ 2 + លេខ 4។ អានលេខឆ្លាស់គ្នា៖ លេខទី 1 និង 3 = ខែ (1990–2006) ឬសប្ដាហ៍ (2007+), លេខទី 2 និង 4 = ឆ្នាំ។ ឧទាហរណ៍ CA4109៖ CA = រោងចក្រ, សប្ដាហ៍ 40, 2019។ ប្រទេសរោងចក្រត្រូវតែដូច "made in" លើត្រា។','["https://legitapp.com/blog/louis-vuitton-date-code-find-out-when-your-lv-bag-was-made", "https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_chanel','b_chanel',2,'Chanel serial number','លេខសៀរៀល Chanel','25123456','window','Sticker inside the bag (often on the lining, with a matching authenticity card). From 2021: microchip, later a metal plate — no year.','ស្ទីគ័រខាងក្នុងកាបូប (ជាធម្មតាលើក្រណាត់ ហើយមានកាតដែលលេខដូចគ្នា)។ ចាប់ពី 2021៖ microchip ហើយក្រោយមកជាបន្ទះដែក — មិនប្រាប់ឆ្នាំ។','Not a date code: the serial gives a production WINDOW. 7 digits (1986–2005): the first digit selects the window. 8 digits (2005–2021): the first two digits select it. Check the sticker too: 8-digit stickers (about 2005–2017) show two CC logos and a slashed zero. A missing or mismatched sticker/card is a reason to look further, not a verdict.','មិនមែន date code ទេ៖ លេខសៀរៀលប្រាប់ "ចន្លោះឆ្នាំ"។ លេខ 7 ខ្ទង់ (1986–2005)៖ លេខទី 1 ប្រាប់ចន្លោះ។ លេខ 8 ខ្ទង់ (2005–2021)៖ លេខ 2 ខ្ទង់ដំបូងប្រាប់ចន្លោះ។ មើលស្ទីគ័រផង៖ ស្ទីគ័រ 8 ខ្ទង់ (ប្រហែល 2005–2017) មានឡូហ្គោ CC ពីរ និងលេខ 0 មានឆូត។ ស្ទីគ័របាត់ ឬកាតមិនត្រូវគ្នា គឺជាហេតុត្រូវពិនិត្យបន្ថែម មិនមែនការសម្រេចទេ។','["https://www.intoarchive.com/editorials/chanel-serial-numbers-how-to-read-7-and-8-digit-codes", "https://blog.fashionphile.com/chanel-serial-codes-decoded", "https://lollipuff.com/chanel-serial-number-meaning-and-sticker-guide", "https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_hermes','b_hermes',3,'Hermès blind stamp (year letter)','ត្រាអក្សរឆ្នាំ Hermès (blind stamp)','□ R','window','Blind-stamped (no colour) near the strap or inside, next to the craftsmans number.','ត្រាចុចគ្មានពណ៌ (blind stamp) នៅជិតខ្សែ ឬខាងក្នុង ជាប់នឹងលេខជាងដេរ។','One letter, sometimes inside a frame. The frame tells the cycle: no frame 1945–1970, circle ○ 1971–1996, square □ 1997–2014. From 2015 the letter has no frame again and letters are not in order, so check a current table. Type the letter to see all possible years, then pick by the frame you see.','អក្សរមួយ ពេលខ្លះនៅក្នុងស៊ុម។ ស៊ុមប្រាប់វដ្ត៖ គ្មានស៊ុម 1945–1970, រង្វង់ ○ 1971–1996, ការ៉េ □ 1997–2014។ ចាប់ពី 2015 អក្សរគ្មានស៊ុមម្ដងទៀត ហើយមិនតាមលំដាប់ ដូច្នេះត្រូវមើលតារាងថ្មី។ វាយអក្សរ ដើម្បីឃើញឆ្នាំដែលអាចទៅរួច ហើយជ្រើសតាមស៊ុមដែលឃើញ។','["https://www.labellov.com/magazine/hermes-date-code-guide", "https://www.rebag.com/thevault/?p=978", "https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_dior','b_dior',4,'Dior date code','Date code Dior','02-MA-0253','month_year','Small leather tab or stamp inside an interior pocket.','ផ្ទាំងស្បែកតូច ឬត្រាក្នុងហោប៉ៅខាងក្នុង។','Modern: 2 digits – 2 letters – 4 digits; vintage (late 1990s): 2 letters – 4 digits. Ignore the first two digits (control number). The letters are the factory (MA = Italy, MC = Spain). The last four digits read like Louis Vuitton: 1st & 3rd = month, 2nd & 4th = year. Example 02-MA-0253: Italy, month 05, 2023. Guides disagree on the first two digits, so treat the reading as provisional.','ទម្រង់ថ្មី៖ លេខ 2 – អក្សរ 2 – លេខ 4; ទម្រង់ចាស់ (ចុងឆ្នាំ 1990)៖ អក្សរ 2 – លេខ 4។ មិនបាច់អានលេខ 2 ដំបូង (លេខត្រួតពិនិត្យ)។ អក្សរ = រោងចក្រ (MA = អ៊ីតាលី, MC = អេស្ប៉ាញ)។ លេខ 4 ចុងក្រោយអានដូច LV៖ លេខទី 1 និង 3 = ខែ, ទី 2 និង 4 = ឆ្នាំ។ ឧទាហរណ៍ 02-MA-0253៖ អ៊ីតាលី ខែ 05 ឆ្នាំ 2023។ ប្រភពខ្លះមិនយល់ស្របលើលេខ 2 ដំបូង ដូច្នេះចាត់ទុកជាការអានបណ្ដោះអាសន្ន។','["https://legitapp.com/blog/confused-by-your-dior-bags-date-code", "https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_celine','b_celine',5,'Celine date code','Date code Celine','S-CU-3196','week_year','Embossed on the inner lining or on a leather tag in an interior pocket.','ចុចលើក្រណាត់ខាងក្នុង ឬលើផ្ទាំងស្បែកក្នុងហោប៉ៅខាងក្នុង។','X-XX-#### (one letter, two letters, four digits). The letters are a factory prefix (not published). Digits are read alternately: before mid-2014 1st & 3rd = MONTH, after mid-2014 1st & 3rd = WEEK; 2nd & 4th = year. Example S-CU-3196 = week 39, 2016. Many bags share the same code — it is not a unique serial.','X-XX-#### (អក្សរ 1, អក្សរ 2, លេខ 4)។ អក្សរ = រោងចក្រ (មិនបានផ្សព្វផ្សាយ)។ អានលេខឆ្លាស់៖ មុនពាក់កណ្ដាលឆ្នាំ 2014 លេខទី 1 និង 3 = ខែ, ក្រោយពាក់កណ្ដាល 2014 = សប្ដាហ៍; លេខទី 2 និង 4 = ឆ្នាំ។ ឧទាហរណ៍ S-CU-3196 = សប្ដាហ៍ 39 ឆ្នាំ 2016។ កាបូបច្រើនអាចមានកូដដូចគ្នា — មិនមែនលេខសៀរៀលតែមួយទេ។','["https://legitapp.com/blog/how-to-tell-the-production-year-of-your-celine-bag", "https://blog.yoogiscloset.com/how-to-read-celine-date-code/", "https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_ysl',(SELECT id FROM brands WHERE slug='saint-laurent'),6,'Saint Laurent serial','លេខសៀរៀល Saint Laurent','BMB 377829.1016','month_year','Heat-stamped on the back of the interior leather tag.','ត្រាលើខ្នងផ្ទាំងស្បែកខាងក្នុង។','Three letters, a six-digit style number, a dot, then four digits read directly as month and year (MMYY). Example …377829.1016 = October 2016. Search the style number: it should match the model you hold.','អក្សរ 3, លេខម៉ូដែល 6 ខ្ទង់, ចំណុច, រួចលេខ 4 អានត្រង់ៗជា ខែ និងឆ្នាំ (MMYY)។ ឧទាហរណ៍ …377829.1016 = ខែតុលា 2016។ ស្វែងរកលេខម៉ូដែល៖ វាគួរតែដូចម៉ូដែលដែលអ្នកកាន់។','["https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_gucci','b_gucci',7,'Gucci serial (style + supplier)','លេខសៀរៀល Gucci (ម៉ូដែល + អ្នកផ្គត់ផ្គង់)','449413 498879','none','Back of the leather "made in Italy" tab inside the bag, two rows. Small leather goods: one row with a dot. Many bags since about 2016 also have a woven QR tag.','ខ្នងផ្ទាំងស្បែក "made in Italy" ខាងក្នុងកាបូប ជា 2 ជួរ។ កាបូបតូចៗ៖ មួយជួរមានចំណុច។ កាបូបជាច្រើនតាំងពីប្រហែល 2016 មានស្លាក QR ត្បាញ។','Not a date code. Top row = style number (about 6 digits), bottom row = supplier / batch code (4–6 digits). Search the top row: it should match the model you hold — a mismatch means the tag may be copied from another bag. Numbers should have small serifs (typewriter-like). The same numbers can appear on many genuine bags.','មិនមែន date code ទេ។ ជួរលើ = លេខម៉ូដែល (ប្រហែល 6 ខ្ទង់), ជួរក្រោម = លេខអ្នកផ្គត់ផ្គង់ / batch (4–6 ខ្ទង់)។ ស្វែងរកជួរលើ៖ វាគួរតែដូចម៉ូដែលដែលអ្នកកាន់ — បើមិនដូច មានន័យថាស្លាកអាចចម្លងពីកាបូបផ្សេង។ លេខគួរមានជើងតូចៗ (serif ដូចម៉ាស៊ីនអង្គុលីលេខ)។ លេខដូចគ្នាអាចមាននៅលើកាបូបពិតច្រើន។','["https://blog.ldj.com/a-guide-to-gucci-serial-numbers/", "https://www.libascollective.com/thecrypt/how-to-authenticate-a-gucci-bag/", "https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_mcm',(SELECT id FROM brands WHERE slug='mcm'),8,'MCM plate number & interior tag','លេខលើបន្ទះ MCM និងស្លាកខាងក្នុង','M1234','none','Engraved on the brass logo plate on the outside; a fabric/leather tag inside (seam) with the article number; "Made in Korea / Italy / Germany".','ឆ្លាក់លើបន្ទះឡូហ្គោលង្ហិនខាងក្រៅ; ស្លាកក្រណាត់/ស្បែកខាងក្នុង (ក្នុងថ្នេរ) មានលេខ article; "Made in Korea / Italy / Germany"។','MCM publishes no date reading. Modern plates: usually one letter + four digits; vintage: four digits only. The plate number should match the interior tag and the card. Bags made since 2005 should have the interior tag. Use the number for consistency, not to date the bag.','MCM មិនផ្សព្វផ្សាយវិធីអានឆ្នាំទេ។ បន្ទះថ្មី៖ ជាធម្មតាអក្សរ 1 + លេខ 4; ចាស់៖ លេខ 4 តែប៉ុណ្ណោះ។ លេខលើបន្ទះគួរតែដូចស្លាកខាងក្នុង និងកាត។ កាបូបផលិតតាំងពី 2005 គួរមានស្លាកខាងក្នុង។ ប្រើលេខនេះដើម្បីពិនិត្យភាពស៊ីគ្នា មិនមែនដើម្បីដឹងឆ្នាំទេ។','["https://legitgrails.com/blogs/mcm/how-to-spot-real-vs-fake-mcm-bag", "https://www.lovetoknow.com/life/style/how-tell-fake-mcm-bag-from-real-one", "https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_prada','b_prada',9,'Prada authenticity card & codes','កាត និងកូដ Prada','1BA863 · NZV · F0002','none','Authenticity card (certificate) and a small white fabric tag with numbers inside an interior pocket.','កាតភាពពិត (certificate) និងស្លាកក្រណាត់សតូចមានលេខ នៅក្នុងហោប៉ៅខាងក្នុង។','No date code. The codes are style, material and colour/lot; any date was on the card, not in the number. Check that the style code on the card matches the bag model and colour.','គ្មាន date code ទេ។ កូដគឺ ម៉ូដែល សម្ភារៈ និងពណ៌/lot; កាលបរិច្ឆេទ (បើមាន) នៅលើកាត មិនមែនក្នុងលេខទេ។ ពិនិត្យថាលេខម៉ូដែលលើកាត ដូចម៉ូដែល និងពណ៌កាបូប។','["https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_fendi',(SELECT id FROM brands WHERE slug='fendi'),10,'Fendi serial number','លេខសៀរៀល Fendi','8BN290-K3S-168-1234','none','Fabric tag inside, often with a holographic sticker (since 2004); must match the authenticity card.','ស្លាកក្រណាត់ខាងក្នុង ជាញឹកញាប់មានស្ទីគ័រ hologram (តាំងពី 2004); ត្រូវតែដូចកាត។','Alphanumeric with dashes, about 15–17 characters. No published year reading: the type of marking only places the era. The number must be identical on the tag and the card.','អក្សរ និងលេខ មានសញ្ញាដាច់ ប្រហែល 15–17 តួ។ មិនមានវិធីអានឆ្នាំទេ៖ ប្រភេទស្លាកប្រាប់តែសម័យ។ លេខត្រូវតែដូចគ្នាលើស្លាក និងកាត។','["https://leprix.com/en/blog/a-brief-guide-to-fendi-authentication-and-serial-numbers-60", "https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_bottega',(SELECT id FROM brands WHERE slug='bottega-veneta'),11,'Bottega Veneta tag','ស្លាក Bottega Veneta','B0123456789K','none','Interior leather/fabric tag ("ORIGINALITY CERTIFIED"), serial on the second line.','ស្លាកស្បែក/ក្រណាត់ខាងក្នុង ("ORIGINALITY CERTIFIED") លេខសៀរៀលនៅជួរទីពីរ។','Identifies the piece; no reliable date reading. Older bags show the style code on the first line; vintage pieces predate the system.','សម្គាល់កាបូប; មិនមានវិធីអានឆ្នាំដែលទុកចិត្តបានទេ។ កាបូបចាស់ៗមានលេខម៉ូដែលនៅជួរទីមួយ; កាបូបបុរាណមិនមានប្រព័ន្ធនេះទេ។','["https://luxbags.fr/blogs/authentication/reading-bottega-veneta-serial-number", "https://www.libascollective.com/tools/serial-number-checker"]','draft'),
+ ('cg_goyard','b_goyard',12,'Goyard code','កូដ Goyard','AMA 020152','month_year','Heat-stamped inside, on a leather tab or the lining.','ត្រាខាងក្នុង លើផ្ទាំងស្បែក ឬក្រណាត់។','Three letters then six digits, read inside out: the outer pair (1st and 6th digits) = month, the middle four = year. This is observed practice — Goyard publishes nothing — so treat it as a hint only. Example AMA 020152 → month 02, 2015.','អក្សរ 3 រួចលេខ 6 អានពីក្នុងចេញក្រៅ៖ គូខាងក្រៅ (លេខទី 1 និងទី 6) = ខែ, លេខ 4 កណ្ដាល = ឆ្នាំ។ នេះជាការសង្កេតពីអ្នកលក់ — Goyard មិនផ្សព្វផ្សាយទេ — ដូច្នេះប្រើជាតម្រុយតែប៉ុណ្ណោះ។ ឧទាហរណ៍ AMA 020152 → ខែ 02 ឆ្នាំ 2015។','["https://www.libascollective.com/tools/serial-number-checker"]','draft');
+
+INSERT INTO code_lookups (id, brand_id, guide_id, pattern, year_from, year_to, label_en, label_km, notes, sort, status) VALUES
+ ('cl_ch7_0','b_chanel','cg_chanel','^0\d{6}$',1986,1988,'7-digit serial starting 0','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 0','intoarchive / Fashionphile',0,'draft'),
+ ('cl_ch7_1','b_chanel','cg_chanel','^1\d{6}$',1989,1991,'7-digit serial starting 1','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 1','intoarchive / Fashionphile',1,'draft'),
+ ('cl_ch7_2','b_chanel','cg_chanel','^2\d{6}$',1991,1994,'7-digit serial starting 2','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 2','intoarchive / Fashionphile',2,'draft'),
+ ('cl_ch7_3','b_chanel','cg_chanel','^3\d{6}$',1994,1996,'7-digit serial starting 3','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 3','intoarchive / Fashionphile',3,'draft'),
+ ('cl_ch7_4','b_chanel','cg_chanel','^4\d{6}$',1996,1997,'7-digit serial starting 4','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 4','intoarchive / Fashionphile',4,'draft'),
+ ('cl_ch7_5','b_chanel','cg_chanel','^5\d{6}$',1997,1999,'7-digit serial starting 5','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 5','intoarchive / Fashionphile',5,'draft'),
+ ('cl_ch7_6','b_chanel','cg_chanel','^6\d{6}$',2000,2002,'7-digit serial starting 6','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 6','intoarchive / Fashionphile',6,'draft'),
+ ('cl_ch7_7','b_chanel','cg_chanel','^7\d{6}$',2000,2003,'7-digit serial starting 7','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 7','intoarchive / Fashionphile',7,'draft'),
+ ('cl_ch7_8','b_chanel','cg_chanel','^8\d{6}$',2003,2004,'7-digit serial starting 8','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 8','intoarchive / Fashionphile',8,'draft'),
+ ('cl_ch7_9','b_chanel','cg_chanel','^9\d{6}$',2004,2005,'7-digit serial starting 9','លេខ 7 ខ្ទង់ ចាប់ផ្ដើម 9','intoarchive / Fashionphile',9,'draft'),
+ ('cl_ch8_10_11','b_chanel','cg_chanel','^1[01]\d{6}$',2005,2008,'8-digit serial starting 10-11','លេខ 8 ខ្ទង់ ចាប់ផ្ដើម 10-11','intoarchive / Fashionphile',20,'draft'),
+ ('cl_ch8_12_14','b_chanel','cg_chanel','^1[2-4]\d{6}$',2008,2011,'8-digit serial starting 12-14','លេខ 8 ខ្ទង់ ចាប់ផ្ដើម 12-14','intoarchive / Fashionphile',21,'draft'),
+ ('cl_ch8_15_19','b_chanel','cg_chanel','^1[5-9]\d{6}$',2011,2014,'8-digit serial starting 15-19','លេខ 8 ខ្ទង់ ចាប់ផ្ដើម 15-19','intoarchive / Fashionphile',22,'draft'),
+ ('cl_ch8_20_24','b_chanel','cg_chanel','^2[0-4]\d{6}$',2014,2018,'8-digit serial starting 20-24','លេខ 8 ខ្ទង់ ចាប់ផ្ដើម 20-24','intoarchive / Fashionphile',23,'draft'),
+ ('cl_ch8_25_29','b_chanel','cg_chanel','^2[5-9]\d{6}$',2018,2020,'8-digit serial starting 25-29','លេខ 8 ខ្ទង់ ចាប់ផ្ដើម 25-29','intoarchive / Fashionphile',24,'draft'),
+ ('cl_ch8_30_31','b_chanel','cg_chanel','^3[01]\d{6}$',2020,2021,'8-digit serial starting 30-31','លេខ 8 ខ្ទង់ ចាប់ផ្ដើម 30-31','intoarchive / Fashionphile',25,'draft'),
+ ('cl_h_plain_A','b_hermes','cg_hermes','^A$',1945,1945,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',100,'draft'),
+ ('cl_h_circle_A','b_hermes','cg_hermes','^A$',1971,1971,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',200,'draft'),
+ ('cl_h_square_A','b_hermes','cg_hermes','^A$',1997,1997,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',300,'draft'),
+ ('cl_h_plain_B','b_hermes','cg_hermes','^B$',1946,1946,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',101,'draft'),
+ ('cl_h_circle_B','b_hermes','cg_hermes','^B$',1972,1972,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',201,'draft'),
+ ('cl_h_square_B','b_hermes','cg_hermes','^B$',1998,1998,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',301,'draft'),
+ ('cl_h_plain_C','b_hermes','cg_hermes','^C$',1947,1947,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',102,'draft'),
+ ('cl_h_circle_C','b_hermes','cg_hermes','^C$',1973,1973,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',202,'draft'),
+ ('cl_h_square_C','b_hermes','cg_hermes','^C$',1999,1999,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',302,'draft'),
+ ('cl_h_plain_D','b_hermes','cg_hermes','^D$',1948,1948,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',103,'draft'),
+ ('cl_h_circle_D','b_hermes','cg_hermes','^D$',1974,1974,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',203,'draft'),
+ ('cl_h_square_D','b_hermes','cg_hermes','^D$',2000,2000,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',303,'draft'),
+ ('cl_h_plain_E','b_hermes','cg_hermes','^E$',1949,1949,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',104,'draft'),
+ ('cl_h_circle_E','b_hermes','cg_hermes','^E$',1975,1975,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',204,'draft'),
+ ('cl_h_square_E','b_hermes','cg_hermes','^E$',2001,2001,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',304,'draft'),
+ ('cl_h_plain_F','b_hermes','cg_hermes','^F$',1950,1950,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',105,'draft'),
+ ('cl_h_circle_F','b_hermes','cg_hermes','^F$',1976,1976,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',205,'draft'),
+ ('cl_h_square_F','b_hermes','cg_hermes','^F$',2002,2002,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',305,'draft'),
+ ('cl_h_plain_G','b_hermes','cg_hermes','^G$',1951,1951,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',106,'draft'),
+ ('cl_h_circle_G','b_hermes','cg_hermes','^G$',1977,1977,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',206,'draft'),
+ ('cl_h_square_G','b_hermes','cg_hermes','^G$',2003,2003,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',306,'draft'),
+ ('cl_h_plain_H','b_hermes','cg_hermes','^H$',1952,1952,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',107,'draft'),
+ ('cl_h_circle_H','b_hermes','cg_hermes','^H$',1978,1978,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',207,'draft'),
+ ('cl_h_square_H','b_hermes','cg_hermes','^H$',2004,2004,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',307,'draft'),
+ ('cl_h_plain_I','b_hermes','cg_hermes','^I$',1953,1953,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',108,'draft'),
+ ('cl_h_circle_I','b_hermes','cg_hermes','^I$',1979,1979,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',208,'draft'),
+ ('cl_h_square_I','b_hermes','cg_hermes','^I$',2005,2005,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',308,'draft'),
+ ('cl_h_plain_J','b_hermes','cg_hermes','^J$',1954,1954,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',109,'draft'),
+ ('cl_h_circle_J','b_hermes','cg_hermes','^J$',1980,1980,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',209,'draft'),
+ ('cl_h_square_J','b_hermes','cg_hermes','^J$',2006,2006,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',309,'draft'),
+ ('cl_h_plain_K','b_hermes','cg_hermes','^K$',1955,1955,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',110,'draft'),
+ ('cl_h_circle_K','b_hermes','cg_hermes','^K$',1981,1981,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',210,'draft'),
+ ('cl_h_square_K','b_hermes','cg_hermes','^K$',2007,2007,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',310,'draft'),
+ ('cl_h_plain_L','b_hermes','cg_hermes','^L$',1956,1956,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',111,'draft'),
+ ('cl_h_circle_L','b_hermes','cg_hermes','^L$',1982,1982,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',211,'draft'),
+ ('cl_h_square_L','b_hermes','cg_hermes','^L$',2008,2008,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',311,'draft'),
+ ('cl_h_plain_M','b_hermes','cg_hermes','^M$',1957,1957,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',112,'draft'),
+ ('cl_h_circle_M','b_hermes','cg_hermes','^M$',1983,1983,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',212,'draft'),
+ ('cl_h_square_M','b_hermes','cg_hermes','^M$',2009,2009,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',312,'draft'),
+ ('cl_h_plain_N','b_hermes','cg_hermes','^N$',1958,1958,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',113,'draft'),
+ ('cl_h_circle_N','b_hermes','cg_hermes','^N$',1984,1984,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',213,'draft'),
+ ('cl_h_square_N','b_hermes','cg_hermes','^N$',2010,2010,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',313,'draft'),
+ ('cl_h_plain_O','b_hermes','cg_hermes','^O$',1959,1959,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',114,'draft'),
+ ('cl_h_circle_O','b_hermes','cg_hermes','^O$',1985,1985,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',214,'draft'),
+ ('cl_h_square_O','b_hermes','cg_hermes','^O$',2011,2011,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',314,'draft'),
+ ('cl_h_plain_P','b_hermes','cg_hermes','^P$',1960,1960,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',115,'draft'),
+ ('cl_h_circle_P','b_hermes','cg_hermes','^P$',1986,1986,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',215,'draft'),
+ ('cl_h_square_P','b_hermes','cg_hermes','^P$',2012,2012,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',315,'draft'),
+ ('cl_h_plain_Q','b_hermes','cg_hermes','^Q$',1961,1961,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',116,'draft'),
+ ('cl_h_circle_Q','b_hermes','cg_hermes','^Q$',1987,1987,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',216,'draft'),
+ ('cl_h_square_Q','b_hermes','cg_hermes','^Q$',2013,2013,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',316,'draft'),
+ ('cl_h_plain_R','b_hermes','cg_hermes','^R$',1962,1962,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',117,'draft'),
+ ('cl_h_circle_R','b_hermes','cg_hermes','^R$',1988,1988,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',217,'draft'),
+ ('cl_h_square_R','b_hermes','cg_hermes','^R$',2014,2014,'Square □ (1997–2014)','ការ៉េ □ (1997–2014)','Hermès cycles: Rebag / Labellov. 2014 bags may also show a bare letter.',317,'draft'),
+ ('cl_h_plain_S','b_hermes','cg_hermes','^S$',1963,1963,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',118,'draft'),
+ ('cl_h_circle_S','b_hermes','cg_hermes','^S$',1989,1989,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',218,'draft'),
+ ('cl_h_plain_T','b_hermes','cg_hermes','^T$',1964,1964,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',119,'draft'),
+ ('cl_h_circle_T','b_hermes','cg_hermes','^T$',1990,1990,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',219,'draft'),
+ ('cl_h_plain_U','b_hermes','cg_hermes','^U$',1965,1965,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',120,'draft'),
+ ('cl_h_circle_U','b_hermes','cg_hermes','^U$',1991,1991,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',220,'draft'),
+ ('cl_h_plain_V','b_hermes','cg_hermes','^V$',1966,1966,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',121,'draft'),
+ ('cl_h_circle_V','b_hermes','cg_hermes','^V$',1992,1992,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',221,'draft'),
+ ('cl_h_plain_W','b_hermes','cg_hermes','^W$',1967,1967,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',122,'draft'),
+ ('cl_h_circle_W','b_hermes','cg_hermes','^W$',1993,1993,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',222,'draft'),
+ ('cl_h_plain_X','b_hermes','cg_hermes','^X$',1968,1968,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',123,'draft'),
+ ('cl_h_circle_X','b_hermes','cg_hermes','^X$',1994,1994,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',223,'draft'),
+ ('cl_h_plain_Y','b_hermes','cg_hermes','^Y$',1969,1969,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',124,'draft'),
+ ('cl_h_circle_Y','b_hermes','cg_hermes','^Y$',1995,1995,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',224,'draft'),
+ ('cl_h_plain_Z','b_hermes','cg_hermes','^Z$',1970,1970,'No frame (1945–1970 cycle)','គ្មានស៊ុម (វដ្ត 1945–1970)','Hermès cycles: Rebag / Labellov',125,'draft'),
+ ('cl_h_circle_Z','b_hermes','cg_hermes','^Z$',1996,1996,'Circle ○ (1971–1996)','រង្វង់ ○ (1971–1996)','Hermès cycles: Rebag / Labellov',225,'draft');
+
+INSERT OR IGNORE INTO datecode_formats (id, brand_id, name, start_year, end_year, pattern, extraction_json, notes, status) VALUES
+ ('dc_dior_2d2l4d','b_dior','Dior: (2 control digits) + 2 factory letters + 4 digits',1997,NULL,'^(?:\d{2})?([A-Z]{2})(\d)(\d)(\d)(\d)$','{"factoryGroup": 1, "periodGroups": [2, 4], "yearGroups": [3, 5], "periodUnit": "month", "yearPivot": 90}','LegitApp / Libas: digits read like LV (1st&3rd month, 2nd&4th year). Guides disagree on the 2 leading digits.','draft'),
+ ('dc_celine_month','b_celine','Celine: 3 letters + 4 digits, month (before mid-2014)',1995,2014,'^([A-Z]{3})(\d)(\d)(\d)(\d)$','{"factoryGroup": 1, "periodGroups": [2, 4], "yearGroups": [3, 5], "periodUnit": "month", "yearPivot": 90}','LegitApp: 1st&3rd = month before mid-2014.','draft'),
+ ('dc_celine_week','b_celine','Celine: 3 letters + 4 digits, week (from mid-2014)',2014,NULL,'^([A-Z]{3})(\d)(\d)(\d)(\d)$','{"factoryGroup": 1, "periodGroups": [2, 4], "yearGroups": [3, 5], "periodUnit": "week", "yearPivot": 90}','LegitApp / Yoogi: 1st&3rd = week after mid-2014 (S-CU-3196 = week 39, 2016).','draft'),
+ ('dc_ysl_mmyy',(SELECT id FROM brands WHERE slug='saint-laurent'),'Saint Laurent: 3 letters + 6-digit style + MMYY',2000,NULL,'^([A-Z]{3})\d{6}(\d)(\d)(\d)(\d)$','{"factoryGroup": 1, "periodGroups": [2, 3], "yearGroups": [4, 5], "periodUnit": "month", "yearPivot": 90}','Libas: four digits after the dot read directly as month + year.','draft'),
+ ('dc_goyard_inside_out','b_goyard','Goyard: 3 letters + 6 digits, month outside, year inside (observed)',2000,NULL,'^([A-Z]{3})(\d)\d\d(\d)(\d)(\d)$','{"factoryGroup": 1, "periodGroups": [2, 5], "yearGroups": [3, 4], "periodUnit": "month", "yearPivot": 90}','Libas: observed practice, not published by Goyard. Year = last two digits of the middle four.','draft');
+
+INSERT OR IGNORE INTO factory_codes (id, brand_id, code, country, location, notes, status) VALUES
+ ('fc_dior_ma','b_dior','MA','Italy',NULL,'LegitApp Dior guide. CONFIRM.','draft'),
+ ('fc_dior_mc','b_dior','MC','Spain',NULL,'LegitApp Dior guide. CONFIRM.','draft');

@@ -5,6 +5,7 @@ import { useI18n } from './i18n.tsx';
 import Login from './pages/Login.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 import FolderPosts from './pages/FolderPosts.tsx';
+import DateCodes from './pages/DateCodes.tsx';
 import NewInspection from './pages/NewInspection.tsx';
 import Inspections from './pages/Inspections.tsx';
 import InspectionDetail from './pages/InspectionDetail.tsx';
@@ -29,7 +30,7 @@ export interface Me { id: string; email: string; name: string; role: string; loc
 export const MeContext = React.createContext<Me | null>(null);
 
 const NAV: [string, string][] = [
-  ['/', 'dashboard'], ['/learn', 'learn'], ['/check', 'check.title'], ['/inspections/new', 'newInspection'], ['/inspections', 'inspections'], ['/knowledge', 'knowledge'],
+  ['/', 'dashboard'], ['/datecode', 'datecode'], ['/learn', 'learn'], ['/check', 'check.title'], ['/inspections/new', 'newInspection'], ['/inspections', 'inspections'], ['/knowledge', 'knowledge'],
   ['/coverage', 'coverage'], ['/library', 'library'], ['/providers', 'providers'], ['/certificates', 'certificates'], ['/audit', 'audit'], ['/settings', 'settings'],
 ];
 
@@ -46,7 +47,7 @@ function useSecretTaps(onUnlock: () => void, taps = 5, windowMs = 3000) {
 // Mobile tab bar: [route, i18n key, 24×24 SVG path]
 const TABS: [string, string, string][] = [
   ['/', 'home', 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z'],
-  ['/learn', 'learn', 'M12 4 2 9l10 5 8-4v6M6 11.2V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-4.8'],
+  ['/datecode', 'datecode', 'M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12M3 4h3M3 20h3M18 4h3M18 20h3'],
   ['/check', 'scan', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8'],
   ['/inspections', 'inspections', 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01'],
   ['/knowledge', 'knowledge', 'M5 4h11l3 3v13H5zM9 9h6M9 13h6M9 17h4'],
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="/studio/:modelId" element={<ModelStudio />} />
             <Route path="/admin" element={<AdminPanel />} />
             <Route path="/learn" element={<Learn />} />
+            <Route path="/datecode" element={<DateCodes />} />
             <Route path="/check" element={<Check />} />
             <Route path="/check/nfc" element={<NfcCheck />} />
             <Route path="/verify/entrupy" element={<EntrupyGuide />} />

@@ -239,11 +239,14 @@ app.post('/api/rules/:id/retire', need(ADMINS), async (c) => {
 
 // decoding tables (data, not code)
 app.get('/api/datecode', async (c) => {
-  const [formats, factories] = await Promise.all([
+  const [formats, factories, guides, lookups] = await Promise.all([
     c.env.DB.prepare('SELECT * FROM datecode_formats ORDER BY brand_id, start_year').all(),
     c.env.DB.prepare('SELECT * FROM factory_codes ORDER BY brand_id, code').all(),
+    // teaching cards and year-window lookups (Chanel serial series, Hermès letters); never read by the engine
+    c.env.DB.prepare(`SELECT g.*, b.name AS brand FROM code_guides g JOIN brands b ON b.id = g.brand_id WHERE g.status <> 'retired' ORDER BY g.sort`).all(),
+    c.env.DB.prepare(`SELECT * FROM code_lookups WHERE status <> 'retired' ORDER BY brand_id, sort`).all(),
   ]);
-  return c.json({ formats: formats.results, factories: factories.results });
+  return c.json({ formats: formats.results, factories: factories.results, guides: guides.results, lookups: lookups.results });
 });
 app.post('/api/datecode/formats/:id/status', need(ADMINS), async (c) => {
   const { status } = await parse(c, z.object({ status: z.enum(['draft', 'approved', 'retired']) }));
