@@ -5,6 +5,7 @@ import { useI18n } from '../i18n.tsx';
 import { MeContext } from '../App.tsx';
 import { Badge, Field, Notice, Page, errText } from '../ui.tsx';
 import DateCodeAppearanceCard, { DateCodeGuide } from '../DateCodeAppearance.tsx';
+import { guessFromFilename, type UploadGuess } from '../../shared/uploadGuess.ts';
 import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, annotateAfterUpload, assetImg, uploadReference } from '../studio.ts';
 
 interface Tax { brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] }
@@ -143,7 +144,9 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
 }) {
   const { t } = useI18n();
   const [f, setF] = useState({ brandId: '', modelId: '', componentCode: 'date_code', label: 'authentic', labelBasis: 'purchase_receipt', license: 'own', sourceUrl: '', teachingNote: '' });
-  const [files, setFiles] = useState<File[]>([]);
+  // one row per photo; `pick` holds what was read from the file name or changed in the list, the form fills the rest
+  const [rows, setRows] = useState<{ file: File; pick: UploadGuess }[]>([]);
+  const files = rows.map((r) => r.file);
   const [previews, setPreviews] = useState<string[]>([]);
   const [adding, setAdding] = useState<'brand' | 'model' | null>(null);
   const [newName, setNewName] = useState('');
@@ -152,10 +155,25 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v, ...(k === 'brandId' ? { modelId: '' } : {}) }));
 
   useEffect(() => {
-    const urls = files.map((x) => URL.createObjectURL(x));
+    const urls = rows.map((x) => URL.createObjectURL(x.file));
     setPreviews(urls);
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
-  }, [files]);
+  }, [rows]);
+
+  const eff = (r: { pick: UploadGuess }) => {
+    const brandId = r.pick.brandId ?? f.brandId;
+    const modelId = r.pick.modelId ?? (brandId === f.brandId ? f.modelId : '');
+    return { brandId, modelId, componentCode: r.pick.componentCode ?? f.componentCode, label: r.pick.label ?? f.label };
+  };
+  const setPick = (i: number, k: keyof UploadGuess, v: string) => setRows((all) => all.map((r, j) => j !== i ? r
+    : { ...r, pick: { ...r.pick, [k]: v, ...(k === 'brandId' ? { modelId: '' } : {}) } as UploadGuess }));
+  const missingBrand = rows.some((r) => !eff(r).brandId);
+  function choose(list: File[]) {
+    const imgs = list.filter((x) => x.type.startsWith('image/'));
+    const codes = comps.map((c) => c.code);
+    setRows(imgs.map((file) => ({ file, pick: guessFromFilename(file.name, tax?.brands ?? [], tax?.models ?? [], codes) })));
+    setMsg(imgs.length < list.length ? { tone: 'warn', text: t('study.onlyImages') } : null);
+  }
 
   async function addTaxonomy() {
     if (!newName.trim()) return;
@@ -176,17 +194,18 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setMsg(null);
-    if (!f.brandId || files.length === 0) return;
+    if (rows.length === 0 || missingBrand) return;
     setBusy(true);
     try {
       let approved = 0;
-      for (const file of files) {
-        const r = await uploadReference(file, { ...f, purpose: 'study' });
-        await annotateAfterUpload(r.id, f.componentCode);
+      for (const row of rows) {
+        const e = eff(row);
+        const r = await uploadReference(row.file, { ...f, ...e, purpose: 'study' });
+        await annotateAfterUpload(r.id, e.componentCode);
         if (r.status === 'approved') approved++;
       }
       setMsg({ tone: 'ok', text: `${t('study.uploaded')} ${files.length} · ${t('study.approved')} ${approved} · ${t('study.quarantine')} ${files.length - approved}` });
-      setFiles([]); onDone();
+      setRows([]); onDone();
     } catch (err) { setMsg({ tone: 'bad', text: errText(err) }); } finally { setBusy(false); }
   }
 
@@ -195,7 +214,7 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
       <h2 className="text-xl">{t('admin.upload')}</h2>
       <div className="grid grid-cols-2 gap-2">
         <Field label={t('brand')}>
-          <select className="input" value={f.brandId} onChange={(e) => set('brandId', e.target.value)} required>
+          <select className="input" value={f.brandId} onChange={(e) => set('brandId', e.target.value)}>
             <option value="">—</option>
             {tax?.brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
@@ -246,20 +265,46 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
       </div>
       <Field label={t('study.whatDiffers')}><textarea className="input" rows={2} maxLength={4000} value={f.teachingNote} onChange={(e) => set('teachingNote', e.target.value)} /></Field>
       <Field label={t('studio.source')}><input className="input" value={f.sourceUrl} onChange={(e) => set('sourceUrl', e.target.value)} /></Field>
-      <Field label={t('study.files')}><input className="input" type="file" accept="image/*" multiple onChange={(e) => {
-        const all = [...(e.target.files ?? [])];
-        const imgs = all.filter((x) => x.type.startsWith('image/'));
-        setFiles(imgs);
-        setMsg(imgs.length < all.length ? { tone: 'warn', text: t('study.onlyImages') } : null);
-      }} /></Field>
-      {previews.length > 0 && (
+      <Field label={t('study.files')}><input className="input" type="file" accept="image/*" multiple onChange={(e) => choose([...(e.target.files ?? [])])} /></Field>
+      {rows.length > 0 && (
         <div>
-          <div className="label">{t('admin.preview')} ({previews.length})</div>
-          <div className="grid grid-cols-5 gap-1.5">{previews.map((u) => <img key={u} src={u} alt="" className="aspect-square w-full rounded object-cover" />)}</div>
+          <div className="label">{t('admin.preview')} ({rows.length}) · {t('admin.autoList')}</div>
+          <ul className="divide-y divide-hairline rounded-lg border border-hairline">
+            {rows.map((r, i) => {
+              const e = eff(r);
+              return (
+                <li key={i} className="flex gap-2 p-2">
+                  <img src={previews[i]} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="truncate font-mono text-[10px] text-muted">{r.file.name}</div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <select className={`input !py-1 text-xs ${!e.brandId ? '!border-counterfeit' : ''}`} value={e.brandId} onChange={(x) => setPick(i, 'brandId', x.target.value)}>
+                        <option value="">{t('brand')} —</option>
+                        {tax?.brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                      <select className="input !py-1 text-xs" value={e.modelId} onChange={(x) => setPick(i, 'modelId', x.target.value)} disabled={!e.brandId}>
+                        <option value="">{t('model')} —</option>
+                        {tax?.models.filter((m) => m.brand_id === e.brandId).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                      <select className="input !py-1 text-xs" value={e.componentCode} onChange={(x) => setPick(i, 'componentCode', x.target.value)}>
+                        {comps.map((c) => <option key={c.code} value={c.code}>{compName(c.code)}</option>)}
+                      </select>
+                      <select className={`input !py-1 text-xs ${e.label === 'authentic' ? 'text-verified' : e.label === 'counterfeit' ? 'text-counterfeit' : ''}`} value={e.label} onChange={(x) => setPick(i, 'label', x.target.value)}>
+                        <option value="authentic">{t('study.knownGenuine')}</option>
+                        <option value="counterfeit">{t('study.knownCounterfeit')}</option>
+                        <option value="unknown">{t('study.unlabelled')}</option>
+                      </select>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {missingBrand && <p className="mt-1 text-xs text-counterfeit">{t('admin.needBrand')}</p>}
         </div>
       )}
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
-      <button className="btn-primary w-full" disabled={busy || !f.brandId || files.length === 0}>{busy ? t('studio.uploading') : `${t('studio.upload')}${files.length ? ` (${files.length})` : ''}`}</button>
+      <button className="btn-primary w-full" disabled={busy || missingBrand || rows.length === 0}>{busy ? t('studio.uploading') : `${t('studio.upload')}${files.length ? ` (${files.length})` : ''}`}</button>
     </form>
   );
 }

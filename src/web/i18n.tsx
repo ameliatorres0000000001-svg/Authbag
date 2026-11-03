@@ -245,6 +245,8 @@ const D: Record<string, { km: string; en: string }> = {
   'admin.all': { km: 'ទាំងអស់', en: 'All' },
   'admin.noPart': { km: 'មិនបញ្ជាក់ផ្នែក', en: 'No part' },
   'admin.close': { km: 'បិទ', en: 'Close' },
+  'admin.autoList': { km: 'ប្រព័ន្ធបំពេញម៉ាក ម៉ូដែល ផ្នែក និងស្លាក ពីឈ្មោះ file ដោយស្វ័យប្រវត្តិ — ពិនិត្យ ហើយកែបាន', en: 'Brand, model, part and label are filled from each file name — check and change if needed' },
+  'admin.needBrand': { km: 'រូបខ្លះមិនទាន់មានម៉ាក — ជ្រើសម៉ាកខាងលើ ឬក្នុងបញ្ជី', en: 'Some photos have no brand yet — pick one above or in the list' },
   'admin.preview': { km: 'រូបដែលបានជ្រើស', en: 'Selected photos' },
   // lessons (step-by-step how to look)
   learn: { km: 'រៀន', en: 'Learn' },
