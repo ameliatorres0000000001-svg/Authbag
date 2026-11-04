@@ -22,14 +22,26 @@ export const EXPERT_ANSWERS: Record<string, { outcome: 'consistent_with_referenc
 };
 
 /** Send the request's photos as an album, then a message with the answer buttons. Returns that message's id. */
-export async function sendReviewRequest(env: Env, req: { id: string; summary: string; photos: { step: string; data: ArrayBuffer; mime: string }[] }): Promise<number> {
+type Photo = { step: string; data: ArrayBuffer; mime: string };
+export async function sendReviewRequest(env: Env, req: { id: string; summary: string; photos: Photo[]; refs?: Photo[] }): Promise<number> {
   const chat = env.TELEGRAM_CHAT_ID!;
-  for (let i = 0; i < req.photos.length; i += 10) {
-    const chunk = req.photos.slice(i, i + 10);
+  // the customer's photos first, then the reference photos of the same parts in their own album
+  const groups: Photo[][] = [];
+  for (const list of [req.photos, req.refs ?? []]) for (let i = 0; i < list.length; i += 10) groups.push(list.slice(i, i + 10));
+  for (const chunk of groups) {
+    if (!chunk.length) continue;
+    if (chunk.length === 1) {
+      // an album needs at least two photos; a single one goes as a plain photo
+      const one = new FormData();
+      one.append('chat_id', chat); one.append('caption', chunk[0].step);
+      one.append('photo', new Blob([chunk[0].data], { type: chunk[0].mime }), 'photo.jpg');
+      await tg(env, 'sendPhoto', one);
+      continue;
+    }
     const fd = new FormData();
     fd.append('chat_id', chat);
     fd.append('media', JSON.stringify(chunk.map((p, j) => ({ type: 'photo', media: `attach://p${j}`, caption: p.step }))));
-    chunk.forEach((p, j) => fd.append(`p${j}`, new Blob([p.data], { type: p.mime }), `${p.step}.jpg`));
+    chunk.forEach((p, j) => fd.append(`p${j}`, new Blob([p.data], { type: p.mime }), `p${j}.jpg`));
     await tg(env, 'sendMediaGroup', fd);
   }
   const msg = await tg(env, 'sendMessage', {

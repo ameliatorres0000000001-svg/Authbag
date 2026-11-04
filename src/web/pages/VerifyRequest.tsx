@@ -6,6 +6,10 @@ import { MeContext } from '../App.tsx';
 import { Notice, OutcomeBadge, errText } from '../ui.tsx';
 import { STAFF_ROLES } from '../studio.ts';
 import { STATUS_TONE, money, shrink, type Plan } from './Verify.tsx';
+import AnnotatedPhoto, { PointCards, type Point } from '../AnnotatedPhoto.tsx';
+import { assetImg } from '../studio.ts';
+
+type Ref = { id: string; label: string; status: string; model: string | null; same_model: boolean; points: Point[] };
 
 const ANSWERS: [string, string][] = [['c', 'consistent_with_references'], ['f', 'concerns_found'], ['m', 'insufficient_evidence'], ['r', 'requires_expert_review']];
 
@@ -14,7 +18,7 @@ export default function VerifyRequest() {
   const { id } = useParams();
   const { t } = useI18n();
   const me = useContext(MeContext)!;
-  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null } | null>(null);
+  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null; refs?: Record<string, Ref> } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -91,6 +95,8 @@ export default function VerifyRequest() {
         </div>
       )}
 
+      <CompareWithRefs photos={data.photos} refs={data.refs ?? {}} />
+
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {data.photos.map((p) => (
           <a key={p.id} href={`/api/verify/photos/${p.id}/image`} target="_blank" rel="noreferrer" className="relative overflow-hidden rounded-xl bg-charcoal">
@@ -100,5 +106,56 @@ export default function VerifyRequest() {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Each of the customer's photos next to a reference photo of the same part (same model first), with the
+ * reference's numbered points: what to compare. Teaching aid only; the expert gives the answer.
+ */
+function CompareWithRefs({ photos, refs }: { photos: { id: string; step: string }[]; refs: Record<string, Ref> }) {
+  const { t } = useI18n();
+  const pairs = photos.filter((p) => refs[p.step]).filter((p, k, all) => all.findIndex((x) => x.step === p.step) === k);
+  const [open, setOpen] = useState<string | null>(null);
+  const [active, setActive] = useState<number | null>(null);
+  if (!pairs.length) return null;
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-lg leading-tight">⚖ {t('vr.compareTitle')}</h2>
+        <p className="text-xs text-muted">{t('vr.compareHelp')}</p>
+      </div>
+      {pairs.map((p) => {
+        const r = refs[p.step];
+        const on = open === p.step;
+        return (
+          <div key={p.step} className="overflow-hidden rounded-2xl border border-hairline bg-surface-card">
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
+              <span className="font-semibold">{t(`vr.step.${p.step}`)}</span>
+              {r.points.length > 0 && (
+                <button type="button" className="text-xs underline" onClick={() => { setOpen(on ? null : p.step); setActive(null); }}>
+                  {on ? t('vr.hidePoints') : `${t('vr.showPoints')} (${r.points.length})`}
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-px bg-hairline">
+              <figure className="bg-charcoal">
+                <img src={`/api/verify/photos/${p.id}/image`} alt="" loading="lazy" className="aspect-square w-full object-cover" />
+                <figcaption className="bg-charcoal px-2 py-1 text-[11px] text-white">{t('vr.yourPhoto')}</figcaption>
+              </figure>
+              <figure className="bg-charcoal">
+                <div className="flex aspect-square items-center justify-center overflow-hidden">
+                  <AnnotatedPhoto src={assetImg(r.id)} points={on ? r.points : []} active={active} onPick={on ? setActive : undefined} className="!rounded-none !border-0" />
+                </div>
+                <figcaption className="truncate bg-charcoal px-2 py-1 text-[11px] text-white">
+                  {t('vr.reference')}{r.model ? ` · ${r.model}` : ''} · {r.label === 'authentic' ? t('study.knownGenuine') : t('study.unlabelled')}
+                </figcaption>
+              </figure>
+            </div>
+            {on && <div className="p-3"><PointCards points={r.points} active={active} onPick={setActive} empty="" /></div>}
+          </div>
+        );
+      })}
+    </section>
   );
 }

@@ -7,7 +7,7 @@ import { Badge, Notice, errText } from '../ui.tsx';
 import AnnotatedPhoto, { PointCards } from '../AnnotatedPhoto.tsx';
 import { STAFF_ROLES, assetImg } from '../studio.ts';
 import type { Post } from '../Feed.tsx';
-import { Dots, GuideBlock, useSlides, type Guide, type GuideText } from '../Album.tsx';
+import { AlbumAiButton, Dots, GuideBlock, useAlbumAi, useSlides, type Guide, type GuideText } from '../Album.tsx';
 
 interface Data { model: { id: string; name: string; brand_id: string; brand: string; cover_asset_id: string | null }; photos: Post[]; guide: Guide; similar: { id: string; name: string; photos: number; cover: string | null }[]; aiConfigured: boolean }
 
@@ -27,7 +27,9 @@ export default function AlbumView() {
   const [active, setActive] = useState<number | null>(null);
   const { ref, i, onScroll, go } = useSlides(d?.photos.length ?? 0);
 
-  useEffect(() => { setD(null); api.get<Data>(`/api/albums/${modelId}`).then(setD).catch((e) => setErr(errText(e))); }, [modelId]);
+  const load = () => api.get<Data>(`/api/albums/${modelId}`).then(setD).catch((e) => setErr(errText(e)));
+  useEffect(() => { setD(null); load(); }, [modelId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const albumAi = useAlbumAi(modelId, load);
   // open at the photo that was tapped
   useEffect(() => {
     const k = Number(sp.get('i')) || 0;
@@ -54,6 +56,15 @@ export default function AlbumView() {
         <span className="font-mono text-xs text-muted">{d.photos.length} {t('folder.photos')}</span>
       </div>
 
+      {staff && d.aiConfigured && d.photos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-4">
+          <button type="button" className="btn-primary !py-1.5 text-xs" disabled={!!albumAi.progress}
+            onClick={() => albumAi.run(d.photos.filter((p) => p.points.length === 0).map((p) => p.id))}>
+            <AlbumAiButton ai={albumAi} label={`✨ ${t('album.aiAll')} (${d.photos.filter((p) => p.points.length === 0).length} ${t('album.unmarked')})`} />
+          </button>
+          {albumAi.err && <span className="text-xs text-counterfeit">{albumAi.err}</span>}
+        </div>
+      )}
       <div className="px-4"><GuideEditor modelId={modelId} guide={d.guide} staff={staff} ai={d.aiConfigured} onSaved={(g) => setD({ ...d, guide: g })} /></div>
 
       {d.photos.length === 0 ? <p className="px-4 text-sm text-muted">{t('noData')}</p> : (

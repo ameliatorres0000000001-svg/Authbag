@@ -45,7 +45,11 @@ export default function Verify() {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => { api.get('/api/taxonomy').then(setTax).catch((e) => setErr(errText(e))); }, []);
-  useEffect(() => { api.get<Meta>(`/api/verify/meta${brandId ? `?brandId=${brandId}` : ''}`).then(setMeta).catch((e) => setErr(errText(e))); }, [brandId]);
+  // examples follow the brand, and the model once the customer starts the photos
+  useEffect(() => {
+    const q = new URLSearchParams(); if (brandId) q.set('brandId', brandId); if (mode && model.trim()) q.set('model', model.trim());
+    api.get<Meta>(`/api/verify/meta?${q}`).then(setMeta).catch((e) => setErr(errText(e)));
+  }, [brandId, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lc = locale === 'km' ? 'km' : 'en';
   const step = STEPS[idx] as Step | undefined;
