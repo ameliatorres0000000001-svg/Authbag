@@ -24,6 +24,9 @@ export default function Feed({ brandId, modelId, noModel, pageSize = 6 }: { bran
   const [ai, setAi] = useState(false);
   const [busy, setBusy] = useState(false);
   const tables = useDateTables();
+  const me = useContext(MeContext)!;
+  const [translating, setTranslating] = useState(false);
+
 
   const fetchPage = useCallback(async (before?: string | null) => {
     const q = new URLSearchParams({ limit: String(pageSize) });
@@ -41,6 +44,26 @@ export default function Feed({ brandId, modelId, noModel, pageSize = 6 }: { bran
     return () => { on = false; };
   }, [fetchPage]);
 
+  // Points without Khmer + English: a staff member's browser asks the server to translate them in small
+  // batches (once per visit), then reloads the feed so KH shows Khmer and EN shows English.
+  useEffect(() => {
+    if (!posts || !ai || !STAFF_ROLES.includes(me.role)) return;
+    if (!posts.some((p) => p.points.some((x) => !x.i18n_json))) return;
+    try { if (sessionStorage.getItem('hz_tr_run')) return; sessionStorage.setItem('hz_tr_run', '1'); } catch { /* ignore */ }
+    let on = true;
+    (async () => {
+      setTranslating(true);
+      try {
+        for (let i = 0; i < 20 && on; i++) {
+          const r = await api.post<{ done: number; left: number }>('/api/points/translate');
+          if (r.left === 0 || r.done === 0) break;
+        }
+        const r = await fetchPage();
+        if (on) { setPosts(r.posts); setNext(r.next); }
+      } catch { /* keep the original text */ } finally { if (on) setTranslating(false); }
+    })();
+    return () => { on = false; };
+  }, [posts, ai, me.role, fetchPage]);
   const more = async () => {
     setBusy(true);
     try { const r = await fetchPage(next); setPosts((p) => [...(p ?? []), ...r.posts]); setNext(r.next); } finally { setBusy(false); }
@@ -52,6 +75,7 @@ export default function Feed({ brandId, modelId, noModel, pageSize = 6 }: { bran
   return (
     <div className="space-y-4">
       {!ai && <p className="text-xs text-muted">{t('feed.aiOffHint')}</p>}
+      {translating && <p className="text-xs text-muted">🌐 {t('feed.translating')}</p>}
       {posts.map((p) => <FeedPost key={p.id} post={p} ai={ai} tables={tables} onChange={replace} />)}
       {next && <button className="btn-ghost w-full" disabled={busy} onClick={more}>{busy ? '…' : t('feed.more')}</button>}
     </div>

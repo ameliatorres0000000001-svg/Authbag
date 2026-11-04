@@ -928,7 +928,7 @@ app.get('/api/feed', async (c) => {
   });
   // self-healing translations: points shown here without Khmer + English get translated in the background,
   // so the next load shows the viewer's language (KH -> Khmer, EN -> English)
-  const missing = (points?.results ?? []).filter((x) => !x.i18n_json).slice(0, 25);
+  const missing = (points?.results ?? []).filter((x) => !x.i18n_json).slice(0, 6);
   if (missing.length && aiConfigured(c.env)) {
     c.executionCtx.waitUntil((async () => {
       const tr = await translatePoints(c.env, missing.map((x) => ({ id: x.id, label: x.label, note: x.note })));
@@ -943,7 +943,8 @@ app.get('/api/feed', async (c) => {
 // Staff run it in batches from the admin panel; returns how many points still need a translation.
 app.post('/api/points/translate', need(STAFF), async (c) => {
   if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
-  const rows = (await c.env.DB.prepare(`SELECT id, label, note FROM reference_points WHERE i18n_json IS NULL ORDER BY created_at LIMIT 25`).all<{ id: string; label: string; note: string | null }>()).results;
+  // small batches: one Claude call per request stays well inside time limits
+  const rows = (await c.env.DB.prepare(`SELECT id, label, note FROM reference_points WHERE i18n_json IS NULL ORDER BY created_at LIMIT 8`).all<{ id: string; label: string; note: string | null }>()).results;
   let done = 0;
   if (rows.length) {
     let tr;
