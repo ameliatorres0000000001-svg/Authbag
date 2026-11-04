@@ -2,7 +2,8 @@
 // Annotation only. The engine never reads marks, so they cannot change an outcome.
 
 export interface Rect { x: number; y: number; w: number; h: number }
-export interface SuggestedMark extends Rect { label: string; note?: string }
+export interface PointText { label: string; note?: string }
+export interface SuggestedMark extends Rect { label: string; note?: string; i18n?: { en?: PointText; km?: PointText } }
 
 export const MIN_SIDE = 0.02;   // smaller boxes are almost always accidental taps
 export const MAX_AI_MARKS = 4;
@@ -58,4 +59,38 @@ export function cropBox(r: Rect, imgW: number, imgH: number): { aspectRatio: str
     aspectRatio: `${r.w * imgW} / ${r.h * imgH}`,
     img: { width: pct(1 / r.w), height: pct(1 / r.h), left: pct(-r.x / r.w), top: pct(-r.y / r.h) },
   };
+}
+
+const txt = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : '');
+
+/**
+ * Parse teaching points written in English and Khmer:
+ * [{"x","y","w","h","label_en","note_en","label_km","note_km"}]. label/note keep the English text
+ * (or Khmer when English is missing); i18n carries both. Never throws.
+ */
+export function parseBilingualMarks(text: string): SuggestedMark[] {
+  const m = text.match(/\[[\s\S]*\]/);
+  if (!m) return [];
+  let raw: unknown;
+  try { raw = JSON.parse(m[0]); } catch { return []; }
+  if (!Array.isArray(raw)) return [];
+  const out: SuggestedMark[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== 'object') continue;
+    const o = e as Record<string, unknown>;
+    if (![o.x, o.y, o.w, o.h].every((n) => typeof n === 'number')) continue;
+    const en = { label: txt(o.label_en ?? o.label, 80), note: txt(o.note_en ?? o.note, 1000) };
+    const km = { label: txt(o.label_km, 80), note: txt(o.note_km, 1000) };
+    const label = en.label || km.label;
+    if (!label) continue;
+    const r = rectFromDrag(o.x as number, o.y as number, (o.x as number) + (o.w as number), (o.y as number) + (o.h as number));
+    if (!r) continue;
+    const i18n: SuggestedMark['i18n'] = {};
+    if (en.label) i18n.en = { label: en.label, ...(en.note ? { note: en.note } : {}) };
+    if (km.label) i18n.km = { label: km.label, ...(km.note ? { note: km.note } : {}) };
+    const note = en.note || km.note;
+    out.push({ ...r, label, ...(note ? { note } : {}), i18n });
+    if (out.length === MAX_AI_MARKS) break;
+  }
+  return out;
 }

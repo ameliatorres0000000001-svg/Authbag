@@ -137,7 +137,7 @@ function FeedPost({ post: p, ai, tables, onChange }: { post: Post; ai: boolean; 
         </div>
       )}
       <AnnotatedPhoto src={shown.src} points={shown.points} active={active} onPick={setActive}
-        tone={panel === 1 ? 'genuine' : isFake ? 'counterfeit' : 'genuine'} className="!rounded-none !border-x-0" />
+        tone={panel === 1 ? 'genuine' : isFake ? 'counterfeit' : 'genuine'} className="!rounded-none !border-x-0" fit />
 
       {/* date code reading */}
       {p.component_code === 'date_code' && p.transcription && panel === 0 && (

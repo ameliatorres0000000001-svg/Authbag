@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Env } from './env.ts';
-import { MAX_AI_MARKS, parseSuggestedMarks, type SuggestedMark } from '../shared/marks.ts';
+import { MAX_AI_MARKS, parseBilingualMarks, parseSuggestedMarks, type SuggestedMark } from '../shared/marks.ts';
 import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
 import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
 
@@ -37,7 +37,7 @@ const toImageMime = (m: string): ImageMime => (['image/png', 'image/gif', 'image
  * One vision call returning raw text. Images are sent in order; the caller's prompt says which is which.
  * `maxTokens` is the caller's expected answer size; Claude also thinks before answering, so the request allows more.
  */
-export async function callVision(env: Env, system: string, images: VisionImage[], userText: string, maxTokens = 1500): Promise<string> {
+export async function callVision(env: Env, system: string, images: VisionImage[], userText: string, maxTokens = 1500, effort: 'low' | 'medium' | 'high' = 'medium'): Promise<string> {
   const provider = aiProvider(env);
   const model = aiModel(env);
   if (!provider || !model) throw new Error('ai_not_configured');
@@ -62,7 +62,7 @@ export async function callVision(env: Env, system: string, images: VisionImage[]
       model,
       // Thinking is on by default for current Claude models and counts toward max_tokens.
       max_tokens: Math.max(16000, maxTokens),
-      output_config: { effort: 'medium' },
+      output_config: { effort },
       system,
       messages: [{ role: 'user', content: [
         ...images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: toImageMime(i.mime), data: b64(i.data) } })),
@@ -168,15 +168,22 @@ export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: {
     : `Box up to ${MAX_AI_MARKS} details on the photo that a learner should study (stamps, date codes, letter shapes, stitches, hardware engraving, edges). ` +
       `The note explains what to look at there and how to read it; if the admin's instructions explain a code or detail, use that explanation.`;
   const text = await callVision(env,
-    `You help teach luxury-bag inspection. ${NO_VERDICT} ${task} ` +
-    `Labels are neutral (max 60 characters); notes are plain and short (max 400 characters). ` +
-    `Coordinates are fractions of IMAGE 1's width/height (0..1) with the origin at the top-left. ` +
-    `Reply with JSON only: [{"label":"...","note":"...","x":0..1,"y":0..1,"w":0..1,"h":0..1}]` + langRule(ctx.lang),
+    `You are a senior luxury-bag authenticator teaching a trainee from a photo. ${NO_VERDICT} ${task} ` +
+    `Choose at most ${MAX_AI_MARKS} details that are clearly visible and worth learning. For each: ` +
+    'BOX — a tight rectangle around exactly that detail (x, y = top-left corner; x, y, w, h are fractions 0..1 of IMAGE 1\'s width and height). ' +
+    'Before answering, check each box really contains the named detail; if you are unsure where it is, leave that detail out. ' +
+    'LABEL — 2 to 5 words naming the detail (e.g. "Star-head screw", "Heat stamp lettering"). ' +
+    'NOTE — at most two short sentences. Sentence 1: what an experienced authenticator checks there and why it matters, using real trade knowledge ' +
+    '(for example: some brands use proprietary screw heads that ordinary repair tools cannot turn; Louis Vuitton heat stamps have very round O\'s and close double T\'s). ' +
+    'Sentence 2 starts with "In this photo:" and says what is visible here. No generic advice about lighting or resolution unless it hides the detail. ' +
+    'Write every label and note in BOTH English and Khmer. Khmer must be natural Khmer, not word for word; its second sentence starts with "ក្នុងរូបនេះ៖". ' +
+    'Keep brand names, codes and stamped words exactly as written on the item. ' +
+    'Reply with JSON only: [{"x":0..1,"y":0..1,"w":0..1,"h":0..1,"label_en":"...","note_en":"...","label_km":"...","note_km":"..."}]',
     compare ? [image, ctx.reference!] : [image],
     `Model: ${ctx.model}.${ctx.part ? ` Part: ${ctx.part}.` : ''}${ctx.title ? ` Photo: ${ctx.title}.` : ''}` +
     `${ctx.label ? ` Uploader label: ${ctx.label}.` : ''}${ctx.note ? `\nAdmin note: ${ctx.note}` : ''}${ctx.prompt ? `\nAdmin instructions: ${ctx.prompt}` : ''}`,
-    1000);
-  return parseSuggestedMarks(text);
+    16000, 'high');
+  return parseBilingualMarks(text);
 }
 
 /**
@@ -262,4 +269,28 @@ export async function identifyStyleCode(env: Env, brand: string, code: string, h
   const sources = (Array.isArray(o.sources) ? o.sources : []).map(url).filter((x): x is string => !!x).slice(0, 6);
   const model_name = str(o.model_name, 160);
   return { found: o.found === true && !!model_name, model_name, colour: str(o.colour, 80), product_url: url(o.product_url), sources, note: str(o.note, 400) };
+}
+
+/** Translate existing teaching points so each has English and Khmer. Text only; meaning and codes unchanged. */
+export async function translatePoints(env: Env, items: { id: string; label: string; note: string | null }[]): Promise<Record<string, { en: { label: string; note?: string }; km: { label: string; note?: string } }>> {
+  const text = await callVision(env,
+    'You translate short teaching notes about luxury bags between English and Khmer. Keep the meaning, keep brand names, codes and stamped words exactly as written, ' +
+    'keep line breaks. If a note has a line starting "In this photo:" the Khmer line starts "ក្នុងរូបនេះ៖" and vice versa. Natural Khmer, not word for word. ' +
+    'Reply with JSON only: [{"id":"...","label_en":"...","note_en":"...","label_km":"...","note_km":"..."}] — one entry per input id.',
+    [], JSON.stringify(items.map((i) => ({ id: i.id, label: i.label, note: i.note ?? '' }))), 16000, 'low');
+  const a = text.indexOf('['), b = text.lastIndexOf(']');
+  let arr: Record<string, unknown>[] = [];
+  try { arr = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : []; } catch { arr = []; }
+  const s = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  const out: Record<string, { en: { label: string; note?: string }; km: { label: string; note?: string } }> = {};
+  const ids = new Set(items.map((i) => i.id));
+  for (const o of Array.isArray(arr) ? arr : []) {
+    const id = s(o?.id, 80);
+    if (!ids.has(id) || !s(o.label_en, 80) || !s(o.label_km, 80)) continue;
+    out[id] = {
+      en: { label: s(o.label_en, 80), ...(s(o.note_en, 1000) ? { note: s(o.note_en, 1000) } : {}) },
+      km: { label: s(o.label_km, 80), ...(s(o.note_km, 1000) ? { note: s(o.note_km, 1000) } : {}) },
+    };
+  }
+  return out;
 }

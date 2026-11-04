@@ -45,6 +45,7 @@ export default function AdminPanel() {
       <p className="-mt-4 mb-4 font-mono text-[10px] uppercase tracking-widest text-muted">{t('admin.hint')}</p>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-5">
         <div className="min-w-0 space-y-4 lg:col-span-2">
+          {STAFF_ROLES.includes(me.role) && <TranslatePoints />}
           <UploadForm tax={tax} comps={comps} compName={compName} canAddTaxonomy={ADMIN_ROLES.includes(me.role)} onTax={loadTax} onDone={loadLib} />
           <DateCodeGuide />
         </div>
@@ -344,5 +345,33 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
       <button className="btn-primary w-full" disabled={busy || missingBrand || rows.length === 0}>{busy ? t('studio.uploading') : `${t('studio.upload')}${files.length ? ` (${files.length})` : ''}`}</button>
     </form>
+  );
+}
+
+/** Fill in Khmer + English for teaching points that have only one language (batches of 25 until done). */
+function TranslatePoints() {
+  const { t } = useI18n();
+  const [state, setState] = useState<{ busy: boolean; left: number | null; msg: string | null }>({ busy: false, left: null, msg: null });
+  async function run() {
+    setState({ busy: true, left: null, msg: null });
+    try {
+      for (let i = 0; i < 40; i++) {
+        const r = await api.post<{ done: number; left: number }>('/api/points/translate');
+        setState({ busy: true, left: r.left, msg: null });
+        if (r.left === 0 || r.done === 0) break;
+      }
+      setState((s) => ({ ...s, busy: false, msg: t('tr.done') }));
+    } catch (e) { setState({ busy: false, left: null, msg: errText(e) }); }
+  }
+  return (
+    <div className="card flex flex-wrap items-center justify-between gap-2">
+      <div className="min-w-0">
+        <div className="font-semibold">🌐 {t('tr.title')}</div>
+        <p className="text-xs text-muted">{t('tr.help')}</p>
+        {state.left !== null && <p className="text-xs">{t('tr.left')}: {state.left}</p>}
+        {state.msg && <p className="text-xs">{state.msg}</p>}
+      </div>
+      <button type="button" className="btn-primary shrink-0" disabled={state.busy} onClick={run}>{state.busy ? '…' : t('tr.run')}</button>
+    </div>
   );
 }
