@@ -1274,6 +1274,26 @@ const STEP_COMPONENT: Record<string, string> = { model: 'canvas', logo: 'heat_st
 const trialUsed = async (env: AppEnv['Bindings'], userId: string) =>
   (await env.DB.prepare('SELECT COUNT(*) AS n FROM verify_requests WHERE user_id = ? AND free_trial = 1').bind(userId).first<{ n: number }>())?.n ?? 0;
 
+/**
+ * The best reference photo for each verification step: same brand and part, the customer's model first,
+ * approved and genuine-labelled first, never a counterfeit-labelled photo. Teaching material for the comparison only.
+ */
+async function verifyRefs(env: AppEnv['Bindings'], brandId: string, modelText: string | null) {
+  const model = modelText
+    ? await env.DB.prepare(`SELECT id FROM models WHERE brand_id = ? AND (lower(name) = lower(?) OR lower(name) LIKE lower(?)) ORDER BY lower(name) = lower(?) DESC LIMIT 1`)
+      .bind(brandId, modelText, `%${modelText}%`, modelText).first<{ id: string }>()
+    : null;
+  const out: Record<string, { id: string; label: string; status: string; model: string | null; same_model: boolean; r2_key: string }> = {};
+  for (const [step, comp] of Object.entries(STEP_COMPONENT)) {
+    const r = await env.DB.prepare(`SELECT a.id, a.label, a.status, a.r2_key, a.model_id, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id
+      WHERE a.brand_id = ? AND a.component_code = ? AND a.status <> 'rejected' AND a.label <> 'counterfeit'
+      ORDER BY (a.model_id IS NOT NULL AND a.model_id = ?) DESC, (a.status = 'approved') DESC, (a.label = 'authentic') DESC, a.created_at DESC LIMIT 1`)
+      .bind(brandId, comp, model?.id ?? '').first<Record<string, any>>();
+    if (r) out[step] = { id: r.id, label: r.label, status: r.status, model: r.model, same_model: !!model && r.model_id === model.id, r2_key: r.r2_key };
+  }
+  return out;
+}
+
 async function planForBrand(env: AppEnv['Bindings'], brandSlug: string) {
   const plans = (await env.DB.prepare('SELECT * FROM verify_plans WHERE active = 1 ORDER BY sort').all<Record<string, any>>()).results;
   return plans.find((p) => { try { return (JSON.parse(p.brands_json) as string[]).includes(brandSlug); } catch { return false; } }) ?? plans[0] ?? null;
@@ -1290,11 +1310,8 @@ app.get('/api/verify/meta', async (c) => {
   if (brandId) {
     const b = await c.env.DB.prepare('SELECT slug FROM brands WHERE id = ?').bind(brandId).first<{ slug: string }>();
     if (b) out.plan = await planForBrand(c.env, b.slug);
-    for (const [step, comp] of Object.entries(STEP_COMPONENT)) {
-      const r = await c.env.DB.prepare(`SELECT id FROM reference_assets WHERE brand_id = ? AND component_code = ? AND status <> 'rejected' AND label <> 'counterfeit'
-        ORDER BY (status = 'approved') DESC, (label = 'authentic') DESC, created_at DESC LIMIT 1`).bind(brandId, comp).first<{ id: string }>();
-      out.examples[step] = r?.id ?? null;
-    }
+    const refs = await verifyRefs(c.env, brandId, c.req.query('model')?.trim() || null);
+    for (const step of Object.keys(STEP_COMPONENT)) out.examples[step] = refs[step]?.id ?? null;
   }
   return c.json(out);
 });
@@ -1344,7 +1361,17 @@ app.post('/api/verify', async (c) => {
     const summary = [`🔎 Verification request ${id}`, `Brand: ${brand.name}`, modelText ? `Model: ${modelText}` : null,
       `Customer: ${me.name} (${me.email})`, `Mode: ${mode} · ${photos.length} photos`, entrupy ? '➕ Customer also asked for an official Entrupy certificate' : null,
       staff ? null : `Free trial ${used + 1}/${VERIFY_TRIAL}`].filter(Boolean).join('\n');
-    c.executionCtx.waitUntil(sendReviewRequest(c.env, { id, summary, photos })
+    c.executionCtx.waitUntil((async () => {
+      // reference photos of the same parts go along, so the expert can compare side by side
+      const refs = await verifyRefs(c.env, brand.id, modelText);
+      const refPhotos: { step: string; data: ArrayBuffer; mime: string }[] = [];
+      for (const [step, r] of Object.entries(refs)) {
+        if (!photos.some((p) => p.step === step)) continue;
+        const o = await c.env.VAULT.get(r.r2_key);
+        if (o) refPhotos.push({ step: `REF · ${step}${r.model ? ` · ${r.model}` : ''} · ${r.label}`, data: await o.arrayBuffer(), mime: o.httpMetadata?.contentType ?? 'image/jpeg' });
+      }
+      return sendReviewRequest(c.env, { id, summary, photos, refs: refPhotos });
+    })()
       .then((mid) => c.env.DB.prepare('UPDATE verify_requests SET telegram_message_id = ?, telegram_error = NULL WHERE id = ?').bind(mid, id).run())
       .catch((e) => c.env.DB.prepare('UPDATE verify_requests SET telegram_error = ? WHERE id = ?').bind(String((e as Error).message).slice(0, 300), id).run()));
   } else {
@@ -1373,7 +1400,11 @@ app.get('/api/verify/:id', async (c) => {
   if (!r || !canSeeRequest(me, r.user_id)) return c.json({ error: 'not_found' }, 404);
   const photos = (await c.env.DB.prepare('SELECT id, step FROM verify_photos WHERE request_id = ? ORDER BY created_at').bind(r.id).all()).results;
   const plan = r.plan_id ? await c.env.DB.prepare('SELECT * FROM verify_plans WHERE id = ?').bind(r.plan_id).first() : null;
-  return c.json({ request: r, photos, plan });
+  const found = await verifyRefs(c.env, r.brand_id, r.model_text);
+  const ids = Object.values(found).map((x) => x.id);
+  const pts = ids.length ? (await c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, source FROM reference_points WHERE asset_id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at`).bind(...ids).all<Record<string, any>>()).results : [];
+  const refs = Object.fromEntries(Object.entries(found).map(([step, x]) => [step, { id: x.id, label: x.label, status: x.status, model: x.model, same_model: x.same_model, points: pts.filter((p) => p.asset_id === x.id) }]));
+  return c.json({ request: r, photos, plan, refs });
 });
 
 app.get('/api/verify/photos/:pid/image', async (c) => {

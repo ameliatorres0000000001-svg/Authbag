@@ -63,6 +63,43 @@ export function GuideBlock({ guide, max, more }: { guide: Guide; max?: number; m
   );
 }
 
+/**
+ * "AI: mark the whole album" — AI draws points on every photo that has none (one call per photo, so each
+ * stays well inside time limits), then writes the album's study guide. Staff only; points stay "AI suggested".
+ */
+export function useAlbumAi(modelId: string, onDone: () => void) {
+  const [progress, setProgress] = useState<{ done: number; total: number; step: 'points' | 'guide' } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  async function run(photoIds: string[]) {
+    setErr(null);
+    let failed = 0;
+    for (let k = 0; k < photoIds.length; k++) {
+      setProgress({ done: k, total: photoIds.length, step: 'points' });
+      try { await api.post(`/api/assets/${photoIds[k]}/points/suggest`); } catch (e) { failed++; if (failed === 1) setErr(errText(e)); }
+    }
+    setProgress({ done: photoIds.length, total: photoIds.length, step: 'guide' });
+    try { await api.post(`/api/albums/${modelId}/guide`); } catch (e) { setErr(errText(e)); }
+    setProgress(null);
+    onDone();
+  }
+  return { progress, err, run };
+}
+
+export function AlbumAiButton({ ai, label, className = '' }: { ai: ReturnType<typeof useAlbumAi>; label: string; className?: string }) {
+  const { t } = useI18n();
+  const p = ai.progress;
+  return (
+    <span className={className}>
+      {p ? (
+        <span className="inline-flex items-center gap-2 text-xs">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-gold" />
+          {p.step === 'points' ? `${t('album.aiMarking')} ${p.done + 1}/${p.total}` : t('album.aiWriting')}
+        </span>
+      ) : label}
+    </span>
+  );
+}
+
 const WHOLE = /whole bag|overall|front view|\bfront\b|រាងទាំងមូល|ទាំងមូល|ខាងមុខ/i;
 /** The album's large photo: the one staff chose, else a photo titled as the whole bag / front, else a photo with no part. */
 export function coverIndex(photos: Post[], coverId?: string | null): number {
@@ -84,6 +121,9 @@ export function AlbumCard({ a }: { a: AlbumData }) {
   const { t, locale } = useI18n();
   const me = useContext(MeContext)!;
   const [guide, setGuide] = useState<Guide>(a.guide);
+  const unmarked = a.photos.filter((p) => p.points.length === 0).map((p) => p.id);
+  // after marking, open the album so the new points and guide are shown
+  const albumAi = useAlbumAi(a.model_id, () => { window.location.href = `/album/${a.model_id}`; });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   const staff = STAFF_ROLES.includes(me.role);
   const ci = coverIndex(a.photos, a.cover_id);
@@ -158,7 +198,12 @@ export function AlbumCard({ a }: { a: AlbumData }) {
 
       <div className="flex flex-wrap items-center gap-2 px-4 pb-4 pt-3">
         <Link to={`/album/${a.model_id}`} className="btn-primary !py-2 text-xs">{t('album.learn')} →</Link>
-        {!guide && staff && <button type="button" className="btn-ghost !py-2 text-xs" disabled={busy} onClick={draft}>{busy ? '…' : `✨ ${t('album.aiGuide')}`}</button>}
+        {staff && (!guide || unmarked.length > 0) && (
+          <button type="button" className="btn-ghost !py-2 text-xs" disabled={busy || !!albumAi.progress} onClick={() => albumAi.run(unmarked)}>
+            <AlbumAiButton ai={albumAi} label={`✨ ${t('album.aiAll')}`} />
+          </button>
+        )}
+        {albumAi.err && <Notice tone="bad">{albumAi.err}</Notice>}
         {err && <Notice tone="bad">{err}</Notice>}
       </div>
     </article>
