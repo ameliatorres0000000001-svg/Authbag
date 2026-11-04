@@ -7,6 +7,10 @@ import { isIos, isStandalone, markInstallSeen, useInstallPrompt } from '../pwa.t
 // Gold accents from design-reference/stitch/hengz_pwa_install, on a deep-space background
 const C = { card: '#15131f', deep: '#0b0a14', text: '#ece8f2', soft: '#cfc6dc', gold: '#f2ca50', gold2: '#d4af37' };
 
+// simple platform marks (Android robot head, Apple)
+const ANDROID = 'M7.2 4.2 5.9 2a.4.4 0 0 1 .7-.4l1.3 2.2A7.9 7.9 0 0 1 12 3c1.5 0 2.9.3 4.1.8l1.3-2.2a.4.4 0 0 1 .7.4l-1.3 2.2A7.4 7.4 0 0 1 20.6 10H3.4a7.4 7.4 0 0 1 3.8-5.8ZM8.5 7.6a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8Zm7 0a.9.9 0 1 0 0-1.8.9.9 0 0 0 0 1.8ZM3.4 11.2h17.2V19a2 2 0 0 1-2 2H5.4a2 2 0 0 1-2-2z';
+const APPLE = 'M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.8-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.5-1-2.5-3.9ZM14 5.5c.7-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.4-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.5 2.8-1.3Z';
+
 const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
 );
@@ -21,9 +25,10 @@ export default function Install() {
   // letter-spacing breaks Khmer and Thai clusters
   const track = locale === 'km' || locale === 'th' ? '' : 'tracking-[0.15em]';
 
-  const install = async () => {
-    if (canPrompt) { const r = await prompt(); if (r === 'accepted') { markInstallSeen(); return; } }
-    setGuide(isIos() ? 'ios' : 'android');
+  // Android: the browser's own install prompt when it offers one, otherwise the steps
+  const installAndroid = async () => {
+    if (canPrompt && !isIos()) { const r = await prompt(); if (r === 'accepted') { markInstallSeen(); return; } }
+    setGuide('android');
   };
   const continueWeb = () => { markInstallSeen(); nav('/'); };
 
@@ -53,23 +58,25 @@ export default function Install() {
         </div>
 
         <div className="space-y-3">
-          {/* most people look around first: the website is the main action, installing is the light one */}
+          {installed ? (
+            <p className="text-center text-xs" style={{ color: C.gold }}>✓ {t('install.installed')}</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">
+              <button type="button" onClick={installAndroid} className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-[13px]"
+                style={{ color: C.text, border: '1px solid rgba(242,202,80,0.35)', background: 'rgba(255,255,255,0.04)' }}>
+                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="#3ddc84" aria-hidden><path d={ANDROID} /></svg> Android
+              </button>
+              <button type="button" onClick={() => setGuide('ios')} className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-[13px]"
+                style={{ color: C.text, border: '1px solid rgba(242,202,80,0.35)', background: 'rgba(255,255,255,0.04)' }}>
+                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor" aria-hidden><path d={APPLE} /></svg> iOS
+              </button>
+            </div>
+          )}
+          {/* most people look around first: the website is the main action */}
           <button type="button" onClick={continueWeb} className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-bold text-[#3c2f00] ${track}`}
             style={{ background: `linear-gradient(135deg, ${C.gold}, ${C.gold2})`, boxShadow: '0 10px 40px rgba(242,202,80,0.25)' }}>
             {t('install.continue')} →
           </button>
-          {installed ? (
-            <p className="text-center text-xs" style={{ color: C.gold }}>✓ {t('install.installed')}</p>
-          ) : (
-            <button type="button" onClick={install} className="mx-auto flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs"
-              style={{ color: C.soft, border: '1px solid rgba(242,202,80,0.35)', background: 'rgba(255,255,255,0.04)' }}>
-              <span className="scale-75"><Icon d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14" /></span> {t('install.ctaSmall')}
-            </button>
-          )}
-          <div className="flex justify-center gap-5 text-[11px]" style={{ color: 'rgba(207,198,220,0.7)' }}>
-            <button type="button" className="underline" onClick={() => setGuide('ios')}>iPhone</button>
-            <button type="button" className="underline" onClick={() => setGuide('android')}>Android</button>
-          </div>
         </div>
       </div>
 
