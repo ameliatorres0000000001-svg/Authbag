@@ -55,23 +55,25 @@ export default function Install() {
               </li>
             ))}
           </ul>
+          <div className="mt-5 w-full max-w-[20rem]">
+            {installed ? (
+              <p className="text-center text-xs" style={{ color: C.gold }}>✓ {t('install.installed')}</p>
+            ) : (
+              <div className="grid w-full grid-cols-2 gap-2.5">
+                <button type="button" onClick={installAndroid} className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-[13px]"
+                  style={{ color: C.text, border: '1px solid rgba(242,202,80,0.35)', background: 'rgba(255,255,255,0.04)' }}>
+                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="#3ddc84" aria-hidden><path d={ANDROID} /></svg> Android
+                </button>
+                <button type="button" onClick={() => setGuide('ios')} className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-[13px]"
+                  style={{ color: C.text, border: '1px solid rgba(242,202,80,0.35)', background: 'rgba(255,255,255,0.04)' }}>
+                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor" aria-hidden><path d={APPLE} /></svg> iOS
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-3">
-          {installed ? (
-            <p className="text-center text-xs" style={{ color: C.gold }}>✓ {t('install.installed')}</p>
-          ) : (
-            <div className="grid grid-cols-2 gap-2.5">
-              <button type="button" onClick={installAndroid} className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-[13px]"
-                style={{ color: C.text, border: '1px solid rgba(242,202,80,0.35)', background: 'rgba(255,255,255,0.04)' }}>
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="#3ddc84" aria-hidden><path d={ANDROID} /></svg> Android
-              </button>
-              <button type="button" onClick={() => setGuide('ios')} className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-[13px]"
-                style={{ color: C.text, border: '1px solid rgba(242,202,80,0.35)', background: 'rgba(255,255,255,0.04)' }}>
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor" aria-hidden><path d={APPLE} /></svg> iOS
-              </button>
-            </div>
-          )}
           {/* most people look around first: the website is the main action */}
           <button type="button" onClick={continueWeb} className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-bold text-[#3c2f00] ${track}`}
             style={{ background: `linear-gradient(135deg, ${C.gold}, ${C.gold2})`, boxShadow: '0 10px 40px rgba(242,202,80,0.25)' }}>
