@@ -28,15 +28,21 @@ export default function Check() {
         <p className="mt-1 text-sm text-muted">{t('check.subtitle')}</p>
       </header>
 
-      {/* how it works */}
-      <ol className="grid grid-cols-4 gap-1.5 text-center">
-        {['check.s1', 'check.s2', 'check.s3', 'check.s4'].map((k, i) => (
-          <li key={k} className="rounded-xl border border-hairline bg-surface-card px-1 py-2">
-            <div className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-charcoal font-mono text-[11px] font-bold text-gold">{i + 1}</div>
-            <div className="text-[11px] leading-tight">{t(k)}</div>
-          </li>
-        ))}
-      </ol>
+      {/* how it works: one dark card, four steps joined by a gold line */}
+      <div className="rounded-2xl bg-charcoal px-2 pb-4 pt-5 text-white shadow-sm">
+        <ol className="relative grid grid-cols-4">
+          <span className="absolute left-[12.5%] right-[12.5%] top-[15px] h-px bg-gradient-to-r from-gold/30 via-gold to-gold/30" aria-hidden />
+          {(['check.s1', 'check.s2', 'check.s3', 'check.s4'] as const).map((k, i) => (
+            <li key={k} className="relative flex flex-col items-center px-1 text-center">
+              <span className={`flex h-[30px] w-[30px] items-center justify-center rounded-full border font-mono text-[12px] font-bold ${i === 3 ? 'border-gold bg-gold text-charcoal' : 'border-gold bg-charcoal text-gold'}`}>
+                {i === 3 ? '✦' : i + 1}
+              </span>
+              <span className="mt-2 text-[12.5px] font-semibold leading-tight">{t(k)}</span>
+              <span className="mt-0.5 text-[10.5px] leading-tight text-white/60">{t(`${k}b`)}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <Tile id="photo" title={t('check.photo')} help={t('check.photoHelp')} to="/verify?mode=scan" primary />
