@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { OUT_LANGS, type OutLang, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
+import { OUT_LANGS, type OutLang, translatePoints, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -723,7 +723,7 @@ app.get('/api/studio', async (c) => {
 app.get('/api/studio/assets/:id', async (c) => {
   const a = await c.env.DB.prepare(`SELECT a.id, a.brand_id, a.model_id, a.component_code, a.label, a.label_basis, a.license, a.source_url, a.status, a.purpose, a.slot, a.teaching_title, a.teaching_note, a.ai_prompt, a.created_at, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id WHERE a.id = ?`).bind(c.req.param('id')).first<Record<string, any>>();
   if (!a) return c.json({ error: 'not_found' }, 404);
-  const points = (await c.env.DB.prepare('SELECT id, x, y, w, h, label, note, source, created_at FROM reference_points WHERE asset_id = ? ORDER BY created_at').bind(a.id).all()).results;
+  const points = (await c.env.DB.prepare('SELECT id, x, y, w, h, label, note, i18n_json, source, created_at FROM reference_points WHERE asset_id = ? ORDER BY created_at').bind(a.id).all()).results;
   return c.json({ ...a, points, aiConfigured: aiConfigured(c.env) });
 });
 
@@ -776,8 +776,8 @@ app.post('/api/assets/:id/points/suggest', need(STAFF), async (c) => {
     const sugg = await suggestTeachingPoints(c.env, { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? 'image/jpeg' },
       { model: a.model ?? 'unspecified', part: a.part, title: a.teaching_title, note: a.teaching_note, prompt: a.ai_prompt, label: a.label, reference, lang: reqLang(c) });
     for (const s of sugg) {
-      await c.env.DB.prepare(`INSERT INTO reference_points (id, asset_id, x, y, w, h, label, note, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ai_suggested')`)
-        .bind(uid('rp_'), a.id, s.x, s.y, s.w, s.h, s.label, s.note ?? null).run();
+      await c.env.DB.prepare(`INSERT INTO reference_points (id, asset_id, x, y, w, h, label, note, i18n_json, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ai_suggested')`)
+        .bind(uid('rp_'), a.id, s.x, s.y, s.w, s.h, s.label, s.note ?? null, s.i18n ? JSON.stringify(s.i18n) : null).run();
     }
     await audit(c.env, c.get('user').id, 'reference_point.ai_suggest', 'asset', a.id, { count: sugg.length, comparedWith: referenceId });
     return c.json({ suggestions: sugg.length, comparedWith: referenceId });
@@ -875,7 +875,7 @@ app.get('/api/lessons/:modelId', async (c) => {
      JOIN lesson_steps s ON s.id = a.lesson_step_id WHERE s.model_id = ? AND a.status <> 'rejected' ORDER BY a.created_at`,
   ).bind(model.id).all<Record<string, any>>()).results;
   const points = assets.length ? (await c.env.DB.prepare(
-    `SELECT p.id, p.asset_id, p.x, p.y, p.w, p.h, p.label, p.note, p.source FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id
+    `SELECT p.id, p.asset_id, p.x, p.y, p.w, p.h, p.label, p.note, p.i18n_json, p.source FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id
      JOIN lesson_steps s ON s.id = a.lesson_step_id WHERE s.model_id = ? ORDER BY p.created_at`,
   ).bind(model.id).all<Record<string, any>>()).results : [];
   return c.json({
@@ -911,7 +911,7 @@ app.get('/api/feed', async (c) => {
   const ids = page.map((p) => p.id);
   const marks = ids.length ? `(${ids.map(() => '?').join(',')})` : '(NULL)';
   const [points, readings, refs] = await Promise.all([
-    ids.length ? c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, source FROM reference_points WHERE asset_id IN ${marks} ORDER BY created_at`).bind(...ids).all<Record<string, any>>() : null,
+    ids.length ? c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, source FROM reference_points WHERE asset_id IN ${marks} ORDER BY created_at`).bind(...ids).all<Record<string, any>>() : null,
     ids.length ? c.env.DB.prepare(`SELECT target_id, result_json, created_at FROM datecode_analyses WHERE target_type = 'asset' AND target_id IN ${marks} ORDER BY created_at DESC`).bind(...ids).all<Record<string, any>>() : null,
     // one approved genuine photo per brand + part, to show beside counterfeit-labelled posts
     c.env.DB.prepare(`SELECT a.id, a.brand_id, a.component_code, a.model_id FROM reference_assets a WHERE a.label = 'authentic' AND a.status = 'approved' AND a.component_code IS NOT NULL ORDER BY a.created_at DESC LIMIT 200`).all<Record<string, any>>(),
@@ -928,6 +928,25 @@ app.get('/api/feed', async (c) => {
   });
   return c.json({ posts: out, next: more ? page[page.length - 1].created_at : null, aiConfigured: aiConfigured(c.env) });
 });
+// ───────────────────────── teaching points: fill in Khmer + English for points that have only one language ─────────────────────────
+// Staff run it in batches from the admin panel; returns how many points still need a translation.
+app.post('/api/points/translate', need(STAFF), async (c) => {
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const rows = (await c.env.DB.prepare(`SELECT id, label, note FROM reference_points WHERE i18n_json IS NULL ORDER BY created_at LIMIT 25`).all<{ id: string; label: string; note: string | null }>()).results;
+  let done = 0;
+  if (rows.length) {
+    let tr;
+    try { tr = await translatePoints(c.env, rows); }
+    catch (e) { return c.json({ error: 'ai_failed', detail: String((e as Error).message ?? e).slice(0, 200) }, 502); }
+    for (const [id, v] of Object.entries(tr)) {
+      await c.env.DB.prepare('UPDATE reference_points SET i18n_json = ? WHERE id = ? AND i18n_json IS NULL').bind(JSON.stringify(v), id).run();
+      done++;
+    }
+  }
+  const left = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM reference_points WHERE i18n_json IS NULL').first<{ n: number }>())?.n ?? 0;
+  return c.json({ done, left });
+});
+
 // ───────────────────────── feed folders: one folder per model (photos grouped), newest activity first ─────────────────────────
 app.get('/api/feed/folders', async (c) => {
   const brandId = c.req.query('brandId');

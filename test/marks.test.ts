@@ -37,3 +37,13 @@ test('crop box keeps the photo proportions and offsets the image', () => {
   assert.equal(c.aspectRatio, '500 / 500');
   assert.deepEqual(c.img, { width: '200%', height: '400%', left: '-50%', top: '-200%' });
 });
+
+import { parseBilingualMarks } from '../src/shared/marks.ts';
+test('bilingual teaching points keep English as the base text and both languages in i18n', () => {
+  const r = parseBilingualMarks('ok [{"x":0.1,"y":0.2,"w":0.3,"h":0.2,"label_en":"Star-head screw","note_en":"Check the head.\\nIn this photo: a star socket.","label_km":"ខ្ចៅក្បាលផ្កាយ","note_km":"មើលក្បាលខ្ចៅ។\\nក្នុងរូបនេះ៖ រន្ធផ្កាយ។"},{"x":0.5,"y":0.5,"w":0.1,"h":0.1,"label_km":"តែខ្មែរ"},{"x":"a"}]');
+  assert.equal(r.length, 2);
+  assert.equal(r[0].label, 'Star-head screw');
+  assert.equal(r[0].i18n!.km!.note, 'មើលក្បាលខ្ចៅ។\nក្នុងរូបនេះ៖ រន្ធផ្កាយ។');
+  assert.equal(r[1].label, 'តែខ្មែរ');
+  assert.equal(r[1].i18n!.en, undefined);
+});
