@@ -14,3 +14,8 @@ createRoot(document.getElementById('root')!).render(
     </I18nProvider>
   </React.StrictMode>,
 );
+
+// installable app + offline shell (see public/sw.js); never caches API data
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+}

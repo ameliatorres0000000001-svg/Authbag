@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api.ts';
 import { useI18n } from './i18n.tsx';
 import Login from './pages/Login.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 import FolderPosts from './pages/FolderPosts.tsx';
 import DateCodes from './pages/DateCodes.tsx';
+import Install from './pages/Install.tsx';
+import LangPicker from './LangPicker.tsx';
+import { installSeen, isMobile, isStandalone } from './pwa.ts';
 import NewInspection from './pages/NewInspection.tsx';
 import Inspections from './pages/Inspections.tsx';
 import InspectionDetail from './pages/InspectionDetail.tsx';
@@ -57,7 +60,9 @@ const TabIcon = ({ d }: { d: string }) => (
 );
 
 export default function App() {
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
+  const loc = useLocation();
+  const [firstPhoneVisit] = useState(() => isMobile() && !isStandalone() && !installSeen());
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const nav = useNavigate();
   const logoTap = useSecretTaps(() => nav('/admin'));
@@ -67,6 +72,9 @@ export default function App() {
   }, []);
   useEffect(refresh, [refresh]);
 
+  // public install screen (works before sign-in); shown once on a phone that has not installed the app
+  if (loc.pathname === '/install') return <Install />;
+  if (firstPhoneVisit && !installSeen()) return <Navigate to="/install" replace />;
   if (me === undefined) return <div className="p-8 text-muted">…</div>;
   if (me === null) return <Login onDone={refresh} />;
 
@@ -87,16 +95,19 @@ export default function App() {
             ))}
           </nav>
           <div className="px-5 pb-5">
-            <div className="flex gap-2">
-              <button className={`btn-ghost !px-3 !py-1 ${locale === 'km' ? '!border-gold' : ''}`} onClick={() => { setLocale('km'); api.put('/api/me/locale', { locale: 'km' }).catch(() => {}); }}>ខ្មែរ</button>
-              <button className={`btn-ghost !px-3 !py-1 ${locale === 'en' ? '!border-gold' : ''}`} onClick={() => { setLocale('en'); api.put('/api/me/locale', { locale: 'en' }).catch(() => {}); }}>EN</button>
+            <div className="flex items-center gap-2">
+              <LangPicker />
+              <Link to="/install" className="btn-ghost !px-2 !py-1 text-xs">⤓ {t('install.open')}</Link>
             </div>
             <button className="mt-3 text-xs text-muted underline" onClick={async () => { await api.post('/api/auth/logout'); setMe(null); nav('/'); }}>{t('signOut')}</button>
           </div>
         </aside>
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-hairline bg-surface/95 px-4 py-3 backdrop-blur md:hidden">
           <Link to="/" onClick={logoTap} className="select-none font-serif text-lg tracking-wide">HENGZ <span className="text-gold">AUTHENTIC</span></Link>
-          <button className="btn-ghost !px-2 !py-0.5 text-xs" onClick={() => { const l = locale === 'km' ? 'en' : 'km'; setLocale(l); api.put('/api/me/locale', { locale: l }).catch(() => {}); }}>{locale === 'km' ? 'EN' : 'ខ្មែរ'}</button>
+          <div className="flex items-center gap-1.5">
+            {!isStandalone() && <Link to="/install" aria-label={t('install.open')} className="btn-ghost !px-2 !py-0.5 text-xs">⤓</Link>}
+            <LangPicker />
+          </div>
         </header>
         <main className="min-w-0 flex-1 pb-24 md:pb-0">
           <Routes>

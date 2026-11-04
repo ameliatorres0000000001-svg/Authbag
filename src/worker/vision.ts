@@ -77,6 +77,20 @@ export async function callVision(env: Env, system: string, images: VisionImage[]
   return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
 }
 
+export type OutLang = 'km' | 'en' | 'vi' | 'th' | 'id';
+export const OUT_LANGS: OutLang[] = ['km', 'en', 'vi', 'th', 'id'];
+const LANG_NAME: Record<OutLang, string> = { km: 'Khmer (ភាសាខ្មែរ)', en: 'English', vi: 'Vietnamese (Tiếng Việt)', th: 'Thai (ภาษาไทย)', id: 'Indonesian (Bahasa Indonesia)' };
+const IN_PHOTO: Record<OutLang, string> = { km: 'ក្នុងរូបនេះ៖', en: 'In this photo:', vi: 'Trong ảnh này:', th: 'ในภาพนี้:', id: 'Di foto ini:' };
+/**
+ * Output language + teaching style for every human-readable field the AI writes.
+ * Codes, brand words and stamped text stay exactly as written on the item.
+ */
+export function langRule(lang: OutLang = 'km'): string {
+  return ` Write every human-readable text value (labels, notes, summaries, descriptions) in ${LANG_NAME[lang]}. ` +
+    `Teach, do not analyse: first say what a learner should check and how, then start a new line with "${IN_PHOTO[lang]}" and say what this photo shows. ` +
+    'Keep brand names, codes, stamped words and letters exactly as written on the item (e.g. LOUIS VUITTON, CA4109). JSON keys stay in English.';
+}
+
 const NO_VERDICT = 'Never state or imply whether an item is authentic or counterfeit. Describe only what is visibly present. If something is not clearly visible, omit it.';
 
 /**
@@ -105,11 +119,11 @@ export async function suggestObservations(env: Env, image: ArrayBuffer, mime: st
 export interface Difference { feature: string; inspected: string; reference: string; note?: string; photoCaveat?: string }
 
 /** Explain visible differences between ONE inspected photo and N approved reference photos. Never a verdict, never a percentage. */
-export async function explainDifferences(env: Env, inspected: VisionImage, refs: VisionImage[], component: string): Promise<{ differences: Difference[]; summary: string }> {
+export async function explainDifferences(env: Env, inspected: VisionImage, refs: VisionImage[], component: string, lang: OutLang = 'km'): Promise<{ differences: Difference[]; summary: string }> {
   const text = await callVision(env,
     `You are an optical comparison assistant for luxury-goods appraisers. ${NO_VERDICT} Do not output scores or percentages. Image 1 is the INSPECTED item; the remaining images are approved REFERENCE photos of the same component. ` +
     `List concrete visible differences and similarities in features such as letter shape and spacing, depth and edge sharpness, finish and colour tone, symbols, texture, alignment. ` +
-    `For each, mention if lighting, angle, or resolution could explain it (photoCaveat). Reply with JSON only: {"summary":"one or two neutral sentences","differences":[{"feature":"...","inspected":"...","reference":"...","note":"...","photoCaveat":"..."}]}`,
+    `For each, mention if lighting, angle, or resolution could explain it (photoCaveat). Reply with JSON only: {"summary":"one or two neutral sentences","differences":[{"feature":"...","inspected":"...","reference":"...","note":"...","photoCaveat":"..."}]}` + langRule(lang),
     [inspected, ...refs], `Component: ${component}. Compare image 1 against the ${refs.length} reference image(s).`, 1800);
   const json = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
   try {
@@ -143,6 +157,7 @@ export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: {
   label?: 'authentic' | 'counterfeit' | 'unknown' | null;
   /** a genuine reference photo of the same part, used when the photo is labelled counterfeit */
   reference?: VisionImage | null;
+  lang?: OutLang;
 }): Promise<SuggestedMark[]> {
   const compare = ctx.label === 'counterfeit' && !!ctx.reference;
   const task = compare
@@ -154,9 +169,9 @@ export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: {
       `The note explains what to look at there and how to read it; if the admin's instructions explain a code or detail, use that explanation.`;
   const text = await callVision(env,
     `You help teach luxury-bag inspection. ${NO_VERDICT} ${task} ` +
-    `Labels are neutral (max 60 characters); notes are plain and short (max 300 characters). ` +
+    `Labels are neutral (max 60 characters); notes are plain and short (max 400 characters). ` +
     `Coordinates are fractions of IMAGE 1's width/height (0..1) with the origin at the top-left. ` +
-    `Reply with JSON only: [{"label":"...","note":"...","x":0..1,"y":0..1,"w":0..1,"h":0..1}]`,
+    `Reply with JSON only: [{"label":"...","note":"...","x":0..1,"y":0..1,"w":0..1,"h":0..1}]` + langRule(ctx.lang),
     compare ? [image, ctx.reference!] : [image],
     `Model: ${ctx.model}.${ctx.part ? ` Part: ${ctx.part}.` : ''}${ctx.title ? ` Photo: ${ctx.title}.` : ''}` +
     `${ctx.label ? ` Uploader label: ${ctx.label}.` : ''}${ctx.note ? `\nAdmin note: ${ctx.note}` : ''}${ctx.prompt ? `\nAdmin instructions: ${ctx.prompt}` : ''}`,
@@ -169,7 +184,7 @@ export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: {
  * Image 1 is the photo to describe; any further images are reference date-code photos of the same brand.
  * Descriptive only, no verdict, no score. Millimetre sizes are kept only when a ruler/scale is visible.
  */
-export async function analyzeDateCodeAppearance(env: Env, image: VisionImage, refs: VisionImage[], ctx: { brand: string; model?: string | null; typed?: string | null }): Promise<DateCodeAppearance | null> {
+export async function analyzeDateCodeAppearance(env: Env, image: VisionImage, refs: VisionImage[], ctx: { brand: string; model?: string | null; typed?: string | null; lang?: OutLang }): Promise<DateCodeAppearance | null> {
   const text = await callVision(env,
     `You describe the physical appearance of a luxury-goods date code for a teaching tool. ${NO_VERDICT} Never give scores or percentages. ` +
     `Image 1 is the date code to describe.${refs.length ? ` Images 2..${refs.length + 1} are reference date-code photos of the same brand for comparison; date codes legitimately vary by era, factory, model and item size, so only point out concrete visible differences.` : ''} ` +
@@ -177,7 +192,7 @@ export async function analyzeDateCodeAppearance(env: Env, image: VisionImage, re
     `font (serif or sans-serif, narrow or wide, stroke thickness, shapes of distinctive digits such as 0, 1, 4, 7); size relative to nearby features; ` +
     `character height in millimetres ONLY if a ruler or scale is visible (otherwise null and scaleVisible false); spacing between characters; baseline alignment and centring; pressed depth, edge sharpness and any foil or ink fill; ` +
     `photo problems (blur, glare, angle, crop) that limit what can be seen. Use short, plain sentences a beginner understands. ` +
-    `Reply with JSON only: {"transcription":"","characterCount":0,"lines":1,"method":"","placement":"","surface":"","font":"","size":"","sizeMm":null,"scaleVisible":false,"spacing":"","alignment":"","depthEdges":"","differences":[{"feature":"","inspected":"","reference":"","photoCaveat":""}],"photoIssues":[""],"summary":""}`,
+    `Reply with JSON only: {"transcription":"","characterCount":0,"lines":1,"method":"","placement":"","surface":"","font":"","size":"","sizeMm":null,"scaleVisible":false,"spacing":"","alignment":"","depthEdges":"","differences":[{"feature":"","inspected":"","reference":"","photoCaveat":""}],"photoIssues":[""],"summary":""}` + langRule(ctx.lang) + ' The transcription field is the code exactly as visible.',
     [image, ...refs],
     `Brand: ${ctx.brand}.${ctx.model ? ` Model: ${ctx.model}.` : ''}${ctx.typed ? ` The appraiser typed the code as: ${ctx.typed}.` : ''}`,
     1800);
@@ -211,14 +226,15 @@ export interface StyleIdentification {
  * Identification only (model name, colour, product page) — never a judgement of whether an item is genuine.
  * Needs the Anthropic provider (web search is a Claude server tool).
  */
-export async function identifyStyleCode(env: Env, brand: string, code: string, hint: string): Promise<StyleIdentification> {
+export async function identifyStyleCode(env: Env, brand: string, code: string, hint: string, lang: OutLang = 'km'): Promise<StyleIdentification> {
   if (aiProvider(env) !== 'anthropic') throw new Error('web_search_needs_claude');
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const system =
     `You identify luxury-goods products from their style / article code. ${NO_VERDICT} ` +
     'Search the web for the exact code. Prefer the brand\'s official site, then large resellers. ' +
     'Only report a model if a page shows this exact code (or the same code without the last colour/size part, then say so in note). Never guess. ' +
-    'Reply with JSON only: {"found":true|false,"model_name":"...","colour":"...","product_url":"...","sources":["url",...],"note":"..."}';
+    'Reply with JSON only: {"found":true|false,"model_name":"...","colour":"...","product_url":"...","sources":["url",...],"note":"..."}. ' +
+    `Keep model_name exactly as the brand writes it; write note in ${LANG_NAME[lang]}.`;
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: `Brand: ${brand}\nCode: ${code}\nWhat the code parts suggest: ${hint || 'unknown'}` }];
   let msg: Anthropic.Message | null = null;
   // a long server-side search can pause; send the turn back so the server resumes it

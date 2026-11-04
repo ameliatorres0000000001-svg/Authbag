@@ -117,7 +117,7 @@ export default function GuidedScan() {
   if (!d) return <Page title="…">{err && <Notice tone="bad">{err}</Notice>}</Page>;
   const insp = d.inspection;
   const defs = stage ? (d.observationDefs as any[]).filter((x) => x.component_code === stage.component) : [];
-  const stageName = (c: string) => (COMP[c] ? COMP[c][locale] : c);
+  const stageName = (c: string) => (COMP[c] ? COMP[c][locale === 'km' ? 'km' : 'en'] : c);
   const doneTpl = d.templates.filter((x: any) => d.captures.some((c: any) => c.template_code === x.code)).length;
 
   return (
@@ -138,7 +138,7 @@ export default function GuidedScan() {
               <button key={s.component} onClick={() => { setCur(s.component); setPick(null); }} className={`shrink-0 rounded-lg border px-3 py-2 text-left text-xs ${cur === s.component ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card'}`}>
                 <div className="font-mono text-[10px] text-muted">{i + 1}</div>
                 <div className="font-semibold">{stageName(s.component)}</div>
-                <Badge tone={ST[s.status].tone}>{ST[s.status][locale]}</Badge>
+                <Badge tone={ST[s.status].tone}>{ST[s.status][locale === 'km' ? 'km' : 'en']}</Badge>
               </button>
             ))}
           </div>
@@ -166,7 +166,7 @@ export default function GuidedScan() {
                 </div>
                 {stage.component === 'rfid' ? (
                   <Notice>{locale === 'km' ? 'ឈីប RFID មិនអាចអានដោយទូរសព្ទសាធារណៈ ដើម្បីបញ្ជាក់ភាពពិតបានទេ។ អាចកត់ត្រាថាមាន ឬអត់ ប៉ុណ្ណោះ ហើយវាមិនបញ្ជាក់អ្វីដោយខ្លួនឯងទេ។' : 'A phone cannot verify an RFID chip. You can only record presence or absence, and that proves nothing on its own.'}</Notice>
-                ) : <CameraCapture onCapture={onCapture} locale={locale} disabled={!!busy} />}
+                ) : <CameraCapture onCapture={onCapture} locale={locale === 'km' ? 'km' : 'en'} disabled={!!busy} />}
                 {busy === 'upload' && <p className="text-xs text-muted">…</p>}
                 {flash && <p className="text-xs text-verified">{flash}</p>}
               </>

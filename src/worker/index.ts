@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
+import { OUT_LANGS, type OutLang, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -16,6 +16,13 @@ const app = new Hono<AppEnv>();
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const MODEL_SET_SIZE = 5;
 
+/** Language the AI writes in: the browser's chosen UI language (x-hz-lang), else the user's saved locale, else Khmer. */
+const reqLang = (c: any): OutLang => {
+  const h = String(c.req.header('x-hz-lang') ?? '').toLowerCase() as OutLang;
+  if (OUT_LANGS.includes(h)) return h;
+  const u = c.get('user')?.locale as OutLang | undefined;
+  return u && OUT_LANGS.includes(u) ? u : 'km';
+};
 const STAFF: Role[] = ['owner', 'lead_authenticator', 'appraiser'];
 const REVIEWERS: Role[] = ['owner', 'lead_authenticator', 'reviewer'];
 const ADMINS: Role[] = ['owner', 'lead_authenticator'];
@@ -270,7 +277,7 @@ app.post('/api/style-codes/identify', async (c) => {
   if (known) return c.json({ match: known, from: 'database' });
   if (aiProvider(c.env) !== 'anthropic') return c.json({ error: 'ai_web_not_configured' }, 501);
   let r;
-  try { r = await identifyStyleCode(c.env, brand.name, norm, hint ?? ''); }
+  try { r = await identifyStyleCode(c.env, brand.name, norm, hint ?? '', reqLang(c)); }
   catch (e) { return c.json({ error: 'ai_failed', detail: String((e as Error).message ?? e).slice(0, 200) }, 502); }
   if (!r.found) return c.json({ match: null, from: 'ai_web', note: r.note, sources: r.sources });
   const id = 'sc_' + crypto.randomUUID().replace(/-/g, '');
@@ -581,7 +588,7 @@ app.post('/api/captures/:id/compare', need(STAFF), async (c) => {
     if (o) refImgs.push({ data: await o.arrayBuffer(), mime: o.httpMetadata?.contentType ?? 'image/jpeg' });
   }
   try {
-    const out = await explainDifferences(c.env, { data: await insp.arrayBuffer(), mime: r.cap.mime }, refImgs, r.cap.component_code ?? 'unspecified');
+    const out = await explainDifferences(c.env, { data: await insp.arrayBuffer(), mime: r.cap.mime }, refImgs, r.cap.component_code ?? 'unspecified', reqLang(c));
     const id = uid('cmp_');
     await c.env.DB.prepare('INSERT INTO comparisons (id, inspection_id, capture_id, asset_ids_json, result_json, model, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(id, r.cap.inspection_id, r.cap.id, JSON.stringify(chosen), JSON.stringify(out), aiModel(c.env), c.get('user').id).run();
@@ -767,7 +774,7 @@ app.post('/api/assets/:id/points/suggest', need(STAFF), async (c) => {
   }
   try {
     const sugg = await suggestTeachingPoints(c.env, { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? 'image/jpeg' },
-      { model: a.model ?? 'unspecified', part: a.part, title: a.teaching_title, note: a.teaching_note, prompt: a.ai_prompt, label: a.label, reference });
+      { model: a.model ?? 'unspecified', part: a.part, title: a.teaching_title, note: a.teaching_note, prompt: a.ai_prompt, label: a.label, reference, lang: reqLang(c) });
     for (const s of sugg) {
       await c.env.DB.prepare(`INSERT INTO reference_points (id, asset_id, x, y, w, h, label, note, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ai_suggested')`)
         .bind(uid('rp_'), a.id, s.x, s.y, s.w, s.h, s.label, s.note ?? null).run();
@@ -802,7 +809,7 @@ async function runDateCodeAnalysis(c: any, target: { type: 'asset' | 'capture'; 
     if (o) { refImgs.push({ data: await o.arrayBuffer(), mime: o.httpMetadata?.contentType ?? 'image/jpeg' }); used.push(r.id); }
   }
   try {
-    const out = await analyzeDateCodeAppearance(c.env, { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? target.mime }, refImgs, { brand: target.brand, model: target.model, typed: target.typed });
+    const out = await analyzeDateCodeAppearance(c.env, { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? target.mime }, refImgs, { brand: target.brand, model: target.model, typed: target.typed, lang: reqLang(c) });
     if (!out) return c.json({ error: 'ai_unreadable_reply' }, 502);
     const id = uid('dca_');
     await c.env.DB.prepare('INSERT INTO datecode_analyses (id, target_type, target_id, brand_id, reference_ids_json, result_json, model, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')

@@ -30,7 +30,7 @@ const TXT = {
 export default function Comparator() {
   const { id, captureId } = useParams();
   const { locale } = useI18n();
-  const T = (k: keyof typeof TXT) => TXT[k][locale];
+  const T = (k: keyof typeof TXT) => TXT[k][locale === 'km' ? 'km' : 'en'];
   const [info, setInfo] = useState<any>(null);
   const [sel, setSel] = useState<string[]>([]);
   const [view, setView] = useState<string | null>(null);
