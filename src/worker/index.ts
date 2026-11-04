@@ -1405,7 +1405,9 @@ app.get('/api/verify/:id', async (c) => {
   const pts = ids.length ? (await c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, source FROM reference_points WHERE asset_id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at`).bind(...ids).all<Record<string, any>>()).results : [];
   const refs = Object.fromEntries(Object.entries(found).map(([step, x]) => [step, { id: x.id, label: x.label, status: x.status, model: x.model, same_model: x.same_model, points: pts.filter((p) => p.asset_id === x.id) }]));
   const certificate = await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id WHERE c.request_id = ?`).bind(r.id).first().catch(() => null);
-  return c.json({ request: r, photos, plan, refs, certificate });
+  const offers = (await c.env.DB.prepare(`SELECT o.id, o.from_side, o.amount_cents, o.currency, o.note, o.status, o.created_at, o.responded_at, u.name AS by_name
+    FROM buyback_offers o JOIN users u ON u.id = o.created_by WHERE o.request_id = ? ORDER BY o.created_at`).bind(r.id).all().catch(() => ({ results: [] }))).results;
+  return c.json({ request: r, photos, plan, refs, certificate, offers });
 });
 
 app.get('/api/verify/photos/:pid/image', async (c) => {
@@ -1460,6 +1462,8 @@ const CERT_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const randomCode = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => CERT_ALPHABET[b % CERT_ALPHABET.length]).join('');
 
 async function revokeForRequest(env: AppEnv['Bindings'], requestId: string, actor: string | null, reason: string) {
+  // open buy-back offers no longer stand once the expert answer is not "consistent" any more
+  await env.DB.prepare(`UPDATE buyback_offers SET status = 'withdrawn', responded_at = ? WHERE request_id = ? AND status = 'open'`).bind(nowIso(), requestId).run().catch(() => null);
   const res = await env.DB.prepare(`UPDATE hengz_certificates SET status = 'revoked', revoked_reason = ?, revoked_at = ? WHERE request_id = ? AND status = 'valid'`)
     .bind(reason, nowIso(), requestId).run().catch(() => null);
   if (res?.meta.changes) await audit(env, actor, 'certificate.revoke', 'verify_request', requestId, { reason, automatic: true });
@@ -1516,6 +1520,54 @@ app.get('/api/public/cert/:code/photo', async (c) => {
   const obj = await c.env.VAULT.get(row.r2_key);
   if (!obj) return c.json({ error: 'not_found' }, 404);
   return new Response(obj.body, { headers: { 'content-type': row.mime, 'cache-control': 'public, max-age=3600' } });
+});
+
+// ───────────────────────── buy-back offers (after "consistent with references") ─────────────────────────
+const money = (cents: number, cur: string) => `${(cents / 100).toFixed(2)} ${cur}`;
+
+/** HENGZ (staff) offers a buy-back price, or the customer (request owner) sends the price they want. */
+app.post('/api/verify/:id/offers', async (c) => {
+  const body = await parse(c, z.object({ side: z.enum(['hengz', 'customer']), amount: z.number().positive().max(10_000_000), currency: z.string().regex(/^[A-Z]{3}$/).default('USD'), note: z.string().max(500).optional() }));
+  const me = c.get('user');
+  const r = await c.env.DB.prepare(`SELECT r.id, r.user_id, r.status, r.expert_outcome, r.model_text, b.name AS brand FROM verify_requests r JOIN brands b ON b.id = r.brand_id WHERE r.id = ?`)
+    .bind(c.req.param('id')).first<Record<string, any>>();
+  if (!r) return c.json({ error: 'not_found' }, 404);
+  if (body.side === 'hengz' && !STAFF.includes(me.role)) return c.json({ error: 'forbidden' }, 403);
+  if (body.side === 'customer' && r.user_id !== me.id) return c.json({ error: 'forbidden' }, 403);
+  if (r.status !== 'answered' || r.expert_outcome !== 'consistent_with_references') return c.json({ error: 'needs_consistent_answer' }, 409);
+  if (await c.env.DB.prepare(`SELECT 1 FROM buyback_offers WHERE request_id = ? AND status = 'accepted'`).bind(r.id).first()) return c.json({ error: 'already_agreed' }, 409);
+  const now = nowIso();
+  // a new offer replaces any offer still open on this request
+  await c.env.DB.prepare(`UPDATE buyback_offers SET status = 'superseded', responded_at = ? WHERE request_id = ? AND status = 'open'`).bind(now, r.id).run();
+  const id = uid('bo_'); const cents = Math.round(body.amount * 100);
+  await c.env.DB.prepare(`INSERT INTO buyback_offers (id, request_id, from_side, amount_cents, currency, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, r.id, body.side, cents, body.currency, body.note?.trim() || null, me.id).run();
+  await audit(c.env, me.id, 'buyback.offer', 'verify_request', r.id, { side: body.side, amount_cents: cents, currency: body.currency });
+  if (body.side === 'customer' && telegramConfigured(c.env)) {
+    c.executionCtx.waitUntil(sendText(c.env, `💰 ${me.name} asks ${money(cents, body.currency)} for ${r.brand}${r.model_text ? ` ${r.model_text}` : ''} (${r.id})${body.note ? `\n“${body.note.trim()}”` : ''}\nAnswer on the request page.`));
+  }
+  return c.json({ id });
+});
+
+/** The other side accepts or declines an open offer; the sender can withdraw it. */
+app.post('/api/verify/offers/:oid/respond', async (c) => {
+  const { action } = await parse(c, z.object({ action: z.enum(['accept', 'decline', 'withdraw']) }));
+  const me = c.get('user');
+  const o = await c.env.DB.prepare(`SELECT o.*, r.user_id, r.model_text, b.name AS brand FROM buyback_offers o JOIN verify_requests r ON r.id = o.request_id JOIN brands b ON b.id = r.brand_id WHERE o.id = ?`)
+    .bind(c.req.param('oid')).first<Record<string, any>>();
+  if (!o || o.status !== 'open') return c.json({ error: 'not_open' }, 409);
+  const isCustomer = o.user_id === me.id; const isStaff = STAFF.includes(me.role);
+  const allowed = action === 'withdraw'
+    ? (o.from_side === 'customer' ? isCustomer : isStaff)
+    : (o.from_side === 'hengz' ? isCustomer : isStaff);
+  if (!allowed) return c.json({ error: 'forbidden' }, 403);
+  const status = action === 'accept' ? 'accepted' : action === 'decline' ? 'declined' : 'withdrawn';
+  await c.env.DB.prepare(`UPDATE buyback_offers SET status = ?, responded_by = ?, responded_at = ? WHERE id = ? AND status = 'open'`).bind(status, me.id, nowIso(), o.id).run();
+  await audit(c.env, me.id, `buyback.${action}`, 'verify_request', o.request_id, { offer: o.id });
+  if (isCustomer && action !== 'withdraw' && telegramConfigured(c.env)) {
+    c.executionCtx.waitUntil(sendText(c.env, `${action === 'accept' ? '✅' : '✖'} ${me.name} ${action === 'accept' ? 'ACCEPTED' : 'declined'} the buy-back offer ${money(o.amount_cents, o.currency)} for ${o.brand}${o.model_text ? ` ${o.model_text}` : ''} (${o.request_id}).${action === 'accept' ? ' Please contact the customer to arrange the buy-back.' : ''}`));
+  }
+  return c.json({ ok: true, status });
 });
 
 /** Staff can also answer from the web (e.g. when Telegram is down). Same four outcomes. */

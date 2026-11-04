@@ -109,7 +109,7 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'album.points': { vi: 'điểm', th: 'จุด', id: 'titik' },
   'album.aiDraft': { vi: 'Bản nháp AI', th: 'ฉบับร่าง AI', id: 'Draf AI' },
   'album.learn': { vi: 'Học mẫu này', th: 'เรียนรู้รุ่นนี้', id: 'Pelajari model ini' },
-  'check.title': { vi: 'Xác minh bởi chuyên gia HENGZ', th: 'ตรวจสอบโดยผู้เชี่ยวชาญ HENGZ', id: 'Diverifikasi ahli HENGZ' },
+  'check.title': { vi: 'Xác minh bởi chuyên gia', th: 'ตรวจสอบโดยผู้เชี่ยวชาญ', id: 'Diverifikasi ahli' },
   'nav.verify': { vi: 'Kiểm tra của tôi', th: 'การตรวจของฉัน', id: 'Cek saya' },
   'nav.admin': { vi: 'Admin', th: 'แอดมิน', id: 'Admin' },
   'vr.startScan': { vi: 'Bắt đầu quét', th: 'เริ่มสแกน', id: 'Mulai pindai' },
