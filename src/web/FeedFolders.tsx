@@ -52,7 +52,7 @@ function Album({ to, cover, kicker, title, count, when, small }: { to: string; c
 }
 
 export function FolderCard({ f, small }: { f: Folder; small?: boolean }) {
-  return <Album small={small} to={`/posts/${f.id}`} cover={f.covers[0] ?? null} kicker={f.brand} title={f.model} count={f.photos} when={f.latest} />;
+  return <Album small={small} to={`/album/${f.id}`} cover={f.covers[0] ?? null} kicker={f.brand} title={f.model} count={f.photos} when={f.latest} />;
 }
 
 /** The "other photos" folder: posts not tied to one model (e.g. comparison pairs). */

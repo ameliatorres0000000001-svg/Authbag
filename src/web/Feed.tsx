@@ -92,7 +92,7 @@ export function timeAgo(iso: string, locale: string, justNow: string): string {
   return justNow;
 }
 
-function FeedPost({ post: p, ai, tables, onChange }: { post: Post; ai: boolean; tables: DateTables | null; onChange: (p: Post) => void }) {
+export function FeedPost({ post: p, ai, tables, onChange }: { post: Post; ai: boolean; tables: DateTables | null; onChange: (p: Post) => void }) {
   const { t, locale } = useI18n();
   const me = useContext(MeContext)!;
   const staff = STAFF_ROLES.includes(me.role);
