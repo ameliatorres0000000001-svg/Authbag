@@ -9,6 +9,7 @@ import { STATUS_TONE, money, shrink, type Plan } from './Verify.tsx';
 import AnnotatedPhoto, { PointCards, type Point } from '../AnnotatedPhoto.tsx';
 import { assetImg } from '../studio.ts';
 
+type Offer = { id: string; from_side: 'hengz' | 'customer'; amount_cents: number; currency: string; note: string | null; status: string; created_at: string; responded_at: string | null; by_name: string };
 type Ref = { id: string; label: string; status: string; model: string | null; same_model: boolean; points: Point[] };
 
 const ANSWERS: [string, string][] = [['c', 'consistent_with_references'], ['f', 'concerns_found'], ['m', 'insufficient_evidence'], ['r', 'requires_expert_review']];
@@ -18,7 +19,7 @@ export default function VerifyRequest() {
   const { id } = useParams();
   const { t } = useI18n();
   const me = useContext(MeContext)!;
-  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null; refs?: Record<string, Ref> } | null>(null);
+  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null; refs?: Record<string, Ref>; certificate?: any; offers?: Offer[] } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -75,6 +76,13 @@ export default function VerifyRequest() {
         {r.entrupy_requested ? <p className="mt-2 text-xs">➕ {t('vr.entrupy')} · {money(data.plan?.entrupy_price_cents, data.plan?.currency ?? 'USD', t('vr.priceLater'))}</p> : null}
         <p className="mt-3 text-[11px] text-muted">{t('vr.disclaimer')}</p>
       </div>
+
+      <CertificateBox requestId={r.id} cert={data.certificate ?? null} canIssue={staff && r.status === 'answered' && r.expert_outcome === 'consistent_with_references'}
+        canRevoke={['owner', 'lead_authenticator'].includes(me.role)} onChange={load} />
+
+      {r.status === 'answered' && r.expert_outcome === 'consistent_with_references' && (
+        <BuybackBox requestId={r.id} offers={data.offers ?? []} isOwner={r.user_id === me.id} staff={staff} currency={data.plan?.currency ?? 'USD'} onChange={load} />
+      )}
 
       {r.status === 'more_photos' && r.user_id === me.id && (
         <label className="btn-primary flex w-full cursor-pointer justify-center !py-3">
@@ -156,6 +164,156 @@ function CompareWithRefs({ photos, refs }: { photos: { id: string; step: string 
           </div>
         );
       })}
+    </section>
+  );
+}
+
+/**
+ * HENGZ expert certificate for this request. Staff issue it by hand (only after the answer
+ * "consistent with references"); the customer opens it to print or save as PDF.
+ */
+function CertificateBox({ requestId, cert, canIssue, canRevoke, onChange }: { requestId: string; cert: any | null; canIssue: boolean; canRevoke: boolean; onChange: () => void }) {
+  const { t } = useI18n();
+  const [desc, setDesc] = useState('');
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  async function issue() {
+    if (!window.confirm(t('cert.confirmIssue'))) return;
+    setBusy(true); setErr(null);
+    try { await api.post(`/api/verify/${requestId}/certificate`, { itemDesc: desc || undefined }); onChange(); } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+  async function revoke() {
+    const reason = window.prompt(t('cert.revokeReason'));
+    if (!reason || reason.trim().length < 3) return;
+    setBusy(true); setErr(null);
+    try { await api.post(`/api/hengz-certificates/${cert.id}/revoke`, { reason: reason.trim() }); onChange(); } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+  if (cert) {
+    const revoked = cert.status === 'revoked';
+    return (
+      <div className={`rounded-2xl border p-4 ${revoked ? 'border-counterfeit/40 bg-counterfeit/5' : 'border-gold bg-gold-light'}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="font-serif text-lg">🏅 {t('cert.title')}</div>
+            <div className="font-mono text-xs">{cert.cert_no} · {new Date(cert.issued_at).toLocaleDateString()} · {cert.expert_name}</div>
+          </div>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${revoked ? 'bg-counterfeit text-white' : 'bg-verified text-white'}`}>{revoked ? t('cert.revokedBadge') : t('cert.validBadge')}</span>
+        </div>
+        {revoked && <p className="mt-2 text-xs">{cert.revoked_reason}</p>}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a className="btn-primary !py-2 text-xs" href={`/certificate/${cert.public_code}`} target="_blank" rel="noreferrer">⎙ {t('cert.open')}</a>
+          {canRevoke && !revoked && <button type="button" className="btn-ghost !py-2 text-xs" disabled={busy} onClick={revoke}>{t('cert.revoke')}</button>}
+        </div>
+        {err && <p className="mt-2 text-xs text-counterfeit">{err}</p>}
+      </div>
+    );
+  }
+  if (!canIssue) return null;
+  return (
+    <div className="space-y-2 rounded-2xl border border-dashed border-gold p-4">
+      <div className="font-semibold">🏅 {t('cert.issueTitle')}</div>
+      <p className="text-xs text-muted">{t('cert.issueHelp')}</p>
+      <input className="input text-sm" maxLength={300} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t('cert.descPh')} />
+      <button type="button" className="btn-primary w-full !py-2.5" disabled={busy} onClick={issue}>{busy ? '…' : `🏅 ${t('cert.issue')}`}</button>
+      {err && <p className="text-xs text-counterfeit">{err}</p>}
+    </div>
+  );
+}
+
+const fmtMoney = (cents: number, cur: string) => {
+  try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: cur === 'KHR' ? 0 : 2 }).format(cents / 100); }
+  catch { return `${(cents / 100).toFixed(2)} ${cur}`; }
+};
+const OFFER_TONE: Record<string, string> = { open: 'bg-gold-light text-charcoal', accepted: 'bg-verified text-white', declined: 'bg-counterfeit/10 text-counterfeit', withdrawn: 'bg-surface-high text-muted', superseded: 'bg-surface-high text-muted' };
+
+/**
+ * Buy-back after "consistent with references": HENGZ offers a price and/or the customer sends theirs.
+ * The other side accepts or declines; a new price replaces the open one. Once accepted, HENGZ arranges the buy-back.
+ */
+function BuybackBox({ requestId, offers, isOwner, staff, currency, onChange }: { requestId: string; offers: Offer[]; isOwner: boolean; staff: boolean; currency: string; onChange: () => void }) {
+  const { t } = useI18n();
+  const [form, setForm] = useState<{ amount: string; currency: string; note: string }>({ amount: '', currency, note: '' });
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  if (!isOwner && !staff) return null;
+  const agreed = offers.find((o) => o.status === 'accepted');
+  const open = offers.find((o) => o.status === 'open');
+  // which side this viewer speaks for (staff on someone else's request = HENGZ; the request owner = customer)
+  const mySide: 'hengz' | 'customer' = isOwner ? 'customer' : 'hengz';
+  const canAnswer = (o: Offer) => (o.from_side === 'hengz' ? isOwner : staff);
+  const canWithdraw = (o: Offer) => (o.from_side === 'customer' ? isOwner : staff);
+
+  async function send(side: 'hengz' | 'customer') {
+    const amount = Number(form.amount.replace(/,/g, ''));
+    if (!(amount > 0)) return;
+    setBusy(true); setErr(null);
+    try { await api.post(`/api/verify/${requestId}/offers`, { side, amount, currency: form.currency, note: form.note || undefined }); setForm({ ...form, amount: '', note: '' }); onChange(); }
+    catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+  async function respond(o: Offer, action: 'accept' | 'decline' | 'withdraw') {
+    if (action === 'accept' && !window.confirm(`${t('bb.confirmAccept')} ${fmtMoney(o.amount_cents, o.currency)}?`)) return;
+    setBusy(true); setErr(null);
+    try { await api.post(`/api/verify/offers/${o.id}/respond`, { action }); onChange(); } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-gold/60 bg-surface-card p-4">
+      <div>
+        <h2 className="font-serif text-lg leading-tight">💰 {t('bb.title')}</h2>
+        <p className="text-xs text-muted">{isOwner ? t('bb.helpCustomer') : t('bb.helpStaff')}</p>
+      </div>
+
+      {agreed && (
+        <div className="rounded-xl bg-verified/10 p-3 text-sm">
+          <div className="font-semibold text-verified">✅ {t('bb.agreed')} {fmtMoney(agreed.amount_cents, agreed.currency)}</div>
+          <div className="text-xs">{isOwner ? t('bb.agreedCustomer') : t('bb.agreedStaff')}</div>
+        </div>
+      )}
+
+      {offers.length > 0 && (
+        <ol className="space-y-2">
+          {offers.map((o) => (
+            <li key={o.id} className={`rounded-xl border p-3 ${o.from_side === 'hengz' ? 'border-gold/50 bg-gold-light/40' : 'border-hairline bg-surface-low'}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-muted">{o.from_side === 'hengz' ? `HENGZ AUTHENTIC · ${t('bb.offer')}` : `${o.by_name} · ${t('bb.asking')}`}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${OFFER_TONE[o.status]}`}>{t(`bb.st.${o.status}`)}</span>
+              </div>
+              <div className="mt-0.5 font-serif text-2xl leading-tight">{fmtMoney(o.amount_cents, o.currency)}</div>
+              {o.note && <p className="mt-1 whitespace-pre-wrap text-[13px]">{o.note}</p>}
+              <div className="mt-1 text-[11px] text-muted">{new Date(o.created_at).toLocaleString()}</div>
+              {o.status === 'open' && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {canAnswer(o) && <>
+                    <button type="button" className="btn-primary !py-1.5 text-xs" disabled={busy} onClick={() => respond(o, 'accept')}>✓ {t('bb.accept')}</button>
+                    <button type="button" className="btn-ghost !py-1.5 text-xs" disabled={busy} onClick={() => respond(o, 'decline')}>{t('bb.decline')}</button>
+                  </>}
+                  {canWithdraw(o) && !canAnswer(o) && <button type="button" className="btn-ghost !py-1.5 text-xs" disabled={busy} onClick={() => respond(o, 'withdraw')}>{t('bb.withdraw')}</button>}
+                  {!canAnswer(o) && <span className="self-center text-xs text-muted">{t('bb.waiting')}</span>}
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {!agreed && (
+        <div className="space-y-2 border-t border-hairline pt-3">
+          <div className="text-sm font-semibold">{mySide === 'customer' ? (open?.from_side === 'hengz' ? t('bb.counter') : t('bb.sendPrice')) : (open?.from_side === 'customer' ? t('bb.counterStaff') : t('bb.makeOffer'))}</div>
+          <div className="flex gap-2">
+            <input className="input min-w-0 flex-1" inputMode="decimal" placeholder="0.00" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} aria-label={t('bb.amount')} />
+            <select className="input !w-auto" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} aria-label={t('bb.currency')}>
+              {['USD', 'KHR', 'THB', 'VND', 'IDR'].map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <input className="input" maxLength={500} placeholder={t('bb.notePh')} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <button type="button" className="btn-primary w-full !py-2.5" disabled={busy || !(Number(form.amount.replace(/,/g, '')) > 0)} onClick={() => send(mySide)}>
+            {busy ? '…' : `💰 ${t('bb.send')}`}
+          </button>
+        </div>
+      )}
+      {err && <p className="text-xs text-counterfeit">{err}</p>}
     </section>
   );
 }
