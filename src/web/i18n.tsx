@@ -312,6 +312,7 @@ const D: Record<string, { km: string; en: string }> = {
   'folder.compareKicker': { km: 'ប្រៀបធៀប', en: 'Comparisons' },
   'folder.other': { km: 'រូបផ្សេងៗ', en: 'Other photos' },
   'folder.mixed': { km: 'ប្រៀបធៀប និងរូបមិនមានម៉ូដែល', en: 'Comparisons & photos without a model' },
+  'feed.translating': { km: 'កំពុងបកប្រែការពន្យល់ជាខ្មែរ / អង់គ្លេស…', en: 'Translating explanations to Khmer / English…' },
   'feed.title': { km: 'ការបង្ហោះថ្មីៗ', en: 'Latest posts' },
   'feed.help': { km: 'រូបដែល admin upload។ ប្រអប់លេខបង្ហាញកន្លែងត្រូវមើល ហើយការពន្យល់នៅខាងក្រោមរូប។', en: 'Photos uploaded by admins. Numbered boxes show where to look; explanations are under each photo.' },
   'feed.none': { km: 'មិនទាន់មានការបង្ហោះទេ។ Admin ចុចឡូហ្គោ 5 ដង ដើម្បី upload រូប។', en: 'No posts yet. An admin can tap the logo 5 times to upload photos.' },
