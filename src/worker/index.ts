@@ -926,6 +926,17 @@ app.get('/api/feed', async (c) => {
       : null;
     return { ...p, points: points?.results.filter((x) => x.asset_id === p.id) ?? [], transcription, genuineRefId: pick?.id ?? null };
   });
+  // self-healing translations: points shown here without Khmer + English get translated in the background,
+  // so the next load shows the viewer's language (KH -> Khmer, EN -> English)
+  const missing = (points?.results ?? []).filter((x) => !x.i18n_json).slice(0, 25);
+  if (missing.length && aiConfigured(c.env)) {
+    c.executionCtx.waitUntil((async () => {
+      const tr = await translatePoints(c.env, missing.map((x) => ({ id: x.id, label: x.label, note: x.note })));
+      for (const [id, v] of Object.entries(tr)) {
+        await c.env.DB.prepare('UPDATE reference_points SET i18n_json = ? WHERE id = ? AND i18n_json IS NULL').bind(JSON.stringify(v), id).run();
+      }
+    })().catch(() => {}));
+  }
   return c.json({ posts: out, next: more ? page[page.length - 1].created_at : null, aiConfigured: aiConfigured(c.env) });
 });
 // ───────────────────────── teaching points: fill in Khmer + English for points that have only one language ─────────────────────────

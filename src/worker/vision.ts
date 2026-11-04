@@ -173,10 +173,10 @@ export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: {
     'BOX — a tight rectangle around exactly that detail (x, y = top-left corner; x, y, w, h are fractions 0..1 of IMAGE 1\'s width and height). ' +
     'Before answering, check each box really contains the named detail; if you are unsure where it is, leave that detail out. ' +
     'LABEL — 2 to 5 words naming the detail (e.g. "Star-head screw", "Heat stamp lettering"). ' +
-    'NOTE — at most two short sentences. Sentence 1: what an experienced authenticator checks there and why it matters, using real trade knowledge ' +
+    'NOTE — two short lines, easy to remember. Line 1 (max 14 words): what an experienced authenticator checks there and why, using real trade knowledge ' +
     '(for example: some brands use proprietary screw heads that ordinary repair tools cannot turn; Louis Vuitton heat stamps have very round O\'s and close double T\'s). ' +
-    'Sentence 2 starts with "In this photo:" and says what is visible here. No generic advice about lighting or resolution unless it hides the detail. ' +
-    'Write every label and note in BOTH English and Khmer. Khmer must be natural Khmer, not word for word; its second sentence starts with "ក្នុងរូបនេះ៖". ' +
+    'Line 2 (max 10 words) starts with "In this photo:" and says what is visible here. No generic advice about lighting or resolution unless it hides the detail. ' +
+    'Write every label and note in BOTH English and Khmer. Khmer must be natural, simple Khmer, not word for word; its second line starts with "ក្នុងរូបនេះ៖". Separate the two lines with a line break. ' +
     'Keep brand names, codes and stamped words exactly as written on the item. ' +
     'Reply with JSON only: [{"x":0..1,"y":0..1,"w":0..1,"h":0..1,"label_en":"...","note_en":"...","label_km":"...","note_km":"..."}]',
     compare ? [image, ctx.reference!] : [image],
@@ -274,7 +274,7 @@ export async function identifyStyleCode(env: Env, brand: string, code: string, h
 /** Translate existing teaching points so each has English and Khmer. Text only; meaning and codes unchanged. */
 export async function translatePoints(env: Env, items: { id: string; label: string; note: string | null }[]): Promise<Record<string, { en: { label: string; note?: string }; km: { label: string; note?: string } }>> {
   const text = await callVision(env,
-    'You translate short teaching notes about luxury bags between English and Khmer. Keep the meaning, keep brand names, codes and stamped words exactly as written, ' +
+    'You translate short teaching notes about luxury bags between English and Khmer, making each one short and easy to remember (a learner reads it on a phone). Keep the meaning, keep brand names, codes and stamped words exactly as written, ' +
     'keep line breaks. If a note has a line starting "In this photo:" the Khmer line starts "ក្នុងរូបនេះ៖" and vice versa. Natural Khmer, not word for word. ' +
     'Reply with JSON only: [{"id":"...","label_en":"...","note_en":"...","label_km":"...","note_km":"..."}] — one entry per input id.',
     [], JSON.stringify(items.map((i) => ({ id: i.id, label: i.label, note: i.note ?? '' }))), 16000, 'low');

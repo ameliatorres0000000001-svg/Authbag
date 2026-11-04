@@ -37,8 +37,14 @@ export default function Install() {
           <img src="/icons/icon-192.png" alt="" width={104} height={104} className="rounded-[24px]"
             style={{ boxShadow: '0 0 0 1px rgba(242,202,80,0.35), 0 0 70px rgba(242,202,80,0.35)' }} />
           <div className="mt-8 font-mono text-[11px] uppercase tracking-[0.35em]" style={{ color: C.gold }}>HENGZ AUTHENTIC</div>
-          <h1 className="mt-3 font-serif text-[30px] leading-tight">{t('install.title')}</h1>
-          <p className="mt-3 max-w-xs text-[15px] leading-relaxed" style={{ color: C.soft }}>{t('install.body')}</p>
+          <h1 className="mt-3 max-w-[18rem] font-serif text-[32px] font-medium leading-[1.2]"
+            style={{ background: 'linear-gradient(180deg,#fff 0%,#f3e7c4 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t('install.title')}</h1>
+          <p className="mt-3 max-w-[19rem] text-[15px] leading-relaxed" style={{ color: C.soft }}>{t('install.body')}</p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            {['install.f3', 'install.f2', 'install.f1'].map((k) => (
+              <span key={k} className="rounded-full px-3 py-1 text-[12px] backdrop-blur" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: C.text }}>{t(k)}</span>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -88,28 +94,47 @@ export default function Install() {
   );
 }
 
-/** Deep-space background: nebula glows and three layers of slowly twinkling stars (pure CSS, no images). */
+/**
+ * Living galaxy background: slow-moving aurora colours (violet, blue, teal, rose, gold), twinkling stars and
+ * a few softly floating gold shapes. Pure CSS; motion stops for users who prefer reduced motion.
+ */
 function Galaxy() {
   const stars = (n: number, size: number, seed: number) => {
     let x = seed;
     const r = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
     return Array.from({ length: n }, () => `radial-gradient(${size}px ${size}px at ${Math.round(r() * 1000) / 10}% ${Math.round(r() * 1000) / 10}%, rgba(255,255,255,${(0.5 + r() * 0.5).toFixed(2)}), transparent)`).join(',');
   };
+  const blobs: [string, string, string, string, string][] = [
+    // colour, size, left, top, animation
+    ['rgba(124,77,255,0.55)', '70vmax', '-20%', '-15%', 'hz-float-a 26s ease-in-out infinite alternate'],
+    ['rgba(0,170,255,0.40)', '60vmax', '45%', '-5%', 'hz-float-b 32s ease-in-out infinite alternate'],
+    ['rgba(0,210,170,0.28)', '55vmax', '-10%', '45%', 'hz-float-b 38s ease-in-out infinite alternate-reverse'],
+    ['rgba(255,70,160,0.30)', '50vmax', '55%', '50%', 'hz-float-a 30s ease-in-out infinite alternate-reverse'],
+    ['rgba(242,202,80,0.30)', '45vmax', '20%', '75%', 'hz-float-c 24s ease-in-out infinite alternate'],
+  ];
+  const floaters: [string, string, string, number, number][] = [
+    // shape, left, size, duration s, delay s
+    ['◇', '12%', '22px', 26, 0], ['✦', '78%', '16px', 22, 4], ['○', '30%', '28px', 34, 9], ['◇', '64%', '18px', 30, 14], ['✦', '88%', '12px', 24, 2], ['○', '6%', '14px', 28, 17],
+  ];
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0">
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       <style>{`
-        @keyframes hz-twinkle { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
-        @keyframes hz-drift { from { transform: translateY(0) } to { transform: translateY(-40px) } }
+        @keyframes hz-twinkle { 0%,100% { opacity: .4 } 50% { opacity: 1 } }
+        @keyframes hz-float-a { from { transform: translate(0,0) scale(1) } to { transform: translate(12vw,8vh) scale(1.15) } }
+        @keyframes hz-float-b { from { transform: translate(0,0) scale(1.1) } to { transform: translate(-14vw,10vh) scale(.95) } }
+        @keyframes hz-float-c { from { transform: translate(0,0) scale(1) } to { transform: translate(10vw,-12vh) scale(1.2) } }
+        @keyframes hz-rise { 0% { transform: translateY(0) rotate(0deg); opacity: 0 } 10% { opacity: .55 } 90% { opacity: .55 } 100% { transform: translateY(-110vh) rotate(180deg); opacity: 0 } }
         @media (prefers-reduced-motion: reduce) { .hz-anim { animation: none !important } }
       `}</style>
-      <div className="absolute inset-0" style={{ background:
-        'radial-gradient(60% 40% at 20% 15%, rgba(110,72,200,0.38), transparent 70%),' +
-        'radial-gradient(50% 35% at 85% 30%, rgba(40,90,190,0.32), transparent 70%),' +
-        'radial-gradient(40% 30% at 70% 70%, rgba(180,60,140,0.20), transparent 70%),' +
-        'radial-gradient(70% 45% at 50% 100%, rgba(242,202,80,0.16), transparent 70%)' }} />
-      <div className="hz-anim absolute inset-0" style={{ backgroundImage: stars(80, 1, 7), animation: 'hz-twinkle 5s ease-in-out infinite' }} />
-      <div className="hz-anim absolute inset-x-0 -bottom-10 top-0" style={{ backgroundImage: stars(36, 2, 13), animation: 'hz-drift 40s linear infinite alternate, hz-twinkle 7s ease-in-out infinite' }} />
-      <div className="hz-anim absolute inset-0" style={{ backgroundImage: stars(10, 3, 29), animation: 'hz-twinkle 9s ease-in-out infinite' }} />
+      {blobs.map(([c, size, left, top, anim], i) => (
+        <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 65%)`, filter: 'blur(30px)', animation: anim }} />
+      ))}
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(120% 90% at 50% 40%, transparent 30%, rgba(5,4,12,0.75) 100%)' }} />
+      <div className="hz-anim absolute inset-0" style={{ backgroundImage: stars(90, 1, 7), animation: 'hz-twinkle 5s ease-in-out infinite' }} />
+      <div className="hz-anim absolute inset-0" style={{ backgroundImage: stars(30, 2, 13), animation: 'hz-twinkle 8s ease-in-out infinite reverse' }} />
+      {floaters.map(([ch, left, size, dur, delay], i) => (
+        <span key={i} className="hz-anim absolute bottom-[-40px]" style={{ left, fontSize: size, color: '#f2ca50', textShadow: '0 0 12px rgba(242,202,80,0.6)', animation: `hz-rise ${dur}s linear ${delay}s infinite`, opacity: 0 }}>{ch}</span>
+      ))}
     </div>
   );
 }
