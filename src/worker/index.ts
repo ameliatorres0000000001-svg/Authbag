@@ -10,6 +10,7 @@ import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
 import { OUT_LANGS, type OutLang, translatePoints, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
+import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
 const app = new Hono<AppEnv>();
@@ -80,7 +81,7 @@ app.post('/api/auth/login', async (c) => {
 // everything below requires a session
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
-  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/')) return next();
+  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook') return next();
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
   if (!user) return c.json({ error: 'unauthenticated' }, 401);
   c.set('user', user);
@@ -1098,6 +1099,240 @@ app.put('/api/settings/:key', need(['owner']), async (c) => {
   const { value } = await parse(c, z.object({ value: z.number().int().min(1).max(1000) }));
   await c.env.DB.prepare('UPDATE settings SET value = ?, updated_by = ?, updated_at = ? WHERE key = ?').bind(String(value), c.get('user').id, nowIso(), key).run();
   await audit(c.env, c.get('user').id, 'settings.update', 'settings', key, { value });
+  return c.json({ ok: true });
+});
+
+// ───────────────────────── expert verification (photos → experts' Telegram group) ─────────────────────────
+// The expert answers with one of the system's four outcomes. This system never issues a certificate;
+// an official Entrupy certificate is only recorded as a requested add-on.
+const VERIFY_STEPS = ['model', 'logo', 'serial', 'material', 'hardware', 'zipper', 'extra'] as const;
+const VERIFY_REQUIRED = ['model', 'logo', 'serial'] as const;
+const VERIFY_TRIAL = 3;
+const MAX_VERIFY_PHOTOS = 10;
+// where to find an example photo for each step among the brand's reference photos
+const STEP_COMPONENT: Record<string, string> = { model: 'canvas', logo: 'heat_stamp', serial: 'date_code', material: 'canvas', hardware: 'hardware', zipper: 'zipper' };
+
+const trialUsed = async (env: AppEnv['Bindings'], userId: string) =>
+  (await env.DB.prepare('SELECT COUNT(*) AS n FROM verify_requests WHERE user_id = ? AND free_trial = 1').bind(userId).first<{ n: number }>())?.n ?? 0;
+
+async function planForBrand(env: AppEnv['Bindings'], brandSlug: string) {
+  const plans = (await env.DB.prepare('SELECT * FROM verify_plans WHERE active = 1 ORDER BY sort').all<Record<string, any>>()).results;
+  return plans.find((p) => { try { return (JSON.parse(p.brands_json) as string[]).includes(brandSlug); } catch { return false; } }) ?? plans[0] ?? null;
+}
+
+app.get('/api/verify/plans', async (c) =>
+  c.json({ plans: (await c.env.DB.prepare('SELECT * FROM verify_plans ORDER BY sort').all()).results }));
+
+app.get('/api/verify/meta', async (c) => {
+  const me = c.get('user'); const brandId = c.req.query('brandId') ?? '';
+  const staff = STAFF.includes(me.role);
+  const used = staff ? 0 : await trialUsed(c.env, me.id);
+  const out: Record<string, any> = { trial: { used, limit: VERIFY_TRIAL, unlimited: staff }, telegram: telegramConfigured(c.env), examples: {}, plan: null };
+  if (brandId) {
+    const b = await c.env.DB.prepare('SELECT slug FROM brands WHERE id = ?').bind(brandId).first<{ slug: string }>();
+    if (b) out.plan = await planForBrand(c.env, b.slug);
+    for (const [step, comp] of Object.entries(STEP_COMPONENT)) {
+      const r = await c.env.DB.prepare(`SELECT id FROM reference_assets WHERE brand_id = ? AND component_code = ? AND status <> 'rejected' AND label <> 'counterfeit'
+        ORDER BY (status = 'approved') DESC, (label = 'authentic') DESC, created_at DESC LIMIT 1`).bind(brandId, comp).first<{ id: string }>();
+      out.examples[step] = r?.id ?? null;
+    }
+  }
+  return c.json(out);
+});
+
+app.post('/api/verify', async (c) => {
+  const me = c.get('user');
+  const form = await c.req.formData();
+  const brandId = String(form.get('brandId') ?? ''); const mode = String(form.get('mode') ?? '');
+  const modelText = String(form.get('model') ?? '').trim().slice(0, 120) || null;
+  const entrupy = form.get('entrupy') === '1' ? 1 : 0;
+  if (!['scan', 'upload'].includes(mode)) return c.json({ error: 'invalid_mode' }, 400);
+  const brand = await c.env.DB.prepare('SELECT id, slug, name FROM brands WHERE id = ?').bind(brandId).first<{ id: string; slug: string; name: string }>();
+  if (!brand) return c.json({ error: 'brand_required' }, 400);
+
+  const photos: { step: string; data: ArrayBuffer; mime: string }[] = [];
+  for (const step of VERIFY_STEPS) {
+    for (const f of form.getAll(step)) {
+      if (!(f instanceof File)) continue;
+      if (f.size > MAX_IMAGE_BYTES) return c.json({ error: 'file_too_large', maxBytes: MAX_IMAGE_BYTES }, 413);
+      const data = await f.arrayBuffer();
+      const mime = sniffImage(new Uint8Array(data, 0, 16));
+      if (!mime) return c.json({ error: 'not_a_supported_image' }, 415);
+      photos.push({ step, data, mime });
+    }
+  }
+  const missing = VERIFY_REQUIRED.filter((s) => !photos.some((p) => p.step === s));
+  if (missing.length) return c.json({ error: 'photos_required', missing }, 400);
+  if (photos.length > MAX_VERIFY_PHOTOS) return c.json({ error: 'too_many_photos', max: MAX_VERIFY_PHOTOS }, 400);
+
+  const staff = STAFF.includes(me.role);
+  const used = staff ? 0 : await trialUsed(c.env, me.id);
+  // paid plans are not open yet: after the free trial, non-staff users wait for the plans to be priced
+  if (!staff && used >= VERIFY_TRIAL) return c.json({ error: 'trial_used', limit: VERIFY_TRIAL }, 402);
+  const plan = await planForBrand(c.env, brand.slug);
+
+  const id = uid('vr_');
+  await c.env.DB.prepare('INSERT INTO verify_requests (id, user_id, brand_id, model_text, mode, plan_id, free_trial, entrupy_requested) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, me.id, brand.id, modelText, mode, plan?.id ?? null, staff ? 0 : 1, entrupy).run();
+  for (const p of photos) {
+    const pid = uid('vp_'); const key = `verify/${id}/${p.step}/${pid}`;
+    await c.env.VAULT.put(key, p.data, { httpMetadata: { contentType: p.mime } });
+    await c.env.DB.prepare('INSERT INTO verify_photos (id, request_id, step, r2_key, mime) VALUES (?, ?, ?, ?, ?)').bind(pid, id, p.step, key, p.mime).run();
+  }
+  await audit(c.env, me.id, 'verify.submit', 'verify_request', id, { brand: brand.slug, photos: photos.length, entrupy: !!entrupy });
+
+  if (telegramConfigured(c.env)) {
+    const summary = [`🔎 Verification request ${id}`, `Brand: ${brand.name}`, modelText ? `Model: ${modelText}` : null,
+      `Customer: ${me.name} (${me.email})`, `Mode: ${mode} · ${photos.length} photos`, entrupy ? '➕ Customer also asked for an official Entrupy certificate' : null,
+      staff ? null : `Free trial ${used + 1}/${VERIFY_TRIAL}`].filter(Boolean).join('\n');
+    c.executionCtx.waitUntil(sendReviewRequest(c.env, { id, summary, photos })
+      .then((mid) => c.env.DB.prepare('UPDATE verify_requests SET telegram_message_id = ?, telegram_error = NULL WHERE id = ?').bind(mid, id).run())
+      .catch((e) => c.env.DB.prepare('UPDATE verify_requests SET telegram_error = ? WHERE id = ?').bind(String((e as Error).message).slice(0, 300), id).run()));
+  } else {
+    await c.env.DB.prepare('UPDATE verify_requests SET telegram_error = ? WHERE id = ?').bind('telegram_not_configured', id).run();
+  }
+  return c.json({ id });
+});
+
+const VR_COLS = `r.id, r.user_id, r.brand_id, b.name AS brand, r.model_text, r.mode, r.plan_id, r.free_trial, r.entrupy_requested, r.status,
+  r.expert_outcome, r.expert_note, r.expert_name, r.created_at, r.answered_at, (r.telegram_message_id IS NOT NULL) AS sent, r.telegram_error`;
+
+app.get('/api/verify', async (c) => {
+  const me = c.get('user');
+  const all = c.req.query('all') === '1' && ADMINS.includes(me.role);
+  const rows = await c.env.DB.prepare(`SELECT ${VR_COLS}, (SELECT id FROM verify_photos WHERE request_id = r.id ORDER BY created_at LIMIT 1) AS cover
+    FROM verify_requests r JOIN brands b ON b.id = r.brand_id ${all ? '' : 'WHERE r.user_id = ?'} ORDER BY r.created_at DESC LIMIT 100`)
+    .bind(...(all ? [] : [me.id])).all();
+  return c.json({ requests: rows.results });
+});
+
+const canSeeRequest = (me: { id: string; role: Role }, userId: string) => me.id === userId || STAFF.includes(me.role) || ADMINS.includes(me.role);
+
+app.get('/api/verify/:id', async (c) => {
+  const me = c.get('user');
+  const r = await c.env.DB.prepare(`SELECT ${VR_COLS} FROM verify_requests r JOIN brands b ON b.id = r.brand_id WHERE r.id = ?`).bind(c.req.param('id')).first<Record<string, any>>();
+  if (!r || !canSeeRequest(me, r.user_id)) return c.json({ error: 'not_found' }, 404);
+  const photos = (await c.env.DB.prepare('SELECT id, step FROM verify_photos WHERE request_id = ? ORDER BY created_at').bind(r.id).all()).results;
+  const plan = r.plan_id ? await c.env.DB.prepare('SELECT * FROM verify_plans WHERE id = ?').bind(r.plan_id).first() : null;
+  return c.json({ request: r, photos, plan });
+});
+
+app.get('/api/verify/photos/:pid/image', async (c) => {
+  const me = c.get('user');
+  const row = await c.env.DB.prepare('SELECT p.r2_key, p.mime, r.user_id FROM verify_photos p JOIN verify_requests r ON r.id = p.request_id WHERE p.id = ?')
+    .bind(c.req.param('pid')).first<{ r2_key: string; mime: string; user_id: string }>();
+  if (!row || !canSeeRequest(me, row.user_id)) return c.json({ error: 'not_found' }, 404);
+  const obj = await c.env.VAULT.get(row.r2_key);
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': row.mime, 'cache-control': 'private, max-age=300' } });
+});
+
+/** After "need more photos", the customer adds photos to the same request (no new trial used) and it goes back to the experts. */
+app.post('/api/verify/:id/photos', async (c) => {
+  const me = c.get('user');
+  const r = await c.env.DB.prepare('SELECT r.id, r.user_id, r.status, r.telegram_message_id, b.name AS brand FROM verify_requests r JOIN brands b ON b.id = r.brand_id WHERE r.id = ?')
+    .bind(c.req.param('id')).first<Record<string, any>>();
+  if (!r || r.user_id !== me.id) return c.json({ error: 'not_found' }, 404);
+  if (r.status !== 'more_photos') return c.json({ error: 'not_waiting_for_photos' }, 409);
+  const form = await c.req.formData();
+  const photos: { step: string; data: ArrayBuffer; mime: string }[] = [];
+  for (const step of VERIFY_STEPS) for (const f of form.getAll(step)) {
+    if (!(f instanceof File)) continue;
+    if (f.size > MAX_IMAGE_BYTES) return c.json({ error: 'file_too_large', maxBytes: MAX_IMAGE_BYTES }, 413);
+    const data = await f.arrayBuffer(); const mime = sniffImage(new Uint8Array(data, 0, 16));
+    if (!mime) return c.json({ error: 'not_a_supported_image' }, 415);
+    photos.push({ step, data, mime });
+  }
+  if (!photos.length) return c.json({ error: 'photos_required' }, 400);
+  if (photos.length > MAX_VERIFY_PHOTOS) return c.json({ error: 'too_many_photos', max: MAX_VERIFY_PHOTOS }, 400);
+  for (const p of photos) {
+    const pid = uid('vp_'); const key = `verify/${r.id}/${p.step}/${pid}`;
+    await c.env.VAULT.put(key, p.data, { httpMetadata: { contentType: p.mime } });
+    await c.env.DB.prepare('INSERT INTO verify_photos (id, request_id, step, r2_key, mime) VALUES (?, ?, ?, ?, ?)').bind(pid, r.id, p.step, key, p.mime).run();
+  }
+  await c.env.DB.prepare(`UPDATE verify_requests SET status = 'submitted', expert_outcome = NULL, answered_at = NULL WHERE id = ?`).bind(r.id).run();
+  await audit(c.env, me.id, 'verify.more_photos', 'verify_request', r.id, { photos: photos.length });
+  if (telegramConfigured(c.env)) {
+    const summary = `📷 More photos for ${r.id} (${r.brand}) from ${me.name}`;
+    c.executionCtx.waitUntil(sendReviewRequest(c.env, { id: r.id, summary, photos })
+      .then((mid) => c.env.DB.prepare('UPDATE verify_requests SET telegram_message_id = ?, telegram_error = NULL WHERE id = ?').bind(mid, r.id).run())
+      .catch((e) => c.env.DB.prepare('UPDATE verify_requests SET telegram_error = ? WHERE id = ?').bind(String((e as Error).message).slice(0, 300), r.id).run()));
+  }
+  return c.json({ ok: true });
+});
+
+/** Staff can also answer from the web (e.g. when Telegram is down). Same four outcomes. */
+app.post('/api/verify/:id/answer', need(STAFF), async (c) => {
+  const body = await parse(c, z.object({ code: z.enum(['c', 'f', 'm', 'r']), note: z.string().max(2000).optional() }));
+  const a = EXPERT_ANSWERS[body.code];
+  const me = c.get('user');
+  const res = await c.env.DB.prepare(`UPDATE verify_requests SET status = ?, expert_outcome = ?, expert_name = ?, expert_note = COALESCE(?, expert_note), answered_at = ? WHERE id = ? AND status <> 'cancelled'`)
+    .bind(a.status, a.outcome, me.name, body.note?.trim() || null, nowIso(), c.req.param('id')).run();
+  if (!res.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await audit(c.env, me.id, 'verify.answer', 'verify_request', c.req.param('id'), { outcome: a.outcome, via: 'web' });
+  return c.json({ ok: true });
+});
+
+app.put('/api/admin/verify/plans/:id', need(ADMINS), async (c) => {
+  const cents = z.number().int().min(0).max(100_000_00).nullable();
+  const body = await parse(c, z.object({
+    name_en: z.string().min(1).max(160), name_km: z.string().min(1).max(160), brands: z.array(z.string().min(1).max(60)).max(60),
+    price_cents: cents, entrupy_price_cents: cents, currency: z.string().regex(/^[A-Z]{3}$/), active: z.boolean(),
+  }));
+  const res = await c.env.DB.prepare('UPDATE verify_plans SET name_en = ?, name_km = ?, brands_json = ?, price_cents = ?, entrupy_price_cents = ?, currency = ?, active = ?, updated_at = ? WHERE id = ?')
+    .bind(body.name_en, body.name_km, JSON.stringify(body.brands), body.price_cents, body.entrupy_price_cents, body.currency, body.active ? 1 : 0, nowIso(), c.req.param('id')).run();
+  if (!res.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await audit(c.env, c.get('user').id, 'verify.plan_update', 'verify_plan', c.req.param('id'), body);
+  return c.json({ ok: true });
+});
+
+app.get('/api/admin/telegram/status', need(ADMINS), async (c) => {
+  const st = { botToken: !!c.env.TELEGRAM_BOT_TOKEN, chatId: !!c.env.TELEGRAM_CHAT_ID, webhookSecret: !!c.env.TELEGRAM_WEBHOOK_SECRET };
+  let webhook: { url?: string; pending?: number; lastError?: string } | null = null;
+  if (st.botToken) {
+    const info = await webhookInfo(c.env).catch(() => null) as any;
+    if (info) webhook = { url: info.url || '', pending: info.pending_update_count, lastError: info.last_error_message };
+  }
+  return c.json({ ...st, webhook });
+});
+
+app.post('/api/admin/telegram/setup', need(ADMINS), async (c) => {
+  if (!telegramConfigured(c.env) || !c.env.TELEGRAM_WEBHOOK_SECRET) return c.json({ error: 'telegram_secrets_missing' }, 400);
+  const url = `${new URL(c.req.url).origin}/api/telegram/webhook`;
+  await setWebhook(c.env, url);
+  await audit(c.env, c.get('user').id, 'telegram.webhook_set', 'settings', null, { url });
+  return c.json({ ok: true, url });
+});
+
+/** Telegram → us. Authenticated by the secret token header, and only the experts' group is accepted. */
+app.post('/api/telegram/webhook', async (c) => {
+  const secret = c.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!secret || c.req.header('x-telegram-bot-api-secret-token') !== secret) return c.json({ error: 'forbidden' }, 403);
+  const u = await c.req.json().catch(() => null) as any;
+  const chatOk = (id: unknown) => String(id) === String(c.env.TELEGRAM_CHAT_ID);
+  const who = (f: any) => [f?.first_name, f?.last_name].filter(Boolean).join(' ') || (f?.username ? `@${f.username}` : 'Expert');
+
+  const cb = u?.callback_query;
+  if (cb?.data && cb.message && chatOk(cb.message.chat?.id)) {
+    const [tag, id, code] = String(cb.data).split('|');
+    const a = EXPERT_ANSWERS[code];
+    if (tag !== 'vr' || !a) { await answerCallback(c.env, cb.id, 'Unknown action'); return c.json({ ok: true }); }
+    const name = who(cb.from).slice(0, 100);
+    const res = await c.env.DB.prepare(`UPDATE verify_requests SET status = ?, expert_outcome = ?, expert_name = ?, answered_at = ? WHERE id = ? AND status <> 'cancelled'`)
+      .bind(a.status, a.outcome, name, nowIso(), id).run();
+    if (!res.meta.changes) { await answerCallback(c.env, cb.id, 'Request not found'); return c.json({ ok: true }); }
+    await audit(c.env, null, 'verify.answer', 'verify_request', id, { outcome: a.outcome, via: 'telegram', expert: name });
+    await answerCallback(c.env, cb.id, 'Saved');
+    await editDecision(c.env, cb.message.chat.id, cb.message.message_id, `${cb.message.text ?? ''}\n\n→ ${a.button} — ${name}\n(Reply to this message to add or change the note for the customer.)`);
+    return c.json({ ok: true });
+  }
+
+  const m = u?.message;
+  if (m?.text && m.reply_to_message?.message_id && chatOk(m.chat?.id)) {
+    const res = await c.env.DB.prepare('UPDATE verify_requests SET expert_note = ?, expert_name = COALESCE(expert_name, ?) WHERE telegram_message_id = ?')
+      .bind(String(m.text).slice(0, 2000), who(m.from).slice(0, 100), m.reply_to_message.message_id).run();
+    if (res.meta.changes) await sendText(c.env, '📝 Note saved for the customer.', m.message_id);
+  }
   return c.json({ ok: true });
 });
 

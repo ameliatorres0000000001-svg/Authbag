@@ -11,6 +11,10 @@ export interface Env {
   AI_MODEL?: string;
   /** Gemini model used for text translation when GEMINI_API_KEY is set (default gemini-3.8-flash) */
   GEMINI_MODEL?: string;
+  /** Telegram bot for expert review: bot token, the experts' group chat id, and the webhook secret token */
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
+  TELEGRAM_WEBHOOK_SECRET?: string;
 }
 
 export type Role = 'owner' | 'lead_authenticator' | 'appraiser' | 'reviewer' | 'subscriber' | 'readonly';
