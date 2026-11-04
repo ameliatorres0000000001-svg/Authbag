@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
+import { testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
@@ -1615,6 +1615,13 @@ app.put('/api/admin/verify/plans/:id', need(ADMINS), async (c) => {
   if (!res.meta.changes) return c.json({ error: 'not_found' }, 404);
   await audit(c.env, c.get('user').id, 'verify.plan_update', 'verify_plan', c.req.param('id'), body);
   return c.json({ ok: true });
+});
+
+/** Admin: is the AI working right now? One tiny call per configured model, plus the translation backlog. */
+app.get('/api/admin/ai/test', need(ADMINS), async (c) => {
+  const results = aiConfigured(c.env) ? await testAi(c.env) : [];
+  const left = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM reference_points WHERE i18n_json IS NULL').first<{ n: number }>())?.n ?? 0;
+  return c.json({ configured: aiConfigured(c.env), results, untranslated: left });
 });
 
 app.get('/api/admin/telegram/status', need(ADMINS), async (c) => {
