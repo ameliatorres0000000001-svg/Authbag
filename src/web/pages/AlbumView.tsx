@@ -9,7 +9,7 @@ import { STAFF_ROLES, assetImg } from '../studio.ts';
 import type { Post } from '../Feed.tsx';
 import { Dots, GuideBlock, useSlides, type Guide, type GuideText } from '../Album.tsx';
 
-interface Data { model: { id: string; name: string; brand_id: string; brand: string }; photos: Post[]; guide: Guide; similar: { id: string; name: string; photos: number; cover: string | null }[]; aiConfigured: boolean }
+interface Data { model: { id: string; name: string; brand_id: string; brand: string; cover_asset_id: string | null }; photos: Post[]; guide: Guide; similar: { id: string; name: string; photos: number; cover: string | null }[]; aiConfigured: boolean }
 
 /**
  * One album, like an expert's study board: the model's guide, then the photos — swipe left/right,
@@ -90,6 +90,11 @@ export default function AlbumView() {
             <section className="space-y-3 px-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-serif text-xl leading-tight">{part ?? t('admin.noPart')}</span>
+                {staff && (d.model.cover_asset_id === cur.id
+                  ? <span className="text-xs text-gold">⭐ {t('album.isCover')}</span>
+                  : <button type="button" className="btn-ghost !px-2 !py-0.5 text-[11px]" onClick={async () => {
+                      try { await api.put(`/api/albums/${modelId}/cover`, { assetId: cur.id }); setD({ ...d, model: { ...d.model, cover_asset_id: cur.id } }); } catch (e) { setErr(errText(e)); }
+                    }}>⭐ {t('album.setCover')}</button>)}
                 <Badge tone={fake ? 'bad' : cur.label === 'authentic' ? 'ok' : 'muted'}>
                   {fake ? t('study.knownCounterfeit') : cur.label === 'authentic' ? t('study.knownGenuine') : t('study.unlabelled')}
                 </Badge>
