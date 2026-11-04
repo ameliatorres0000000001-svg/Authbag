@@ -40,11 +40,12 @@ export default function AnnotatedPhoto({ src, points, active, onPick, tone = 'ne
         {points.map((p, i) => {
           const on = active === i;
           return (
-            <button key={p.id} type="button" onClick={() => onPick?.(i)} aria-label={`${i + 1}. ${localizePoint(p, locale).label}`}
-              className={`absolute rounded-sm border-2 transition ${p.source === 'ai_suggested' ? 'border-dashed' : ''} ${on ? 'border-gold bg-gold/15 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]' : 'border-white/85 hover:border-gold'}`}
-              style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: `${p.w * 100}%`, height: `${p.h * 100}%`, zIndex: on ? 2 : 1 }}>
-              <span className={`absolute -left-2.5 -top-2.5 flex h-5 w-5 items-center justify-center rounded-full border font-mono text-[10px] font-semibold ${on ? 'border-gold bg-gold text-charcoal' : 'border-white bg-charcoal text-white'}`}>{i + 1}</span>
-            </button>
+            // without onPick the boxes are only drawn (e.g. inside a link that opens the album)
+            React.createElement(onPick ? 'button' : 'span', {
+              key: p.id, ...(onPick ? { type: 'button', onClick: () => onPick(i), 'aria-label': `${i + 1}. ${localizePoint(p, locale).label}` } : { 'aria-hidden': true }),
+              className: `absolute rounded-sm border-2 transition ${onPick ? '' : 'pointer-events-none'} ${p.source === 'ai_suggested' ? 'border-dashed' : ''} ${on ? 'border-gold bg-gold/15 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]' : 'border-white/85 hover:border-gold'}`,
+              style: { left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: `${p.w * 100}%`, height: `${p.h * 100}%`, zIndex: on ? 2 : 1 },
+            }, <span className={`absolute -left-2.5 -top-2.5 flex h-5 w-5 items-center justify-center rounded-full border font-mono text-[10px] font-semibold ${on ? 'border-gold bg-gold text-charcoal' : 'border-white bg-charcoal text-white'}`}>{i + 1}</span>)
           );
         })}
         </div>

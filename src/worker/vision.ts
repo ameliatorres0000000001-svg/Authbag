@@ -300,3 +300,50 @@ export async function translatePoints(env: Env, items: { id: string; label: stri
   }
   return out;
 }
+
+export interface GuideText { title: string; intro: string; steps: string[] }
+export type ModelGuide = { km: GuideText; en: GuideText };
+
+const cleanGuide = (v: any): GuideText | null => {
+  const s = (x: unknown, max: number) => (typeof x === 'string' ? x.trim().slice(0, max) : '');
+  const steps = Array.isArray(v?.steps) ? v.steps.map((x: unknown) => s(x, 240)).filter(Boolean).slice(0, 6) : [];
+  const g = { title: s(v?.title, 120), intro: s(v?.intro, 400), steps };
+  return g.title && g.steps.length ? g : null;
+};
+export const parseModelGuide = (raw: unknown): ModelGuide | null => {
+  const km = cleanGuide((raw as any)?.km); const en = cleanGuide((raw as any)?.en);
+  return km && en ? { km, en } : null;
+};
+
+/**
+ * A short "how to look at this model" guide for an album, written from the album's own teaching points.
+ * Teaching text only: where to look and what to compare against references — never a verdict.
+ */
+export async function writeModelGuide(env: Env, ctx: { brand: string; model: string; points: { part: string | null; label: string; note: string | null }[] }): Promise<ModelGuide | null> {
+  const system = `You are a senior luxury-bag authenticator writing a short study guide for one bag model, for learners reading on a phone. ${NO_VERDICT} ` +
+    'Use only the teaching points provided (they were checked by staff); do not invent features, codes or dates. ' +
+    'Write 3 to 5 steps, in the order an expert inspects the bag (overall shape → logo/stamp → serial/date code → material → hardware → zipper). ' +
+    'Each step is one short line: the part, then exactly what to look at and compare with references. ' +
+    'Write it in English and in natural Khmer (not word for word); keep brand names, codes and stamped words exactly as written. ' +
+    'Reply with JSON only: {"en":{"title":"How to look at <model>","intro":"one sentence","steps":["..."]},"km":{"title":"...","intro":"...","steps":["..."]}}';
+  const input = JSON.stringify({ brand: ctx.brand, model: ctx.model, points: ctx.points.slice(0, 60) });
+  const text = env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY
+    ? await callGemini(env, env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini, system, [], input)
+    : await callVision(env, system, [], input, 3000, 'medium');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  try { return a >= 0 && b > a ? parseModelGuide(JSON.parse(text.slice(a, b + 1))) : null; } catch { return null; }
+}
+
+/** Which of the brand's models a loose photo most likely shows (to suggest an album). Identification of the model only. */
+export async function suggestModelForPhoto(env: Env, image: VisionImage, brand: string, models: { id: string; name: string }[]): Promise<{ modelId: string | null; confidence: number; reason: string }> {
+  const text = await callVision(env,
+    `You identify which bag model a photo shows, from a fixed list, so the photo can be filed in the right album. ${NO_VERDICT} ` +
+    'If the photo is a close-up that could belong to several models, or the model is unclear, answer null. ' +
+    'Reply with JSON only: {"model_id": "<id from the list>" | null, "confidence": 0..1, "reason": "one short English sentence on the visible shape/feature used"}',
+    [image], `Brand: ${brand}\nModels: ${JSON.stringify(models.map((m) => ({ id: m.id, name: m.name })))}`, 600, 'low');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  let o: any = null; try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { o = null; }
+  const id = typeof o?.model_id === 'string' && models.some((m) => m.id === o.model_id) ? o.model_id : null;
+  const conf = Math.max(0, Math.min(1, Number(o?.confidence) || 0));
+  return { modelId: id, confidence: id ? conf : 0, reason: typeof o?.reason === 'string' ? o.reason.slice(0, 200) : '' };
+}

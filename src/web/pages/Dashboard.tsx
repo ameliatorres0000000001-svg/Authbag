@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
 import { FolderCard, LooseFolderCard, type Folder } from '../FeedFolders.tsx';
-import Feed from '../Feed.tsx';
+import Timeline from '../Timeline.tsx';
 
 export interface StudioModel {
   id: string; name: string; brand: string; brand_id: string;
@@ -59,10 +59,10 @@ export default function Dashboard() {
       )}
       {!d && <div className="flex gap-3 overflow-hidden">{[0, 1, 2, 3].map((i) => <div key={i} className="h-[104px] w-[104px] shrink-0 animate-pulse rounded-lg bg-surface-low" />)}</div>}
 
-      {/* posts, one by one */}
+      {/* albums, single photos and genuine-vs-counterfeit comparisons */}
       <section>
         <h1 className="mb-3 text-2xl leading-tight md:text-3xl">{t('feed.title')}</h1>
-        <div className="mx-auto max-w-xl md:mx-0"><Feed brandId={brand || undefined} /></div>
+        <div className="mx-auto max-w-xl md:mx-0"><Timeline brandId={brand || undefined} /></div>
       </section>
     </div>
   );

@@ -102,4 +102,11 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'vr.next': { vi: 'Tiếp', th: 'ถัดไป', id: 'Lanjut' },
   'vr.skip': { vi: 'Bỏ qua', th: 'ข้าม', id: 'Lewati' },
   'vr.back': { vi: 'Quay lại', th: 'กลับ', id: 'Kembali' },
+  'album.tap': { vi: 'Chạm để xem ›', th: 'แตะเพื่อดู ›', id: 'Ketuk untuk detail ›' },
+  'album.open': { vi: 'Mở toàn bộ album', th: 'เปิดอัลบั้มทั้งหมด', id: 'Buka album lengkap' },
+  'album.similar': { vi: 'Mẫu khác của thương hiệu', th: 'รุ่นอื่นของแบรนด์นี้', id: 'Model lain dari merek ini' },
+  'album.single': { vi: 'Ảnh đơn', th: 'ภาพเดี่ยว', id: 'Foto tunggal' },
+  'album.compareKicker': { vi: 'Phân tích · thật và giả', th: 'วิเคราะห์ · ของแท้เทียบของปลอม', id: 'Analisis · asli vs palsu' },
+  'album.points': { vi: 'điểm', th: 'จุด', id: 'titik' },
+  'album.aiDraft': { vi: 'Bản nháp AI', th: 'ฉบับร่าง AI', id: 'Draf AI' },
 };

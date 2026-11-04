@@ -5,6 +5,7 @@ import { useI18n } from './i18n.tsx';
 import Login from './pages/Login.tsx';
 import Dashboard from './pages/Dashboard.tsx';
 import FolderPosts from './pages/FolderPosts.tsx';
+import AlbumView from './pages/AlbumView.tsx';
 import DateCodes from './pages/DateCodes.tsx';
 import Install from './pages/Install.tsx';
 import LangPicker from './LangPicker.tsx';
@@ -115,6 +116,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/posts/:modelId" element={<FolderPosts />} />
+            <Route path="/album/:modelId" element={<AlbumView />} />
             <Route path="/inspections" element={<Inspections />} />
             <Route path="/inspections/new" element={<NewInspection />} />
             <Route path="/inspections/:id" element={<InspectionDetail />} />

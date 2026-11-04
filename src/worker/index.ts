@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { OUT_LANGS, type OutLang, translatePoints, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
+import { OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
@@ -892,6 +892,45 @@ app.get('/api/lessons/:modelId', async (c) => {
 
 
 // ───────────────────────── feed: uploaded photos as posts (newest first), with points and the latest date-code reading ─────────────────────────
+const POST_COLS = `a.id, a.brand_id, b.name AS brand, a.model_id, m.name AS model, a.component_code, cp.name_en AS part_en, cp.name_km AS part_km,
+            a.label, a.label_basis, a.status, a.purpose, a.teaching_title, a.teaching_note, a.lesson_step_id, a.created_at, u.name AS author`;
+const POST_FROM = `FROM reference_assets a JOIN brands b ON b.id = a.brand_id LEFT JOIN models m ON m.id = a.model_id
+     LEFT JOIN components cp ON cp.code = a.component_code LEFT JOIN users u ON u.id = a.created_by`;
+
+/** Attach points, the latest date-code reading and (for counterfeit-labelled photos) a genuine reference to each post. */
+async function buildPosts(c: any, page: Record<string, any>[]): Promise<Record<string, any>[]> {
+  const ids = page.map((p) => p.id);
+  const marks = ids.length ? `(${ids.map(() => '?').join(',')})` : '(NULL)';
+  const [points, readings, refs] = await Promise.all([
+    ids.length ? c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, source FROM reference_points WHERE asset_id IN ${marks} ORDER BY created_at`).bind(...ids).all() : null,
+    ids.length ? c.env.DB.prepare(`SELECT target_id, result_json, created_at FROM datecode_analyses WHERE target_type = 'asset' AND target_id IN ${marks} ORDER BY created_at DESC`).bind(...ids).all() : null,
+    // one approved genuine photo per brand + part, to show beside counterfeit-labelled posts
+    c.env.DB.prepare(`SELECT a.id, a.brand_id, a.component_code, a.model_id FROM reference_assets a WHERE a.label = 'authentic' AND a.status = 'approved' AND a.component_code IS NOT NULL ORDER BY a.created_at DESC LIMIT 200`).all(),
+  ]) as [any, any, any];
+  const out = page.map((p) => {
+    const reading = readings?.results.find((r: any) => r.target_id === p.id);
+    let transcription: string | null = null;
+    try { transcription = reading ? (JSON.parse(reading.result_json).transcription || null) : null; } catch { transcription = null; }
+    const pick = p.label === 'counterfeit' && p.component_code
+      ? (refs.results.find((r: any) => r.brand_id === p.brand_id && r.component_code === p.component_code && r.model_id === p.model_id && r.id !== p.id)
+        ?? refs.results.find((r: any) => r.brand_id === p.brand_id && r.component_code === p.component_code && r.id !== p.id))
+      : null;
+    return { ...p, points: points?.results.filter((x: any) => x.asset_id === p.id) ?? [], transcription, genuineRefId: pick?.id ?? null };
+  });
+  // self-healing translations: points shown here without Khmer + English get translated in the background,
+  // so the next load shows the viewer's language (KH -> Khmer, EN -> English)
+  const missing = (points?.results ?? []).filter((x: any) => !x.i18n_json).slice(0, 6);
+  if (missing.length && aiConfigured(c.env)) {
+    c.executionCtx.waitUntil((async () => {
+      const tr = await translatePoints(c.env, missing.map((x: any) => ({ id: x.id, label: x.label, note: x.note })));
+      for (const [id, v] of Object.entries(tr)) {
+        await c.env.DB.prepare('UPDATE reference_points SET i18n_json = ? WHERE id = ? AND i18n_json IS NULL').bind(JSON.stringify(v), id).run();
+      }
+    })().catch(() => {}));
+  }
+  return out;
+}
+
 app.get('/api/feed', async (c) => {
   const q = c.req.query();
   const limit = Math.min(30, Math.max(1, Number(q.limit) || 10));
@@ -900,46 +939,149 @@ app.get('/api/feed', async (c) => {
   if (q.modelId) { where.push('a.model_id = ?'); args.push(q.modelId); }
   if (q.noModel) where.push('a.model_id IS NULL');
   if (q.before) { where.push('a.created_at < ?'); args.push(q.before); }
-  const posts = (await c.env.DB.prepare(
-    `SELECT a.id, a.brand_id, b.name AS brand, a.model_id, m.name AS model, a.component_code, cp.name_en AS part_en, cp.name_km AS part_km,
-            a.label, a.label_basis, a.status, a.purpose, a.teaching_title, a.teaching_note, a.lesson_step_id, a.created_at, u.name AS author
-     FROM reference_assets a JOIN brands b ON b.id = a.brand_id LEFT JOIN models m ON m.id = a.model_id
-     LEFT JOIN components cp ON cp.code = a.component_code LEFT JOIN users u ON u.id = a.created_by
-     WHERE ${where.join(' AND ')} ORDER BY a.created_at DESC LIMIT ?`,
-  ).bind(...args, limit + 1).all<Record<string, any>>()).results;
+  const posts = (await c.env.DB.prepare(`SELECT ${POST_COLS} ${POST_FROM} WHERE ${where.join(' AND ')} ORDER BY a.created_at DESC LIMIT ?`)
+    .bind(...args, limit + 1).all<Record<string, any>>()).results;
   const more = posts.length > limit;
   const page = posts.slice(0, limit);
-  const ids = page.map((p) => p.id);
-  const marks = ids.length ? `(${ids.map(() => '?').join(',')})` : '(NULL)';
-  const [points, readings, refs] = await Promise.all([
-    ids.length ? c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, source FROM reference_points WHERE asset_id IN ${marks} ORDER BY created_at`).bind(...ids).all<Record<string, any>>() : null,
-    ids.length ? c.env.DB.prepare(`SELECT target_id, result_json, created_at FROM datecode_analyses WHERE target_type = 'asset' AND target_id IN ${marks} ORDER BY created_at DESC`).bind(...ids).all<Record<string, any>>() : null,
-    // one approved genuine photo per brand + part, to show beside counterfeit-labelled posts
-    c.env.DB.prepare(`SELECT a.id, a.brand_id, a.component_code, a.model_id FROM reference_assets a WHERE a.label = 'authentic' AND a.status = 'approved' AND a.component_code IS NOT NULL ORDER BY a.created_at DESC LIMIT 200`).all<Record<string, any>>(),
-  ]);
-  const out = page.map((p) => {
-    const reading = readings?.results.find((r) => r.target_id === p.id);
-    let transcription: string | null = null;
-    try { transcription = reading ? (JSON.parse(reading.result_json).transcription || null) : null; } catch { transcription = null; }
-    const pick = p.label === 'counterfeit' && p.component_code
-      ? (refs.results.find((r) => r.brand_id === p.brand_id && r.component_code === p.component_code && r.model_id === p.model_id && r.id !== p.id)
-        ?? refs.results.find((r) => r.brand_id === p.brand_id && r.component_code === p.component_code && r.id !== p.id))
-      : null;
-    return { ...p, points: points?.results.filter((x) => x.asset_id === p.id) ?? [], transcription, genuineRefId: pick?.id ?? null };
-  });
-  // self-healing translations: points shown here without Khmer + English get translated in the background,
-  // so the next load shows the viewer's language (KH -> Khmer, EN -> English)
-  const missing = (points?.results ?? []).filter((x) => !x.i18n_json).slice(0, 6);
-  if (missing.length && aiConfigured(c.env)) {
-    c.executionCtx.waitUntil((async () => {
-      const tr = await translatePoints(c.env, missing.map((x) => ({ id: x.id, label: x.label, note: x.note })));
-      for (const [id, v] of Object.entries(tr)) {
-        await c.env.DB.prepare('UPDATE reference_points SET i18n_json = ? WHERE id = ? AND i18n_json IS NULL').bind(JSON.stringify(v), id).run();
-      }
-    })().catch(() => {}));
-  }
+  const out = await buildPosts(c, page);
   return c.json({ posts: out, next: more ? page[page.length - 1].created_at : null, aiConfigured: aiConfigured(c.env) });
 });
+
+const ALBUM_PREVIEW = 12;
+const guideOf = (row: { i18n_json: string; status: string; updated_at: string } | null | undefined) => {
+  if (!row) return null;
+  try { return { ...JSON.parse(row.i18n_json), status: row.status, updated_at: row.updated_at }; } catch { return null; }
+};
+
+/**
+ * Home timeline, newest activity first, mixing three kinds of item:
+ *  album   — every photo of one model (genuine / unlabelled), swipe through, with the model's study guide
+ *  photo   — a single photo not filed under a model yet
+ *  compare — a counterfeit-labelled photo, shown next to a genuine reference of the same part
+ */
+app.get('/api/feed/timeline', async (c) => {
+  const q = c.req.query();
+  const limit = Math.min(20, Math.max(1, Number(q.limit) || 6));
+  const brand = q.brandId ? 'AND a.brand_id = ?' : '';
+  const before = q.before ? 'WHERE at < ?' : '';
+  const b = q.brandId ? [q.brandId] : [];
+  const rows = (await c.env.DB.prepare(
+    `SELECT * FROM (
+       SELECT 'album' AS kind, a.model_id AS key, MAX(a.created_at) AS at FROM reference_assets a
+         WHERE a.status <> 'rejected' AND a.model_id IS NOT NULL AND a.label <> 'counterfeit' ${brand} GROUP BY a.model_id
+       UNION ALL
+       SELECT 'photo', a.id, a.created_at FROM reference_assets a WHERE a.status <> 'rejected' AND a.model_id IS NULL AND a.label <> 'counterfeit' ${brand}
+       UNION ALL
+       SELECT 'compare', a.id, a.created_at FROM reference_assets a WHERE a.status <> 'rejected' AND a.label = 'counterfeit' ${brand}
+     ) ${before} ORDER BY at DESC LIMIT ?`,
+  ).bind(...b, ...b, ...b, ...(q.before ? [q.before] : []), limit + 1).all<{ kind: string; key: string; at: string }>()).results;
+  const more = rows.length > limit;
+  const page = rows.slice(0, limit);
+
+  const single = page.filter((r) => r.kind !== 'album').map((r) => r.key);
+  const albumIds = page.filter((r) => r.kind === 'album').map((r) => r.key);
+  const ph = (n: number) => Array.from({ length: n }, () => '?').join(',');
+  const [singleRows, albumRows, totals, guides] = await Promise.all([
+    single.length ? c.env.DB.prepare(`SELECT ${POST_COLS} ${POST_FROM} WHERE a.id IN (${ph(single.length)})`).bind(...single).all<Record<string, any>>() : null,
+    // first photos of each album, oldest first so the overview photo leads
+    albumIds.length ? c.env.DB.prepare(`SELECT * FROM (SELECT ${POST_COLS}, ROW_NUMBER() OVER (PARTITION BY a.model_id ORDER BY a.created_at) AS n ${POST_FROM}
+       WHERE a.status <> 'rejected' AND a.label <> 'counterfeit' AND a.model_id IN (${ph(albumIds.length)})) WHERE n <= ${ALBUM_PREVIEW} ORDER BY created_at`).bind(...albumIds).all<Record<string, any>>() : null,
+    albumIds.length ? c.env.DB.prepare(`SELECT model_id, COUNT(*) AS n FROM reference_assets WHERE status <> 'rejected' AND label <> 'counterfeit' AND model_id IN (${ph(albumIds.length)}) GROUP BY model_id`).bind(...albumIds).all<{ model_id: string; n: number }>() : null,
+    albumIds.length ? c.env.DB.prepare(`SELECT model_id, i18n_json, status, updated_at FROM model_guides WHERE model_id IN (${ph(albumIds.length)})`).bind(...albumIds).all<any>().catch(() => ({ results: [] })) : null,
+  ]);
+  const posts = await buildPosts(c, [...(singleRows?.results ?? []), ...(albumRows?.results ?? [])]);
+  const items = page.map((r) => {
+    if (r.kind !== 'album') return { kind: r.kind, at: r.at, post: posts.find((p) => p.id === r.key) };
+    const photos = posts.filter((p) => p.model_id === r.key && (albumRows?.results ?? []).some((x) => x.id === p.id));
+    return {
+      kind: 'album', at: r.at,
+      album: { model_id: r.key, model: photos[0]?.model ?? '', brand_id: photos[0]?.brand_id, brand: photos[0]?.brand ?? '',
+        total: totals?.results.find((t) => t.model_id === r.key)?.n ?? photos.length, photos,
+        guide: guideOf(guides?.results.find((g: any) => g.model_id === r.key)) },
+    };
+  }).filter((x: any) => x.post || x.album);
+  return c.json({ items, next: more ? page[page.length - 1].at : null, aiConfigured: aiConfigured(c.env) });
+});
+
+/** One album: all its photos with points, the study guide and other models of the same brand. */
+app.get('/api/albums/:modelId', async (c) => {
+  const id = c.req.param('modelId');
+  const model = await c.env.DB.prepare('SELECT m.id, m.name, m.brand_id, b.name AS brand FROM models m JOIN brands b ON b.id = m.brand_id WHERE m.id = ?').bind(id).first<Record<string, any>>();
+  if (!model) return c.json({ error: 'not_found' }, 404);
+  const rows = (await c.env.DB.prepare(`SELECT ${POST_COLS} ${POST_FROM} WHERE a.status <> 'rejected' AND a.model_id = ? ORDER BY (a.label = 'counterfeit'), a.created_at LIMIT 80`).bind(id).all<Record<string, any>>()).results;
+  const [photos, guide, similar] = await Promise.all([
+    buildPosts(c, rows),
+    c.env.DB.prepare('SELECT i18n_json, status, updated_at FROM model_guides WHERE model_id = ?').bind(id).first<any>().catch(() => null),
+    c.env.DB.prepare(`SELECT m.id, m.name, COUNT(a.id) AS photos, (SELECT x.id FROM reference_assets x WHERE x.model_id = m.id AND x.status <> 'rejected' ORDER BY x.created_at LIMIT 1) AS cover
+       FROM models m JOIN reference_assets a ON a.model_id = m.id AND a.status <> 'rejected'
+       WHERE m.brand_id = ? AND m.id <> ? GROUP BY m.id ORDER BY MAX(a.created_at) DESC LIMIT 12`).bind(model.brand_id, id).all(),
+  ]);
+  return c.json({ model, photos, guide: guideOf(guide), similar: similar.results, aiConfigured: aiConfigured(c.env) });
+});
+
+/** AI drafts the album's study guide from its teaching points (staff). Stored as a draft until approved. */
+app.post('/api/albums/:modelId/guide', need(STAFF), async (c) => {
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const id = c.req.param('modelId');
+  const model = await c.env.DB.prepare('SELECT m.id, m.name, b.name AS brand FROM models m JOIN brands b ON b.id = m.brand_id WHERE m.id = ?').bind(id).first<Record<string, any>>();
+  if (!model) return c.json({ error: 'not_found' }, 404);
+  const pts = (await c.env.DB.prepare(`SELECT p.label, p.note, cp.name_en AS part FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id
+     LEFT JOIN components cp ON cp.code = a.component_code
+     WHERE a.model_id = ? AND a.status <> 'rejected' AND a.label <> 'counterfeit' ORDER BY a.created_at, p.created_at LIMIT 60`).bind(id).all<{ label: string; note: string | null; part: string | null }>()).results;
+  if (!pts.length) return c.json({ error: 'no_points_yet' }, 409);
+  let g;
+  try { g = await writeModelGuide(c.env, { brand: model.brand, model: model.name, points: pts }); }
+  catch (e) { return c.json({ error: 'ai_failed', detail: String((e as Error).message ?? e).slice(0, 200) }, 502); }
+  if (!g) return c.json({ error: 'ai_failed' }, 502);
+  await c.env.DB.prepare(`INSERT INTO model_guides (model_id, i18n_json, status, ai_model, updated_by, updated_at) VALUES (?, ?, 'ai_draft', ?, ?, ?)
+    ON CONFLICT(model_id) DO UPDATE SET i18n_json = excluded.i18n_json, status = 'ai_draft', ai_model = excluded.ai_model, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
+    .bind(id, JSON.stringify(g), aiModel(c.env), c.get('user').id, nowIso()).run();
+  await audit(c.env, c.get('user').id, 'guide.ai_draft', 'model', id);
+  return c.json({ guide: { ...g, status: 'ai_draft' } });
+});
+
+/** Staff edit and/or approve the guide. */
+app.put('/api/albums/:modelId/guide', need(STAFF), async (c) => {
+  const gt = z.object({ title: z.string().min(1).max(120), intro: z.string().max(400), steps: z.array(z.string().min(1).max(240)).min(1).max(6) });
+  const body = await parse(c, z.object({ km: gt, en: gt, approve: z.boolean() }));
+  const id = c.req.param('modelId');
+  const status = body.approve ? 'approved' : 'ai_draft';
+  await c.env.DB.prepare(`INSERT INTO model_guides (model_id, i18n_json, status, updated_by, updated_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(model_id) DO UPDATE SET i18n_json = excluded.i18n_json, status = excluded.status, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
+    .bind(id, JSON.stringify({ km: body.km, en: body.en }), status, c.get('user').id, nowIso()).run();
+  await audit(c.env, c.get('user').id, body.approve ? 'guide.approve' : 'guide.edit', 'model', id);
+  return c.json({ ok: true, status });
+});
+
+/** AI suggests which album (model) a loose photo belongs to. Staff confirm before anything moves. */
+app.post('/api/assets/:id/suggest-model', need(STAFF), async (c) => {
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const a = await c.env.DB.prepare('SELECT a.r2_key, a.brand_id, b.name AS brand FROM reference_assets a JOIN brands b ON b.id = a.brand_id WHERE a.id = ?').bind(c.req.param('id')).first<Record<string, any>>();
+  if (!a) return c.json({ error: 'not_found' }, 404);
+  const models = (await c.env.DB.prepare('SELECT id, name FROM models WHERE brand_id = ? ORDER BY name').bind(a.brand_id).all<{ id: string; name: string }>()).results;
+  if (!models.length) return c.json({ modelId: null, confidence: 0, reason: 'no_models' });
+  const obj = await c.env.VAULT.get(a.r2_key);
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  let r;
+  try { r = await suggestModelForPhoto(c.env, { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? 'image/jpeg' }, a.brand, models); }
+  catch (e) { return c.json({ error: 'ai_failed', detail: String((e as Error).message ?? e).slice(0, 200) }, 502); }
+  return c.json({ ...r, model: models.find((m) => m.id === r.modelId)?.name ?? null });
+});
+
+/** File a photo under a model (album), or take it out (null). */
+app.put('/api/assets/:id/model', need(STAFF), async (c) => {
+  const { modelId } = await parse(c, z.object({ modelId: z.string().min(1).nullable() }));
+  const a = await c.env.DB.prepare('SELECT brand_id, model_id FROM reference_assets WHERE id = ?').bind(c.req.param('id')).first<{ brand_id: string; model_id: string | null }>();
+  if (!a) return c.json({ error: 'not_found' }, 404);
+  if (modelId) {
+    const m = await c.env.DB.prepare('SELECT brand_id FROM models WHERE id = ?').bind(modelId).first<{ brand_id: string }>();
+    if (!m || m.brand_id !== a.brand_id) return c.json({ error: 'model_not_in_brand' }, 400);
+  }
+  await c.env.DB.prepare('UPDATE reference_assets SET model_id = ? WHERE id = ?').bind(modelId, c.req.param('id')).run();
+  await audit(c.env, c.get('user').id, 'asset.set_model', 'asset', c.req.param('id'), { from: a.model_id, to: modelId });
+  return c.json({ ok: true });
+});
+
 // ───────────────────────── teaching points: fill in Khmer + English for points that have only one language ─────────────────────────
 // Staff run it in batches from the admin panel; returns how many points still need a translation.
 app.post('/api/points/translate', need(STAFF), async (c) => {
