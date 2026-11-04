@@ -31,6 +31,15 @@ export default function Check() {
         <p className="mt-1 text-sm text-muted">{t('check.subtitle')}</p>
       </header>
 
+      <Link to="/verify" className="flex items-center gap-4 rounded-2xl border border-charcoal bg-charcoal p-4 text-white shadow-sm transition hover:ring-2 hover:ring-gold">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gold text-charcoal"><Svg d={ICON.official} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-serif text-xl leading-tight">{t('vr.title')}</span>
+          <span className="block text-sm text-white/70">{t('vr.hubHelp')}</span>
+        </span>
+        <span className="text-gold">→</span>
+      </Link>
+
       <div className="grid grid-cols-2 gap-3">
         <Tile id="photo" title={t('check.photo')} help={t('check.photoHelp')} active={mode === 'photo'} onClick={() => setMode(mode === 'photo' ? null : 'photo')} primary />
         <Tile id="upload" title={t('check.upload')} help={t('check.uploadHelp')} active={mode === 'upload'} onClick={() => setMode(mode === 'upload' ? null : 'upload')} />
