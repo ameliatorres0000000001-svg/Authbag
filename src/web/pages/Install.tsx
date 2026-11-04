@@ -11,7 +11,7 @@ const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
 );
 
-/** Simple install screen on a galaxy background: native prompt where the browser offers one, otherwise iPhone / Android steps. */
+/** Simple install screen on a black background: native prompt where the browser offers one, otherwise iPhone / Android steps. */
 export default function Install() {
   const { t, locale } = useI18n();
   const nav = useNavigate();
@@ -28,7 +28,7 @@ export default function Install() {
   const continueWeb = () => { markInstallSeen(); nav('/'); };
 
   return (
-    <div className="relative min-h-[100dvh] overflow-hidden" style={{ background: '#05040c', color: C.text }}>
+    <div className="relative min-h-[100dvh] overflow-hidden" style={{ background: '#000', color: C.text }}>
       <Galaxy />
       <div className="relative mx-auto flex min-h-[100dvh] max-w-md flex-col px-6 pb-8 pt-4">
         <div className="flex justify-end"><LangPicker dark /></div>
@@ -39,7 +39,7 @@ export default function Install() {
           {/* one type scale: 12 kicker · 30 brand · 16 subtitle · 15 rows */}
           <div className="mt-7 text-[12px] font-semibold uppercase" style={{ color: C.gold, letterSpacing: track ? '0.3em' : undefined }}>{t('install.welcome')}</div>
           <h1 className="mt-2 font-serif text-[30px] font-medium leading-tight tracking-[0.04em]"
-            style={{ background: 'linear-gradient(180deg,#fff 0%,#f3e7c4 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>HENGZ AUTHENTIC</h1>
+            style={{ color: '#f6ecd0', textShadow: '0 0 24px rgba(242,202,80,0.25)' }}>HENGZ <span style={{ color: C.gold }}>AUTHENTIC</span></h1>
           <p className="mt-2 max-w-[19rem] text-[16px] leading-snug" style={{ color: C.soft }}>{t('install.sub')}</p>
           <div className="mx-auto my-5 h-px w-14" style={{ background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />
           <ul className="w-full max-w-[20rem] space-y-2.5 text-left">
@@ -100,8 +100,8 @@ export default function Install() {
 }
 
 /**
- * Living galaxy background: slow-moving aurora colours (violet, blue, teal, rose, gold), twinkling stars and
- * a few softly floating gold shapes. Pure CSS; motion stops for users who prefer reduced motion.
+ * Black night-sky background: a soft breathing gold glow behind the logo, twinkling stars and a few
+ * slowly rising gold sparkles. Pure CSS; motion stops for users who prefer reduced motion.
  */
 function Galaxy() {
   const stars = (n: number, size: number, seed: number) => {
@@ -109,32 +109,26 @@ function Galaxy() {
     const r = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
     return Array.from({ length: n }, () => `radial-gradient(${size}px ${size}px at ${Math.round(r() * 1000) / 10}% ${Math.round(r() * 1000) / 10}%, rgba(255,255,255,${(0.5 + r() * 0.5).toFixed(2)}), transparent)`).join(',');
   };
+  // black night sky: one soft gold glow behind the logo that slowly breathes
   const blobs: [string, string, string, string, string][] = [
     // colour, size, left, top, animation
-    ['rgba(124,77,255,0.55)', '70vmax', '-20%', '-15%', 'hz-float-a 26s ease-in-out infinite alternate'],
-    ['rgba(0,170,255,0.40)', '60vmax', '45%', '-5%', 'hz-float-b 32s ease-in-out infinite alternate'],
-    ['rgba(0,210,170,0.28)', '55vmax', '-10%', '45%', 'hz-float-b 38s ease-in-out infinite alternate-reverse'],
-    ['rgba(255,70,160,0.30)', '50vmax', '55%', '50%', 'hz-float-a 30s ease-in-out infinite alternate-reverse'],
-    ['rgba(242,202,80,0.30)', '45vmax', '20%', '75%', 'hz-float-c 24s ease-in-out infinite alternate'],
+    ['rgba(242,202,80,0.22)', '80vmin', 'calc(50% - 40vmin)', '4%', 'hz-glow 9s ease-in-out infinite alternate'],
   ];
   const floaters: [string, string, string, number, number][] = [
     // shape, left, size, duration s, delay s
-    ['✦', '12%', '22px', 26, 0], ['✦', '78%', '16px', 22, 4], ['○', '30%', '28px', 34, 9], ['✦', '64%', '18px', 30, 14], ['✦', '88%', '12px', 24, 2], ['○', '6%', '14px', 28, 17],
+    ['✦', '12%', '22px', 26, 0], ['✦', '78%', '16px', 22, 4], ['✦', '64%', '18px', 30, 14], ['✦', '88%', '12px', 24, 2],
   ];
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       <style>{`
+        @keyframes hz-glow { from { opacity: .55; transform: scale(.95) } to { opacity: 1; transform: scale(1.05) } }
         @keyframes hz-twinkle { 0%,100% { opacity: .4 } 50% { opacity: 1 } }
-        @keyframes hz-float-a { from { transform: translate(0,0) scale(1) } to { transform: translate(12vw,8vh) scale(1.15) } }
-        @keyframes hz-float-b { from { transform: translate(0,0) scale(1.1) } to { transform: translate(-14vw,10vh) scale(.95) } }
-        @keyframes hz-float-c { from { transform: translate(0,0) scale(1) } to { transform: translate(10vw,-12vh) scale(1.2) } }
         @keyframes hz-rise { 0% { transform: translateY(0) rotate(0deg); opacity: 0 } 10% { opacity: .55 } 90% { opacity: .55 } 100% { transform: translateY(-110vh) rotate(180deg); opacity: 0 } }
         @media (prefers-reduced-motion: reduce) { .hz-anim { animation: none !important } }
       `}</style>
       {blobs.map(([c, size, left, top, anim], i) => (
-        <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 65%)`, filter: 'blur(30px)', animation: anim }} />
+        <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 65%)`, filter: 'blur(40px)', animation: anim }} />
       ))}
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(120% 90% at 50% 40%, transparent 30%, rgba(5,4,12,0.75) 100%)' }} />
       <div className="hz-anim absolute inset-0" style={{ backgroundImage: stars(90, 1, 7), animation: 'hz-twinkle 5s ease-in-out infinite' }} />
       <div className="hz-anim absolute inset-0" style={{ backgroundImage: stars(30, 2, 13), animation: 'hz-twinkle 8s ease-in-out infinite reverse' }} />
       {floaters.map(([ch, left, size, dur, delay], i) => (
