@@ -981,13 +981,14 @@ app.get('/api/feed/timeline', async (c) => {
   const single = page.filter((r) => r.kind !== 'album').map((r) => r.key);
   const albumIds = page.filter((r) => r.kind === 'album').map((r) => r.key);
   const ph = (n: number) => Array.from({ length: n }, () => '?').join(',');
-  const [singleRows, albumRows, totals, guides] = await Promise.all([
+  const [singleRows, albumRows, totals, guides, covers] = await Promise.all([
     single.length ? c.env.DB.prepare(`SELECT ${POST_COLS} ${POST_FROM} WHERE a.id IN (${ph(single.length)})`).bind(...single).all<Record<string, any>>() : null,
     // first photos of each album, oldest first so the overview photo leads
     albumIds.length ? c.env.DB.prepare(`SELECT * FROM (SELECT ${POST_COLS}, ROW_NUMBER() OVER (PARTITION BY a.model_id ORDER BY a.created_at) AS n ${POST_FROM}
        WHERE a.status <> 'rejected' AND a.label <> 'counterfeit' AND a.model_id IN (${ph(albumIds.length)})) WHERE n <= ${ALBUM_PREVIEW} ORDER BY created_at`).bind(...albumIds).all<Record<string, any>>() : null,
     albumIds.length ? c.env.DB.prepare(`SELECT model_id, COUNT(*) AS n FROM reference_assets WHERE status <> 'rejected' AND label <> 'counterfeit' AND model_id IN (${ph(albumIds.length)}) GROUP BY model_id`).bind(...albumIds).all<{ model_id: string; n: number }>() : null,
     albumIds.length ? c.env.DB.prepare(`SELECT model_id, i18n_json, status, updated_at FROM model_guides WHERE model_id IN (${ph(albumIds.length)})`).bind(...albumIds).all<any>().catch(() => ({ results: [] })) : null,
+    albumIds.length ? c.env.DB.prepare(`SELECT id, cover_asset_id FROM models WHERE id IN (${ph(albumIds.length)})`).bind(...albumIds).all<{ id: string; cover_asset_id: string | null }>().catch(() => ({ results: [] as { id: string; cover_asset_id: string | null }[] })) : null,
   ]);
   const posts = await buildPosts(c, [...(singleRows?.results ?? []), ...(albumRows?.results ?? [])]);
   const items = page.map((r) => {
@@ -997,7 +998,8 @@ app.get('/api/feed/timeline', async (c) => {
       kind: 'album', at: r.at,
       album: { model_id: r.key, model: photos[0]?.model ?? '', brand_id: photos[0]?.brand_id, brand: photos[0]?.brand ?? '',
         total: totals?.results.find((t) => t.model_id === r.key)?.n ?? photos.length, photos,
-        guide: guideOf(guides?.results.find((g: any) => g.model_id === r.key)) },
+        guide: guideOf(guides?.results.find((g: any) => g.model_id === r.key)),
+        cover_id: covers?.results.find((m) => m.id === r.key)?.cover_asset_id ?? null },
     };
   }).filter((x: any) => x.post || x.album);
   return c.json({ items, next: more ? page[page.length - 1].at : null, aiConfigured: aiConfigured(c.env) });
@@ -1008,6 +1010,7 @@ app.get('/api/albums/:modelId', async (c) => {
   const id = c.req.param('modelId');
   const model = await c.env.DB.prepare('SELECT m.id, m.name, m.brand_id, b.name AS brand FROM models m JOIN brands b ON b.id = m.brand_id WHERE m.id = ?').bind(id).first<Record<string, any>>();
   if (!model) return c.json({ error: 'not_found' }, 404);
+  model.cover_asset_id = (await c.env.DB.prepare('SELECT cover_asset_id FROM models WHERE id = ?').bind(id).first<{ cover_asset_id: string | null }>().catch(() => null))?.cover_asset_id ?? null;
   const rows = (await c.env.DB.prepare(`SELECT ${POST_COLS} ${POST_FROM} WHERE a.status <> 'rejected' AND a.model_id = ? ORDER BY (a.label = 'counterfeit'), a.created_at LIMIT 80`).bind(id).all<Record<string, any>>()).results;
   const [photos, guide, similar] = await Promise.all([
     buildPosts(c, rows),
@@ -1017,6 +1020,20 @@ app.get('/api/albums/:modelId', async (c) => {
        WHERE m.brand_id = ? AND m.id <> ? GROUP BY m.id ORDER BY MAX(a.created_at) DESC LIMIT 12`).bind(model.brand_id, id).all(),
   ]);
   return c.json({ model, photos, guide: guideOf(guide), similar: similar.results, aiConfigured: aiConfigured(c.env) });
+});
+
+/** Staff choose the album's large photo (the whole bag). */
+app.put('/api/albums/:modelId/cover', need(STAFF), async (c) => {
+  const { assetId } = await parse(c, z.object({ assetId: z.string().min(1).nullable() }));
+  const id = c.req.param('modelId');
+  if (assetId) {
+    const a = await c.env.DB.prepare('SELECT model_id FROM reference_assets WHERE id = ?').bind(assetId).first<{ model_id: string | null }>();
+    if (!a || a.model_id !== id) return c.json({ error: 'photo_not_in_album' }, 400);
+  }
+  const res = await c.env.DB.prepare('UPDATE models SET cover_asset_id = ? WHERE id = ?').bind(assetId, id).run();
+  if (!res.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await audit(c.env, c.get('user').id, 'album.cover', 'model', id, { assetId });
+  return c.json({ ok: true });
 });
 
 /** AI drafts the album's study guide from its teaching points (staff). Stored as a draft until approved. */

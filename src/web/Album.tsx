@@ -10,7 +10,7 @@ import { timeAgo, type Post } from './Feed.tsx';
 
 export interface GuideText { title: string; intro: string; steps: string[] }
 export type Guide = { km: GuideText; en: GuideText; status: 'ai_draft' | 'approved'; updated_at?: string } | null;
-export interface AlbumData { model_id: string; model: string; brand_id: string; brand: string; total: number; photos: Post[]; guide: Guide }
+export interface AlbumData { model_id: string; model: string; brand_id: string; brand: string; total: number; photos: Post[]; guide: Guide; cover_id?: string | null }
 
 export const guideText = (g: Guide, locale: string): GuideText | null => (g ? (locale === 'km' ? g.km : g.en) : null);
 
@@ -63,17 +63,39 @@ export function GuideBlock({ guide, max, more }: { guide: Guide; max?: number; m
   );
 }
 
-/** Timeline card: one album per model. Swipe the photos; tap a photo to open the album viewer. */
+const WHOLE = /whole bag|overall|front view|\bfront\b|រាងទាំងមូល|ទាំងមូល|ខាងមុខ/i;
+/** The album's large photo: the one staff chose, else a photo titled as the whole bag / front, else a photo with no part. */
+export function coverIndex(photos: Post[], coverId?: string | null): number {
+  const chosen = coverId ? photos.findIndex((p) => p.id === coverId) : -1;
+  if (chosen >= 0) return chosen;
+  const whole = photos.findIndex((p) => WHOLE.test(p.teaching_title ?? ''));
+  if (whole >= 0) return whole;
+  const k = photos.findIndex((p) => !p.component_code);
+  if (k >= 0) return k;
+  const c = photos.findIndex((p) => p.component_code === 'canvas' || p.component_code === 'handles');
+  return c >= 0 ? c : 0;
+}
+
+/**
+ * Timeline card for one model: caption (how to look at it) on top, one large photo of the model,
+ * then the detail photos small underneath. Tap any photo to open the album viewer at that photo.
+ */
 export function AlbumCard({ a }: { a: AlbumData }) {
   const { t, locale } = useI18n();
   const me = useContext(MeContext)!;
-  const { ref, i, onScroll, go } = useSlides(a.photos.length);
   const [guide, setGuide] = useState<Guide>(a.guide);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   const staff = STAFF_ROLES.includes(me.role);
-  const cur = a.photos[i];
-  const part = cur ? (locale === 'km' ? (cur.part_km ?? cur.part_en) : cur.part_en) : null;
+  const ci = coverIndex(a.photos, a.cover_id);
+  const cover = a.photos[ci];
+  const details = a.photos.map((p, k) => ({ p, k })).filter((x) => x.k !== ci);
+  const MAX = 6;
+  const shown = details.slice(0, details.length > MAX ? MAX - 1 : MAX);
+  const extra = a.total - 1 - shown.length;
   const latest = a.photos.reduce((m, p) => (p.created_at > m ? p.created_at : m), '');
+  const partOf = (p: Post) => (locale === 'km' ? (p.part_km ?? p.part_en) : p.part_en) ?? t('admin.noPart');
+  const g = guideText(guide, locale);
+  const to = (k: number) => `/album/${a.model_id}?i=${k}`;
 
   async function draft() {
     setBusy(true); setErr(null);
@@ -89,36 +111,54 @@ export function AlbumCard({ a }: { a: AlbumData }) {
           <div className="truncate font-semibold leading-tight">{a.brand} · {a.model}</div>
           <div className="truncate text-xs text-muted">▤ {t('album.kicker')} · {a.total} {t('folder.photos')}{latest ? ` · ${timeAgo(latest, locale, t('feed.justNow'))}` : ''}</div>
         </Link>
+        {guide?.status === 'ai_draft' && <Badge tone="warn">{t('album.aiDraft')}</Badge>}
       </header>
 
-      <div className="relative bg-charcoal">
-        <div ref={ref} onScroll={onScroll} className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {a.photos.map((p, k) => (
-            <Link key={p.id} to={`/album/${a.model_id}?i=${k}`} className="flex w-full shrink-0 snap-center items-center justify-center" style={{ minHeight: '44vh' }}>
-              <AnnotatedPhoto src={assetImg(p.id)} points={p.points} className="!rounded-none !border-0" fit />
-            </Link>
-          ))}
-        </div>
-        <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 font-mono text-[11px] text-white">{i + 1}/{a.total}</span>
-        {cur && (
+      {/* caption: how to look at this model */}
+      <Link to={`/album/${a.model_id}`} className="block px-4 pb-3">
+        {g ? (
+          <>
+            <div className="font-serif text-[17px] leading-snug">🔍 {g.title}</div>
+            {g.intro && <p className="mt-0.5 text-[14px] leading-snug text-muted">{g.intro}</p>}
+            <p className="mt-1.5 line-clamp-2 text-[14px] leading-snug">{g.steps.slice(0, 3).map((x, k) => `${k + 1}. ${x}`).join('  ')}</p>
+          </>
+        ) : cover?.teaching_title ? (
+          <div className="text-[15px] font-semibold leading-snug">{cover.teaching_title}</div>
+        ) : (
+          <div className="text-[14px] text-muted">{t('album.learnThis')}</div>
+        )}
+      </Link>
+
+      {/* the model, large */}
+      {cover && (
+        <Link to={to(ci)} className="relative block bg-charcoal">
+          <div className="flex justify-center"><AnnotatedPhoto src={assetImg(cover.id)} points={cover.points} className="!rounded-none !border-0" fit /></div>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2 pt-8 text-white">
-            <span className="truncate text-[13px]">{part ?? t('admin.noPart')}{cur.points.length ? ` · ${cur.points.length} ${t('album.points')}` : ''}</span>
+            <span className="truncate text-[13px]">{partOf(cover)}{cover.points.length ? ` · ${cover.points.length} ${t('album.points')}` : ''}</span>
             <span className="shrink-0 text-[11px] text-white/80">{t('album.tap')}</span>
           </div>
-        )}
-      </div>
-      <div className="py-2"><Dots n={a.photos.length} i={i} onGo={go} /></div>
+        </Link>
+      )}
 
-      <div className="space-y-2 px-4 pb-4">
-        {guide ? (
-          <GuideBlock guide={guide} max={3} more={
-            <Link to={`/album/${a.model_id}`} className="mt-2 inline-block text-[13px] font-semibold underline">{t('album.open')} →</Link>
-          } />
-        ) : staff ? (
-          <button type="button" className="btn-ghost w-full !py-2 text-xs" disabled={busy} onClick={draft}>{busy ? '…' : `✨ ${t('album.aiGuide')}`}</button>
-        ) : (
-          <Link to={`/album/${a.model_id}`} className="text-[13px] font-semibold underline">{t('album.open')} →</Link>
-        )}
+      {/* the details of this model, small */}
+      {shown.length > 0 && (
+        <div className="grid grid-cols-3 gap-1 p-1">
+          {shown.map(({ p, k }) => (
+            <Link key={p.id} to={to(k)} className="group relative aspect-square overflow-hidden bg-charcoal">
+              <img src={assetImg(p.id)} alt="" loading="lazy" className="h-full w-full object-cover transition group-hover:scale-[1.03]" />
+              {p.points.length > 0 && <span className="absolute right-1 top-1 rounded-full bg-gold px-1.5 font-mono text-[10px] font-bold text-charcoal">{p.points.length}</span>}
+              <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/80 to-transparent px-1.5 pb-1 pt-4 text-[11px] text-white">{partOf(p)}</span>
+            </Link>
+          ))}
+          {extra > 0 && (
+            <Link to={to(details[shown.length]?.k ?? 0)} className="flex aspect-square items-center justify-center bg-charcoal font-serif text-xl text-gold">+{extra}</Link>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-4 pt-3">
+        <Link to={`/album/${a.model_id}`} className="btn-primary !py-2 text-xs">{t('album.learn')} →</Link>
+        {!guide && staff && <button type="button" className="btn-ghost !py-2 text-xs" disabled={busy} onClick={draft}>{busy ? '…' : `✨ ${t('album.aiGuide')}`}</button>}
         {err && <Notice tone="bad">{err}</Notice>}
       </div>
     </article>

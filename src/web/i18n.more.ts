@@ -109,4 +109,5 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'album.compareKicker': { vi: 'Phân tích · thật và giả', th: 'วิเคราะห์ · ของแท้เทียบของปลอม', id: 'Analisis · asli vs palsu' },
   'album.points': { vi: 'điểm', th: 'จุด', id: 'titik' },
   'album.aiDraft': { vi: 'Bản nháp AI', th: 'ฉบับร่าง AI', id: 'Draf AI' },
+  'album.learn': { vi: 'Học mẫu này', th: 'เรียนรู้รุ่นนี้', id: 'Pelajari model ini' },
 };
