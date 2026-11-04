@@ -18,6 +18,8 @@
     { "binding": "VAULT", "bucket_name": "hengz-vault-private" }
   ],
   "observability": { "enabled": true },
+  // background jobs: translate teaching points still missing Khmer + English
+  "triggers": { "crons": ["*/10 * * * *"] },
   "vars": { "AI_MODEL": "" }
   // Optional secrets (set with `wrangler secret put NAME`, never committed):
   //   ENTRUPY_API_KEY   – only after Entrupy approves your business account

@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Env } from './env.ts';
-import { MAX_AI_MARKS, parseBilingualMarks, parseSuggestedMarks, type SuggestedMark } from '../shared/marks.ts';
+import { MAX_AI_MARKS, parseBilingualMarks, parseSuggestedMarks, refineMarks, type Rect, type SuggestedMark } from '../shared/marks.ts';
 import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
 import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
 
@@ -30,6 +30,11 @@ export const aiModel = (env: Env): string | null => {
 
 export const aiConfigured = (env: Env) => aiProvider(env) !== null;
 
+/** Drawing teaching points is the hardest vision task: it uses the strongest Claude model unless AI_MODEL pins one. */
+const POINTS_MODEL = 'claude-opus-5-5';
+export const pointsModel = (env: Env): string | null =>
+  aiProvider(env) === 'anthropic' ? (env.AI_MODEL?.trim() || POINTS_MODEL) : aiModel(env);
+
 type ImageMime = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 const toImageMime = (m: string): ImageMime => (['image/png', 'image/gif', 'image/webp'].includes(m) ? m as ImageMime : 'image/jpeg');
 
@@ -37,9 +42,9 @@ const toImageMime = (m: string): ImageMime => (['image/png', 'image/gif', 'image
  * One vision call returning raw text. Images are sent in order; the caller's prompt says which is which.
  * `maxTokens` is the caller's expected answer size; Claude also thinks before answering, so the request allows more.
  */
-export async function callVision(env: Env, system: string, images: VisionImage[], userText: string, maxTokens = 1500, effort: 'low' | 'medium' | 'high' = 'medium'): Promise<string> {
+export async function callVision(env: Env, system: string, images: VisionImage[], userText: string, maxTokens = 1500, effort: 'low' | 'medium' | 'high' = 'medium', modelOverride?: string): Promise<string> {
   const provider = aiProvider(env);
-  const model = aiModel(env);
+  const model = provider === 'anthropic' && modelOverride ? modelOverride : aiModel(env);
   if (!provider || !model) throw new Error('ai_not_configured');
   if (provider === 'gemini') return callGemini(env, model, system, images, userText);
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
@@ -158,21 +163,36 @@ export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: {
   model: string; part?: string | null; title?: string | null; note?: string | null; prompt?: string | null;
   /** the uploader's own label; never a verdict from the AI */
   label?: 'authentic' | 'counterfeit' | 'unknown' | null;
-  /** a genuine reference photo of the same part, used when the photo is labelled counterfeit */
+  /** a genuine reference photo of the same part: compared against when the photo is labelled counterfeit, otherwise for orientation */
   reference?: VisionImage | null;
   lang?: OutLang;
+  brand?: string | null;
+  /** what HENGZ experts already teach for this brand / model / part (curated points, approved code guide) */
+  knowledge?: string[];
+  /** points already on this photo: do not repeat them */
+  existing?: (Rect & { label: string })[];
 }): Promise<SuggestedMark[]> {
   const compare = ctx.label === 'counterfeit' && !!ctx.reference;
+  const orient = !compare && !!ctx.reference;
   const task = compare
     ? `Image 1 was labelled by the uploader as a counterfeit example; image 2 is a genuine reference of the same part. ` +
       `Box up to ${MAX_AI_MARKS} places on IMAGE 1 where a visible detail differs from image 2 (letter shape or spacing, stamp depth, stitch count or angle, ` +
       `hardware finish or engraving, alignment, colour). For each, the note says what image 1 shows, what image 2 shows, and how a learner can see it; ` +
       `mention when lighting, angle or resolution could explain the difference. Use the uploader's label as given; do not judge it yourself.`
     : `Box up to ${MAX_AI_MARKS} details on the photo that a learner should study (stamps, date codes, letter shapes, stitches, hardware engraving, edges). ` +
-      `The note explains what to look at there and how to read it; if the admin's instructions explain a code or detail, use that explanation.`;
+      `The note explains what to look at there and how to read it; if the admin's instructions explain a code or detail, use that explanation.` +
+      (orient ? ' Image 2 is a genuine reference photo of the same part, only to help you recognise the parts: draw every box on IMAGE 1.' : '');
+  // expert context: what HENGZ already teaches for this model / part, and points already on the photo
+  const knowledge = (ctx.knowledge ?? []).filter(Boolean).slice(0, 14);
+  const existing = ctx.existing ?? [];
+  const context =
+    (knowledge.length ? `\nWhat HENGZ experts already teach for this brand / model / part (prefer these checkpoints when they are visible, and stay consistent with them):\n- ${knowledge.join('\n- ')}` : '') +
+    (existing.length ? `\nPoints already on this photo (do not repeat them; choose other details): ${existing.map((p) => p.label).join('; ')}` : '');
   const text = await callVision(env,
     `You are a senior luxury-bag authenticator teaching a trainee from a photo. ${NO_VERDICT} ${task} ` +
-    `Choose at most ${MAX_AI_MARKS} details that are clearly visible and worth learning. For each: ` +
+    `Choose at most ${MAX_AI_MARKS} details that are clearly visible and worth learning, the most diagnostic first: where an expert would look for this brand and part ` +
+    '(e.g. stamp lettering and spacing, date code characters, stitch count and angle, hardware engraving and screws, edge paint, zipper pull markings). ' +
+    'Each box covers ONE detail, not the whole bag or a large area; no two boxes on the same detail. First locate the detail in words (where it is in the image), then give its box. For each: ' +
     'BOX — a tight rectangle around exactly that detail (x, y = top-left corner; x, y, w, h are fractions 0..1 of IMAGE 1\'s width and height). ' +
     'Before answering, check each box really contains the named detail; if you are unsure where it is, leave that detail out. ' +
     'LABEL — 2 to 5 words naming the detail (e.g. "Star-head screw", "Heat stamp lettering"). ' +
@@ -181,12 +201,13 @@ export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: {
     'Line 2 (max 10 words) starts with "In this photo:" and says what is visible here. No generic advice about lighting or resolution unless it hides the detail. ' +
     'Write every label and note in BOTH English and Khmer. Khmer must be natural, simple Khmer, not word for word; its second line starts with "ក្នុងរូបនេះ៖". Separate the two lines with a line break. ' +
     'Keep brand names, codes and stamped words exactly as written on the item. ' +
-    'Reply with JSON only: [{"x":0..1,"y":0..1,"w":0..1,"h":0..1,"label_en":"...","note_en":"...","label_km":"...","note_km":"..."}]',
-    compare ? [image, ctx.reference!] : [image],
-    `Model: ${ctx.model}.${ctx.part ? ` Part: ${ctx.part}.` : ''}${ctx.title ? ` Photo: ${ctx.title}.` : ''}` +
-    `${ctx.label ? ` Uploader label: ${ctx.label}.` : ''}${ctx.note ? `\nAdmin note: ${ctx.note}` : ''}${ctx.prompt ? `\nAdmin instructions: ${ctx.prompt}` : ''}`,
-    16000, 'high');
-  return parseBilingualMarks(text);
+    'Reply with JSON only: [{"where":"short words on where it is","x":0..1,"y":0..1,"w":0..1,"h":0..1,"label_en":"...","note_en":"...","label_km":"...","note_km":"..."}]',
+    compare || orient ? [image, ctx.reference!] : [image],
+    `${ctx.brand ? `Brand: ${ctx.brand}. ` : ''}Model: ${ctx.model}.${ctx.part ? ` Part: ${ctx.part}.` : ''}${ctx.title ? ` Photo: ${ctx.title}.` : ''}` +
+    `${ctx.label ? ` Uploader label: ${ctx.label}.` : ''}${ctx.note ? `\nAdmin note: ${ctx.note}` : ''}${ctx.prompt ? `\nAdmin instructions: ${ctx.prompt}` : ''}${context}`,
+    16000, 'high', pointsModel(env) ?? undefined);
+  // drop boxes that cover most of the photo or repeat another point
+  return refineMarks(parseBilingualMarks(text), existing);
 }
 
 /**
@@ -281,23 +302,32 @@ export async function translatePoints(env: Env, items: { id: string; label: stri
     'keep line breaks. If a note has a line starting "In this photo:" the Khmer line starts "ក្នុងរូបនេះ៖" and vice versa. Natural Khmer, not word for word. ' +
     'Reply with JSON only: [{"id":"...","label_en":"...","note_en":"...","label_km":"...","note_km":"..."}] — one entry per input id.';
   const input = JSON.stringify(items.map((i) => ({ id: i.id, label: i.label, note: i.note ?? '' })));
-  const text = env.GEMINI_API_KEY
-    ? await callGemini(env, env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini, system, [], input)
-    : await callVision(env, system, [], input, 16000, 'low');
-  const a = text.indexOf('['), b = text.lastIndexOf(']');
-  let arr: Record<string, unknown>[] = [];
-  try { arr = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : []; } catch { arr = []; }
-  const s = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-  const out: Record<string, { en: { label: string; note?: string }; km: { label: string; note?: string } }> = {};
+  type Tr = Record<string, { en: { label: string; note?: string }; km: { label: string; note?: string } }>;
   const ids = new Set(items.map((i) => i.id));
-  for (const o of Array.isArray(arr) ? arr : []) {
-    const id = s(o?.id, 80);
-    if (!ids.has(id) || !s(o.label_en, 80) || !s(o.label_km, 80)) continue;
-    out[id] = {
-      en: { label: s(o.label_en, 80), ...(s(o.note_en, 1000) ? { note: s(o.note_en, 1000) } : {}) },
-      km: { label: s(o.label_km, 80), ...(s(o.note_km, 1000) ? { note: s(o.note_km, 1000) } : {}) },
-    };
+  const s = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  const read = (text: string): Tr => {
+    const a = text.indexOf('['), b = text.lastIndexOf(']');
+    let arr: Record<string, unknown>[] = [];
+    try { arr = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : []; } catch { arr = []; }
+    const out: Tr = {};
+    for (const o of Array.isArray(arr) ? arr : []) {
+      const id = s(o?.id, 80);
+      if (!ids.has(id) || !s(o.label_en, 80) || !s(o.label_km, 80)) continue;
+      out[id] = {
+        en: { label: s(o.label_en, 80), ...(s(o.note_en, 1000) ? { note: s(o.note_en, 1000) } : {}) },
+        km: { label: s(o.label_km, 80), ...(s(o.note_km, 1000) ? { note: s(o.note_km, 1000) } : {}) },
+      };
+    }
+    return out;
+  };
+  // Gemini first when its key is set (fast, cheap); if it fails or gives nothing usable, Claude translates instead
+  let out: Tr = {};
+  if (env.GEMINI_API_KEY) {
+    try { out = read(await callGemini(env, env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini, system, [], input)); }
+    catch (e) { console.error('translate: gemini failed, falling back to claude:', (e as Error).message); }
   }
+  if (!Object.keys(out).length && env.ANTHROPIC_API_KEY) out = read(await callVision(env, system, [], input, 16000, 'low'));
+  if (!Object.keys(out).length) throw new Error('ai_translate_failed');
   return out;
 }
 

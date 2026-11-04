@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cropBox, isValidRect, parseSuggestedMarks, rectFromDrag, MAX_AI_MARKS } from '../src/shared/marks.ts';
+import { cropBox, iou, isValidRect, parseSuggestedMarks, rectFromDrag, refineMarks, MAX_AI_MARKS } from '../src/shared/marks.ts';
 
 test('drag in any direction gives the same clamped rectangle', () => {
   assert.deepEqual(rectFromDrag(0.6, 0.7, 0.2, 0.1), rectFromDrag(0.2, 0.1, 0.6, 0.7));
@@ -46,4 +46,16 @@ test('bilingual teaching points keep English as the base text and both languages
   assert.equal(r[0].i18n!.km!.note, 'មើលក្បាលខ្ចៅ។\nក្នុងរូបនេះ៖ រន្ធផ្កាយ។');
   assert.equal(r[1].label, 'តែខ្មែរ');
   assert.equal(r[1].i18n!.en, undefined);
+});
+
+test('refineMarks drops near-whole-photo boxes and duplicates', () => {
+  const whole = { x: 0.02, y: 0.02, w: 0.95, h: 0.9, label: 'whole' };
+  const a = { x: 0.1, y: 0.1, w: 0.2, h: 0.2, label: 'a' };
+  const aAgain = { x: 0.11, y: 0.1, w: 0.2, h: 0.21, label: 'a again' };
+  const b = { x: 0.6, y: 0.6, w: 0.2, h: 0.2, label: 'b' };
+  assert.deepEqual(refineMarks([whole, a, aAgain, b]).map((m) => m.label), ['a', 'b']);
+  // a box that repeats a point already on the photo is dropped
+  assert.deepEqual(refineMarks([a, b], [{ x: 0.6, y: 0.61, w: 0.2, h: 0.19 }]).map((m) => m.label), ['a']);
+  assert.ok(Math.abs(iou(a, a) - 1) < 1e-9);
+  assert.equal(iou(a, b), 0);
 });

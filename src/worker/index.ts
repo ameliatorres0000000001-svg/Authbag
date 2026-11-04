@@ -758,8 +758,8 @@ app.delete('/api/reference-points/:id', need(STAFF), async (c) => {
 });
 
 app.post('/api/assets/:id/points/suggest', need(STAFF), async (c) => {
-  const a = await c.env.DB.prepare(`SELECT a.id, a.r2_key, a.brand_id, a.model_id, a.component_code, a.label, a.teaching_title, a.teaching_note, a.ai_prompt, m.name AS model, cp.name_en AS part
-    FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id LEFT JOIN components cp ON cp.code = a.component_code WHERE a.id = ?`).bind(c.req.param('id')).first<Record<string, any>>();
+  const a = await c.env.DB.prepare(`SELECT a.id, a.r2_key, a.brand_id, a.model_id, a.component_code, a.label, a.teaching_title, a.teaching_note, a.ai_prompt, m.name AS model, cp.name_en AS part, b.name AS brand
+    FROM reference_assets a JOIN brands b ON b.id = a.brand_id LEFT JOIN models m ON m.id = a.model_id LEFT JOIN components cp ON cp.code = a.component_code WHERE a.id = ?`).bind(c.req.param('id')).first<Record<string, any>>();
   if (!a) return c.json({ error: 'not_found' }, 404);
   if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
   const obj = await c.env.VAULT.get(a.r2_key);
@@ -773,9 +773,30 @@ app.post('/api/assets/:id/points/suggest', need(STAFF), async (c) => {
     const ro = ref && (await c.env.VAULT.get(ref.r2_key));
     if (ro) { reference = { data: await ro.arrayBuffer(), mime: ro.httpMetadata?.contentType ?? 'image/jpeg' }; referenceId = ref!.id; }
   }
+  // For other photos: a genuine reference of the same part (same model first) helps the AI recognise what it sees.
+  if (!reference && a.component_code) {
+    const ref = await c.env.DB.prepare(`SELECT id, r2_key FROM reference_assets WHERE brand_id = ? AND component_code = ? AND label = 'authentic' AND status <> 'rejected' AND id <> ?
+      ORDER BY (model_id IS ?) DESC, (status = 'approved') DESC, created_at DESC LIMIT 1`).bind(a.brand_id, a.component_code, a.id, a.model_id).first<{ id: string; r2_key: string }>();
+    const ro = ref && (await c.env.VAULT.get(ref.r2_key));
+    if (ro) { reference = { data: await ro.arrayBuffer(), mime: ro.httpMetadata?.contentType ?? 'image/jpeg' }; referenceId = ref!.id; }
+  }
+  // What HENGZ already teaches for this brand / model / part: curated (not AI) points, then the approved code guide.
+  const curated = (await c.env.DB.prepare(`SELECT DISTINCT p.label, p.note FROM reference_points p JOIN reference_assets x ON x.id = p.asset_id
+    WHERE x.brand_id = ? AND (x.component_code IS ? OR x.model_id IS ?) AND p.source <> 'ai_suggested' AND x.label <> 'counterfeit' AND x.id <> ?
+    ORDER BY (x.model_id IS ?) DESC, (x.component_code IS ?) DESC LIMIT 12`)
+    .bind(a.brand_id, a.component_code, a.model_id, a.id, a.model_id, a.component_code).all<{ label: string; note: string | null }>()).results;
+  const guides = ['date_code', 'heat_stamp'].includes(a.component_code)
+    ? (await c.env.DB.prepare(`SELECT title_en, where_en, body_en FROM code_guides WHERE brand_id = ? AND status = 'approved' ORDER BY sort LIMIT 3`).bind(a.brand_id).all<Record<string, string | null>>().catch(() => ({ results: [] as Record<string, string | null>[] }))).results
+    : [];
+  const knowledge = [
+    ...curated.map((p) => `${p.label}${p.note ? `: ${p.note.split('\n')[0]}` : ''}`.slice(0, 220)),
+    ...guides.map((g) => `${g.title_en}${g.where_en ? ` (where: ${g.where_en})` : ''}: ${g.body_en ?? ''}`.slice(0, 300)),
+  ];
+  const existing = (await c.env.DB.prepare('SELECT x, y, w, h, label FROM reference_points WHERE asset_id = ?').bind(a.id).all<{ x: number; y: number; w: number; h: number; label: string }>()).results;
   try {
     const sugg = await suggestTeachingPoints(c.env, { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? 'image/jpeg' },
-      { model: a.model ?? 'unspecified', part: a.part, title: a.teaching_title, note: a.teaching_note, prompt: a.ai_prompt, label: a.label, reference, lang: reqLang(c) });
+      { model: a.model ?? 'unspecified', part: a.part, title: a.teaching_title, note: a.teaching_note, prompt: a.ai_prompt, label: a.label, reference, lang: reqLang(c),
+        brand: a.brand, knowledge, existing });
     for (const s of sugg) {
       await c.env.DB.prepare(`INSERT INTO reference_points (id, asset_id, x, y, w, h, label, note, i18n_json, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ai_suggested')`)
         .bind(uid('rp_'), a.id, s.x, s.y, s.w, s.h, s.label, s.note ?? null, s.i18n ? JSON.stringify(s.i18n) : null).run();
@@ -1648,4 +1669,27 @@ app.post('/api/telegram/webhook', async (c) => {
 });
 
 app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404));
-export default app;
+/**
+ * Every 10 minutes: translate teaching points that are still missing Khmer + English, in small batches,
+ * so translations finish on their own without anyone opening the app. Does nothing once all are done.
+ */
+async function translateBacklog(env: AppEnv['Bindings']) {
+  if (!aiConfigured(env)) return;
+  for (let round = 0; round < 5; round++) {
+    const rows = (await env.DB.prepare(`SELECT id, label, note FROM reference_points WHERE i18n_json IS NULL ORDER BY created_at LIMIT 8`).all<{ id: string; label: string; note: string | null }>()).results;
+    if (!rows.length) return;
+    let tr;
+    try { tr = await translatePoints(env, rows); } catch (e) { console.error('translate backlog failed:', (e as Error).message); return; }
+    for (const [id, v] of Object.entries(tr)) {
+      await env.DB.prepare('UPDATE reference_points SET i18n_json = ? WHERE id = ? AND i18n_json IS NULL').bind(JSON.stringify(v), id).run();
+    }
+    console.log(`translate backlog: ${Object.keys(tr).length}/${rows.length} done`);
+  }
+}
+
+export default {
+  fetch: app.fetch,
+  async scheduled(_event: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
+    ctx.waitUntil(translateBacklog(env));
+  },
+} satisfies ExportedHandler<AppEnv['Bindings']>;

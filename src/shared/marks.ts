@@ -94,3 +94,26 @@ export function parseBilingualMarks(text: string): SuggestedMark[] {
   }
   return out;
 }
+
+const area = (r: Rect) => r.w * r.h;
+/** Intersection over union of two rectangles (0 = apart, 1 = identical). */
+export function iou(a: Rect, b: Rect): number {
+  const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  const inter = ix * iy;
+  return inter / (area(a) + area(b) - inter || 1);
+}
+
+/**
+ * Keep only useful AI boxes: drop a box that covers most of the photo (it points at nothing in particular)
+ * and a box that mostly repeats an earlier one, or a point already on the photo. Order is kept.
+ */
+export function refineMarks<T extends Rect>(marks: T[], existing: Rect[] = [], maxArea = 0.55, maxOverlap = 0.5): T[] {
+  const kept: T[] = [];
+  for (const m of marks) {
+    if (area(m) > maxArea) continue;
+    if ([...existing, ...kept].some((k) => iou(k, m) > maxOverlap)) continue;
+    kept.push(m);
+  }
+  return kept;
+}
