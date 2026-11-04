@@ -69,3 +69,33 @@ export function VerifyQueue() {
     </div>
   );
 }
+
+/** Admin: test the AI keys and models now, with the provider's own error message when something fails. */
+export function AiCheck() {
+  const { t } = useI18n();
+  const [r, setR] = useState<{ configured: boolean; results: { name: string; model: string; ok: boolean; ms: number; error?: string }[]; untranslated: number } | null>(null);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  async function run() {
+    setBusy(true); setErr(null);
+    try { setR(await api.get('/api/admin/ai/test')); } catch (e) { setErr(String((e as Error).message)); }
+    setBusy(false);
+  }
+  return (
+    <div className="card space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-semibold">🤖 {t('ai.check')}</div>
+        <button type="button" className="btn-primary !py-1 text-xs" disabled={busy} onClick={run}>{busy ? '…' : `🔎 ${t('ai.test')}`}</button>
+      </div>
+      {r && !r.configured && <p className="text-xs text-counterfeit">{t('ai.noKey')}</p>}
+      {r?.results.map((x) => (
+        <div key={x.name} className={`rounded-lg p-2 text-xs ${x.ok ? 'bg-verified/10' : 'bg-counterfeit/10'}`}>
+          <div className="font-semibold">{x.ok ? '✅' : '❌'} {x.name}</div>
+          <div className="font-mono text-[10px] text-muted">{x.model} · {x.ms} ms</div>
+          {x.error && <div className="mt-1 break-words font-mono text-[11px] text-counterfeit">{x.error}</div>}
+        </div>
+      ))}
+      {r && <p className="text-xs text-muted">{t('ai.untranslated')}: {r.untranslated}</p>}
+      {err && <p className="text-xs text-counterfeit">{err}</p>}
+    </div>
+  );
+}

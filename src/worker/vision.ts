@@ -62,11 +62,55 @@ export async function callVision(env: Env, system: string, images: VisionImage[]
       ] }],
     });
   } catch (e) {
-    if (e instanceof Anthropic.APIError) throw new Error(`ai_http_${e.status ?? 0}`);
+    if (e instanceof Anthropic.APIError) {
+      const why = apiErrorText(e);
+      // the stronger model may not be available on this account: fall back to the default model
+      if (modelOverride && modelOverride !== aiModel(env) && (e.status === 404 || e.status === 403 || /model/i.test(why))) {
+        console.error(`ai: ${modelOverride} failed (${why}); using ${aiModel(env)}`);
+        return callVision(env, system, images, userText, maxTokens, effort);
+      }
+      console.error(`ai: ${model} failed: ${why}`);
+      throw new Error(`ai_http_${e.status ?? 0}: ${why}`);
+    }
     throw e;
   }
   if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
   return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
+}
+
+/** The provider's own short error message (e.g. "credit balance too low", "model not found"); never contains the key. */
+function apiErrorText(e: InstanceType<typeof Anthropic.APIError>): string {
+  const body = (e as { error?: { error?: { message?: string } } }).error;
+  return String(body?.error?.message ?? e.message ?? '').replace(/\s+/g, ' ').slice(0, 200);
+}
+
+/** Admin check: one tiny call to each configured model, with the time taken and the provider's error message. */
+export async function testAi(env: Env): Promise<{ name: string; model: string; ok: boolean; ms: number; error?: string }[]> {
+  const out: { name: string; model: string; ok: boolean; ms: number; error?: string }[] = [];
+  const run = async (name: string, model: string, fn: () => Promise<string>) => {
+    const t = Date.now();
+    try { const r = await fn(); out.push({ name, model, ok: r.trim().length > 0, ms: Date.now() - t, ...(r.trim() ? {} : { error: 'empty reply' }) }); }
+    catch (e) { out.push({ name, model, ok: false, ms: Date.now() - t, error: String((e as Error).message).slice(0, 240) }); }
+  };
+  const ask = 'Reply with the single word: ok';
+  if (env.ANTHROPIC_API_KEY) {
+    const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    const call = (model: string) => async () => {
+      try {
+        const m = await client.messages.create({ model, max_tokens: 2000, output_config: { effort: 'low' }, messages: [{ role: 'user', content: ask }] });
+        return m.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
+      } catch (e) { if (e instanceof Anthropic.APIError) throw new Error(`ai_http_${e.status ?? 0}: ${apiErrorText(e)}`); throw e; }
+    };
+    const main = env.AI_MODEL?.trim() || DEFAULT_MODEL.anthropic;
+    await run('Claude (explanations, translation, guides)', main, call(main));
+    const pm = pointsModel(env);
+    if (pm && pm !== main) await run('Claude (drawing points)', pm, call(pm));
+  }
+  if (env.GEMINI_API_KEY) {
+    const gm = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini;
+    await run('Gemini (translation)', gm, () => callGemini(env, gm, 'Reply in JSON.', [], `${ask} as {"r":"ok"}`));
+  }
+  return out;
 }
 
 export type OutLang = 'km' | 'en' | 'vi' | 'th' | 'id';
