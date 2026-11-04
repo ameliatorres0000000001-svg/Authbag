@@ -36,15 +36,20 @@ export default function Install() {
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <img src="/icons/icon-192.png" alt="" width={104} height={104} className="rounded-[24px]"
             style={{ boxShadow: '0 0 0 1px rgba(242,202,80,0.35), 0 0 70px rgba(242,202,80,0.35)' }} />
-          <div className="mt-8 font-mono text-[11px] uppercase tracking-[0.35em]" style={{ color: C.gold }}>HENGZ AUTHENTIC</div>
-          <h1 className="mt-3 max-w-[18rem] font-serif text-[32px] font-medium leading-[1.2]"
-            style={{ background: 'linear-gradient(180deg,#fff 0%,#f3e7c4 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{t('install.title')}</h1>
-          <p className="mt-3 max-w-[19rem] text-[15px] leading-relaxed" style={{ color: C.soft }}>{t('install.body')}</p>
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
-            {['install.f3', 'install.f2', 'install.f1'].map((k) => (
-              <span key={k} className="rounded-full px-3 py-1 text-[12px] backdrop-blur" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: C.text }}>{t(k)}</span>
+          {/* one type scale: 12 kicker · 30 brand · 16 subtitle · 15 rows */}
+          <div className="mt-7 text-[12px] font-semibold uppercase" style={{ color: C.gold, letterSpacing: track ? '0.3em' : undefined }}>{t('install.welcome')}</div>
+          <h1 className="mt-2 font-serif text-[30px] font-medium leading-tight tracking-[0.04em]"
+            style={{ background: 'linear-gradient(180deg,#fff 0%,#f3e7c4 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>HENGZ AUTHENTIC</h1>
+          <p className="mt-2 max-w-[19rem] text-[16px] leading-snug" style={{ color: C.soft }}>{t('install.sub')}</p>
+          <div className="mx-auto my-5 h-px w-14" style={{ background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />
+          <ul className="w-full max-w-[20rem] space-y-2.5 text-left">
+            {([['M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 15.4 7.2 17.9l.9-5.4L4.2 8.7l5.4-.8z', 'install.row1'], ['M9 12l2 2 4-4M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z', 'install.row2']] as const).map(([d, k]) => (
+              <li key={k} className="flex items-center gap-3 rounded-2xl px-4 py-3 backdrop-blur" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: 'rgba(242,202,80,0.14)', color: C.gold }}><Icon d={d} /></span>
+                <span className="text-[15px] leading-snug" style={{ color: C.text }}>{t(k)}</span>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
 
         <div className="space-y-3">
@@ -114,7 +119,7 @@ function Galaxy() {
   ];
   const floaters: [string, string, string, number, number][] = [
     // shape, left, size, duration s, delay s
-    ['◇', '12%', '22px', 26, 0], ['✦', '78%', '16px', 22, 4], ['○', '30%', '28px', 34, 9], ['◇', '64%', '18px', 30, 14], ['✦', '88%', '12px', 24, 2], ['○', '6%', '14px', 28, 17],
+    ['✦', '12%', '22px', 26, 0], ['✦', '78%', '16px', 22, 4], ['○', '30%', '28px', 34, 9], ['✦', '64%', '18px', 30, 14], ['✦', '88%', '12px', 24, 2], ['○', '6%', '14px', 28, 17],
   ];
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
