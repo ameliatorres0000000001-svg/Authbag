@@ -200,3 +200,50 @@ export async function findPhotoRegions(env: Env, image: VisionImage, partCodes: 
     [image], 'Find each photo in this image.', 1500);
   return parseCropRegions(text, partCodes);
 }
+
+export interface StyleIdentification {
+  found: boolean; model_name: string | null; colour: string | null; product_url: string | null;
+  sources: string[]; note: string | null;
+}
+
+/**
+ * Look up which product a brand style / article code belongs to, using Claude's web search.
+ * Identification only (model name, colour, product page) — never a judgement of whether an item is genuine.
+ * Needs the Anthropic provider (web search is a Claude server tool).
+ */
+export async function identifyStyleCode(env: Env, brand: string, code: string, hint: string): Promise<StyleIdentification> {
+  if (aiProvider(env) !== 'anthropic') throw new Error('web_search_needs_claude');
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const system =
+    `You identify luxury-goods products from their style / article code. ${NO_VERDICT} ` +
+    'Search the web for the exact code. Prefer the brand\'s official site, then large resellers. ' +
+    'Only report a model if a page shows this exact code (or the same code without the last colour/size part, then say so in note). Never guess. ' +
+    'Reply with JSON only: {"found":true|false,"model_name":"...","colour":"...","product_url":"...","sources":["url",...],"note":"..."}';
+  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: `Brand: ${brand}\nCode: ${code}\nWhat the code parts suggest: ${hint || 'unknown'}` }];
+  let msg: Anthropic.Message | null = null;
+  // a long server-side search can pause; send the turn back so the server resumes it
+  for (let i = 0; i < 3; i++) {
+    try {
+      msg = await client.messages.create({
+        model: aiModel(env)!, max_tokens: 16000, output_config: { effort: 'medium' }, system, messages,
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }],
+      });
+    } catch (e) {
+      if (e instanceof Anthropic.APIError) throw new Error(`ai_http_${e.status ?? 0}`);
+      throw e;
+    }
+    if (msg.stop_reason !== 'pause_turn') break;
+    messages.push({ role: 'assistant', content: msg.content });
+  }
+  if (!msg) throw new Error('ai_failed');
+  if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
+  const text = msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  let o: Record<string, unknown> = {};
+  try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : {}; } catch { o = {}; }
+  const str = (v: unknown, max = 300) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+  const url = (v: unknown) => { const s = str(v, 500); return s && /^https?:\/\//.test(s) ? s : null; };
+  const sources = (Array.isArray(o.sources) ? o.sources : []).map(url).filter((x): x is string => !!x).slice(0, 6);
+  const model_name = str(o.model_name, 160);
+  return { found: o.found === true && !!model_name, model_name, colour: str(o.colour, 80), product_url: url(o.product_url), sources, note: str(o.note, 400) };
+}
