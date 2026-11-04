@@ -53,17 +53,19 @@ export default function Install() {
         </div>
 
         <div className="space-y-3">
-          {installed ? (
-            <p className="rounded-2xl px-4 py-3 text-center text-sm backdrop-blur" style={{ background: 'rgba(255,255,255,0.06)', color: C.gold }}>✓ {t('install.installed')}</p>
-          ) : (
-            <button type="button" onClick={install} className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-[#3c2f00] ${track}`}
-              style={{ background: `linear-gradient(135deg, ${C.gold}, ${C.gold2})`, boxShadow: '0 10px 40px rgba(242,202,80,0.25)' }}>
-              <Icon d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14" /> {t('install.cta')}
-            </button>
-          )}
-          <button type="button" onClick={continueWeb} className="w-full py-2 text-sm" style={{ color: C.soft }}>
+          {/* most people look around first: the website is the main action, installing is the light one */}
+          <button type="button" onClick={continueWeb} className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-bold text-[#3c2f00] ${track}`}
+            style={{ background: `linear-gradient(135deg, ${C.gold}, ${C.gold2})`, boxShadow: '0 10px 40px rgba(242,202,80,0.25)' }}>
             {t('install.continue')} →
           </button>
+          {installed ? (
+            <p className="text-center text-xs" style={{ color: C.gold }}>✓ {t('install.installed')}</p>
+          ) : (
+            <button type="button" onClick={install} className="mx-auto flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-xs"
+              style={{ color: C.soft, border: '1px solid rgba(242,202,80,0.35)', background: 'rgba(255,255,255,0.04)' }}>
+              <span className="scale-75"><Icon d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14" /></span> {t('install.ctaSmall')}
+            </button>
+          )}
           <div className="flex justify-center gap-5 text-[11px]" style={{ color: 'rgba(207,198,220,0.7)' }}>
             <button type="button" className="underline" onClick={() => setGuide('ios')}>iPhone</button>
             <button type="button" className="underline" onClick={() => setGuide('android')}>Android</button>
