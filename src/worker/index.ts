@@ -81,7 +81,7 @@ app.post('/api/auth/login', async (c) => {
 // everything below requires a session
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
-  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook') return next();
+  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p.startsWith('/api/public/cert/')) return next();
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
   if (!user) return c.json({ error: 'unauthenticated' }, 401);
   c.set('user', user);
@@ -1404,7 +1404,8 @@ app.get('/api/verify/:id', async (c) => {
   const ids = Object.values(found).map((x) => x.id);
   const pts = ids.length ? (await c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, source FROM reference_points WHERE asset_id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at`).bind(...ids).all<Record<string, any>>()).results : [];
   const refs = Object.fromEntries(Object.entries(found).map(([step, x]) => [step, { id: x.id, label: x.label, status: x.status, model: x.model, same_model: x.same_model, points: pts.filter((p) => p.asset_id === x.id) }]));
-  return c.json({ request: r, photos, plan, refs });
+  const certificate = await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id WHERE c.request_id = ?`).bind(r.id).first().catch(() => null);
+  return c.json({ request: r, photos, plan, refs, certificate });
 });
 
 app.get('/api/verify/photos/:pid/image', async (c) => {
@@ -1442,6 +1443,7 @@ app.post('/api/verify/:id/photos', async (c) => {
   }
   await c.env.DB.prepare(`UPDATE verify_requests SET status = 'submitted', expert_outcome = NULL, answered_at = NULL WHERE id = ?`).bind(r.id).run();
   await audit(c.env, me.id, 'verify.more_photos', 'verify_request', r.id, { photos: photos.length });
+  await revokeForRequest(c.env, r.id, me.id, 'Request reopened with new photos');
   if (telegramConfigured(c.env)) {
     const summary = `📷 More photos for ${r.id} (${r.brand}) from ${me.name}`;
     c.executionCtx.waitUntil(sendReviewRequest(c.env, { id: r.id, summary, photos })
@@ -1449,6 +1451,71 @@ app.post('/api/verify/:id/photos', async (c) => {
       .catch((e) => c.env.DB.prepare('UPDATE verify_requests SET telegram_error = ? WHERE id = ?').bind(String((e as Error).message).slice(0, 300), r.id).run()));
   }
   return c.json({ ok: true });
+});
+
+// ───────────────────────── HENGZ expert certificates ─────────────────────────
+// Issued by hand by a named HENGZ expert, only for a request answered "consistent with references" (DB triggers enforce it).
+// The system and AI never issue one. Numbered, checkable by QR, revocable, never edited.
+const CERT_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const randomCode = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => CERT_ALPHABET[b % CERT_ALPHABET.length]).join('');
+
+async function revokeForRequest(env: AppEnv['Bindings'], requestId: string, actor: string | null, reason: string) {
+  const res = await env.DB.prepare(`UPDATE hengz_certificates SET status = 'revoked', revoked_reason = ?, revoked_at = ? WHERE request_id = ? AND status = 'valid'`)
+    .bind(reason, nowIso(), requestId).run().catch(() => null);
+  if (res?.meta.changes) await audit(env, actor, 'certificate.revoke', 'verify_request', requestId, { reason, automatic: true });
+}
+
+const CERT_COLS = `c.id, c.cert_no, c.public_code, c.request_id, c.brand_id, b.name AS brand, c.model_text, c.item_desc, c.photo_id, c.customer_name,
+  c.expert_name, c.issued_at, c.status, c.revoked_reason, c.revoked_at`;
+
+app.post('/api/verify/:id/certificate', need(STAFF), async (c) => {
+  const body = await parse(c, z.object({ itemDesc: z.string().max(300).optional(), photoId: z.string().optional() }));
+  const me = c.get('user');
+  const r = await c.env.DB.prepare(`SELECT r.id, r.brand_id, r.model_text, r.status, r.expert_outcome, u.name AS customer FROM verify_requests r JOIN users u ON u.id = r.user_id WHERE r.id = ?`)
+    .bind(c.req.param('id')).first<Record<string, any>>();
+  if (!r) return c.json({ error: 'not_found' }, 404);
+  if (r.status !== 'answered' || r.expert_outcome !== 'consistent_with_references') return c.json({ error: 'needs_consistent_answer' }, 409);
+  const existing = await c.env.DB.prepare(`SELECT status FROM hengz_certificates WHERE request_id = ?`).bind(r.id).first<{ status: string }>();
+  if (existing) return c.json({ error: existing.status === 'valid' ? 'already_issued' : 'revoked_certificate_exists' }, 409);
+  const photo = body.photoId
+    ? await c.env.DB.prepare(`SELECT id FROM verify_photos WHERE id = ? AND request_id = ?`).bind(body.photoId, r.id).first<{ id: string }>()
+    : await c.env.DB.prepare(`SELECT id FROM verify_photos WHERE request_id = ? ORDER BY (step = 'model') DESC, created_at LIMIT 1`).bind(r.id).first<{ id: string }>();
+  const id = uid('hc_');
+  const certNo = `HZ-${new Date().getUTCFullYear()}-${randomCode(6)}`;
+  const code = randomCode(16);
+  await c.env.DB.prepare(`INSERT INTO hengz_certificates (id, cert_no, public_code, request_id, brand_id, model_text, item_desc, photo_id, customer_name, expert_id, expert_name)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, certNo, code, r.id, r.brand_id, r.model_text, body.itemDesc?.trim() || null, photo?.id ?? null, r.customer, me.id, me.name).run();
+  await audit(c.env, me.id, 'certificate.issue', 'hengz_certificate', id, { certNo, request: r.id });
+  return c.json({ id, certNo, code });
+});
+
+app.post('/api/hengz-certificates/:id/revoke', need(ADMINS), async (c) => {
+  const { reason } = await parse(c, z.object({ reason: z.string().min(3).max(300) }));
+  const res = await c.env.DB.prepare(`UPDATE hengz_certificates SET status = 'revoked', revoked_reason = ?, revoked_at = ? WHERE id = ? AND status = 'valid'`)
+    .bind(reason, nowIso(), c.req.param('id')).run();
+  if (!res.meta.changes) return c.json({ error: 'not_found_or_already_revoked' }, 404);
+  await audit(c.env, c.get('user').id, 'certificate.revoke', 'hengz_certificate', c.req.param('id'), { reason });
+  return c.json({ ok: true });
+});
+
+app.get('/api/hengz-certificates', need(STAFF), async (c) =>
+  c.json({ certificates: (await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id ORDER BY c.issued_at DESC LIMIT 200`).all()).results }));
+
+/** Public check (the QR code on the certificate): shows the certificate as issued, or that it was revoked. */
+app.get('/api/public/cert/:code', async (c) => {
+  const row = await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id WHERE c.public_code = ?`)
+    .bind(c.req.param('code')).first<Record<string, any>>();
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  const { request_id: _r, ...pub } = row;
+  return c.json({ certificate: pub });
+});
+app.get('/api/public/cert/:code/photo', async (c) => {
+  const row = await c.env.DB.prepare(`SELECT p.r2_key, p.mime FROM hengz_certificates c JOIN verify_photos p ON p.id = c.photo_id WHERE c.public_code = ?`)
+    .bind(c.req.param('code')).first<{ r2_key: string; mime: string }>();
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  const obj = await c.env.VAULT.get(row.r2_key);
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': row.mime, 'cache-control': 'public, max-age=3600' } });
 });
 
 /** Staff can also answer from the web (e.g. when Telegram is down). Same four outcomes. */
@@ -1460,6 +1527,7 @@ app.post('/api/verify/:id/answer', need(STAFF), async (c) => {
     .bind(a.status, a.outcome, me.name, body.note?.trim() || null, nowIso(), c.req.param('id')).run();
   if (!res.meta.changes) return c.json({ error: 'not_found' }, 404);
   await audit(c.env, me.id, 'verify.answer', 'verify_request', c.req.param('id'), { outcome: a.outcome, via: 'web' });
+  if (a.outcome !== 'consistent_with_references') await revokeForRequest(c.env, c.req.param('id'), me.id, 'Expert answer changed');
   return c.json({ ok: true });
 });
 
@@ -1512,6 +1580,7 @@ app.post('/api/telegram/webhook', async (c) => {
       .bind(a.status, a.outcome, name, nowIso(), id).run();
     if (!res.meta.changes) { await answerCallback(c.env, cb.id, 'Request not found'); return c.json({ ok: true }); }
     await audit(c.env, null, 'verify.answer', 'verify_request', id, { outcome: a.outcome, via: 'telegram', expert: name });
+    if (a.outcome !== 'consistent_with_references') await revokeForRequest(c.env, id, null, 'Expert answer changed');
     await answerCallback(c.env, cb.id, 'Saved');
     await editDecision(c.env, cb.message.chat.id, cb.message.message_id, `${cb.message.text ?? ''}\n\n→ ${a.button} — ${name}\n(Reply to this message to add or change the note for the customer.)`);
     return c.json({ ok: true });

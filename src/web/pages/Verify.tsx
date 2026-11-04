@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
 import { Notice, OutcomeBadge, errText } from '../ui.tsx';
@@ -34,6 +34,9 @@ export async function shrink(file: File): Promise<File> {
 export default function Verify() {
   const { t, locale } = useI18n();
   const nav = useNavigate();
+  const [sp] = useSearchParams();
+  // the Scan hub opens this page with ?mode=scan or ?mode=upload already chosen
+  const preset = (['scan', 'upload'] as const).find((m) => m === sp.get('mode')) ?? null;
   const [tax, setTax] = useState<{ brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] } | null>(null);
   const [brandId, setBrandId] = useState('');
   const [model, setModel] = useState('');
@@ -114,6 +117,11 @@ export default function Verify() {
       </section>
 
       <section className="space-y-2">
+        {preset ? (
+          <button type="button" disabled={!brandId || blocked} onClick={() => { setMode(preset); setIdx(0); }} className="btn-primary w-full !py-3.5 disabled:opacity-40">
+            {preset === 'scan' ? '📷' : '🖼️'} {t(preset === 'scan' ? 'vr.startScan' : 'vr.startUpload')} →
+          </button>
+        ) : (<>
         <div className="font-serif text-lg">2. {t('vr.how')}</div>
         <div className="grid grid-cols-2 gap-3">
           {(['scan', 'upload'] as const).map((m) => (
@@ -127,6 +135,7 @@ export default function Verify() {
             </button>
           ))}
         </div>
+        </>)}
       </section>
 
       {err && <Notice tone="bad">{err}</Notice>}

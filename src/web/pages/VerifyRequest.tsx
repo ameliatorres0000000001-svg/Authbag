@@ -18,7 +18,7 @@ export default function VerifyRequest() {
   const { id } = useParams();
   const { t } = useI18n();
   const me = useContext(MeContext)!;
-  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null; refs?: Record<string, Ref> } | null>(null);
+  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null; refs?: Record<string, Ref>; certificate?: any } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -75,6 +75,9 @@ export default function VerifyRequest() {
         {r.entrupy_requested ? <p className="mt-2 text-xs">➕ {t('vr.entrupy')} · {money(data.plan?.entrupy_price_cents, data.plan?.currency ?? 'USD', t('vr.priceLater'))}</p> : null}
         <p className="mt-3 text-[11px] text-muted">{t('vr.disclaimer')}</p>
       </div>
+
+      <CertificateBox requestId={r.id} cert={data.certificate ?? null} canIssue={staff && r.status === 'answered' && r.expert_outcome === 'consistent_with_references'}
+        canRevoke={['owner', 'lead_authenticator'].includes(me.role)} onChange={load} />
 
       {r.status === 'more_photos' && r.user_id === me.id && (
         <label className="btn-primary flex w-full cursor-pointer justify-center !py-3">
@@ -157,5 +160,58 @@ function CompareWithRefs({ photos, refs }: { photos: { id: string; step: string 
         );
       })}
     </section>
+  );
+}
+
+/**
+ * HENGZ expert certificate for this request. Staff issue it by hand (only after the answer
+ * "consistent with references"); the customer opens it to print or save as PDF.
+ */
+function CertificateBox({ requestId, cert, canIssue, canRevoke, onChange }: { requestId: string; cert: any | null; canIssue: boolean; canRevoke: boolean; onChange: () => void }) {
+  const { t } = useI18n();
+  const [desc, setDesc] = useState('');
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  async function issue() {
+    if (!window.confirm(t('cert.confirmIssue'))) return;
+    setBusy(true); setErr(null);
+    try { await api.post(`/api/verify/${requestId}/certificate`, { itemDesc: desc || undefined }); onChange(); } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+  async function revoke() {
+    const reason = window.prompt(t('cert.revokeReason'));
+    if (!reason || reason.trim().length < 3) return;
+    setBusy(true); setErr(null);
+    try { await api.post(`/api/hengz-certificates/${cert.id}/revoke`, { reason: reason.trim() }); onChange(); } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+  if (cert) {
+    const revoked = cert.status === 'revoked';
+    return (
+      <div className={`rounded-2xl border p-4 ${revoked ? 'border-counterfeit/40 bg-counterfeit/5' : 'border-gold bg-gold-light'}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="font-serif text-lg">🏅 {t('cert.title')}</div>
+            <div className="font-mono text-xs">{cert.cert_no} · {new Date(cert.issued_at).toLocaleDateString()} · {cert.expert_name}</div>
+          </div>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${revoked ? 'bg-counterfeit text-white' : 'bg-verified text-white'}`}>{revoked ? t('cert.revokedBadge') : t('cert.validBadge')}</span>
+        </div>
+        {revoked && <p className="mt-2 text-xs">{cert.revoked_reason}</p>}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a className="btn-primary !py-2 text-xs" href={`/certificate/${cert.public_code}`} target="_blank" rel="noreferrer">⎙ {t('cert.open')}</a>
+          {canRevoke && !revoked && <button type="button" className="btn-ghost !py-2 text-xs" disabled={busy} onClick={revoke}>{t('cert.revoke')}</button>}
+        </div>
+        {err && <p className="mt-2 text-xs text-counterfeit">{err}</p>}
+      </div>
+    );
+  }
+  if (!canIssue) return null;
+  return (
+    <div className="space-y-2 rounded-2xl border border-dashed border-gold p-4">
+      <div className="font-semibold">🏅 {t('cert.issueTitle')}</div>
+      <p className="text-xs text-muted">{t('cert.issueHelp')}</p>
+      <input className="input text-sm" maxLength={300} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t('cert.descPh')} />
+      <button type="button" className="btn-primary w-full !py-2.5" disabled={busy} onClick={issue}>{busy ? '…' : `🏅 ${t('cert.issue')}`}</button>
+      {err && <p className="text-xs text-counterfeit">{err}</p>}
+    </div>
   );
 }
