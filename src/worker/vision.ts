@@ -41,20 +41,7 @@ export async function callVision(env: Env, system: string, images: VisionImage[]
   const provider = aiProvider(env);
   const model = aiModel(env);
   if (!provider || !model) throw new Error('ai_not_configured');
-  if (provider === 'gemini') {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST',
-      headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [...images.map((i) => ({ inline_data: { mime_type: i.mime, data: b64(i.data) } })), { text: userText }] }],
-        generationConfig: { responseMimeType: 'application/json' },
-      }),
-    });
-    if (!res.ok) throw new Error(`ai_http_${res.status}`);
-    const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-    return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-  }
+  if (provider === 'gemini') return callGemini(env, model, system, images, userText);
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   let msg: Anthropic.Message;
   try {
@@ -89,6 +76,22 @@ export function langRule(lang: OutLang = 'km'): string {
   return ` Write every human-readable text value (labels, notes, summaries, descriptions) in ${LANG_NAME[lang]}. ` +
     `Teach, do not analyse: first say what a learner should check and how, then start a new line with "${IN_PHOTO[lang]}" and say what this photo shows. ` +
     'Keep brand names, codes, stamped words and letters exactly as written on the item (e.g. LOUIS VUITTON, CA4109). JSON keys stay in English.';
+}
+
+/** One Gemini generateContent call returning JSON text. */
+async function callGemini(env: Env, model: string, system: string, images: VisionImage[], userText: string): Promise<string> {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [...images.map((i) => ({ inline_data: { mime_type: i.mime, data: b64(i.data) } })), { text: userText }] }],
+      generationConfig: { responseMimeType: 'application/json' },
+    }),
+  });
+  if (!res.ok) throw new Error(`ai_http_${res.status}`);
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
 }
 
 const NO_VERDICT = 'Never state or imply whether an item is authentic or counterfeit. Describe only what is visibly present. If something is not clearly visible, omit it.';
@@ -273,11 +276,14 @@ export async function identifyStyleCode(env: Env, brand: string, code: string, h
 
 /** Translate existing teaching points so each has English and Khmer. Text only; meaning and codes unchanged. */
 export async function translatePoints(env: Env, items: { id: string; label: string; note: string | null }[]): Promise<Record<string, { en: { label: string; note?: string }; km: { label: string; note?: string } }>> {
-  const text = await callVision(env,
-    'You translate short teaching notes about luxury bags between English and Khmer, making each one short and easy to remember (a learner reads it on a phone). Keep the meaning, keep brand names, codes and stamped words exactly as written, ' +
+  // translation is plain text work: use Gemini when its key is set (fast and cheap), otherwise the main AI
+  const system = 'You translate short teaching notes about luxury bags between English and Khmer, making each one short and easy to remember (a learner reads it on a phone). Keep the meaning, keep brand names, codes and stamped words exactly as written, ' +
     'keep line breaks. If a note has a line starting "In this photo:" the Khmer line starts "ក្នុងរូបនេះ៖" and vice versa. Natural Khmer, not word for word. ' +
-    'Reply with JSON only: [{"id":"...","label_en":"...","note_en":"...","label_km":"...","note_km":"..."}] — one entry per input id.',
-    [], JSON.stringify(items.map((i) => ({ id: i.id, label: i.label, note: i.note ?? '' }))), 16000, 'low');
+    'Reply with JSON only: [{"id":"...","label_en":"...","note_en":"...","label_km":"...","note_km":"..."}] — one entry per input id.';
+  const input = JSON.stringify(items.map((i) => ({ id: i.id, label: i.label, note: i.note ?? '' })));
+  const text = env.GEMINI_API_KEY
+    ? await callGemini(env, env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini, system, [], input)
+    : await callVision(env, system, [], input, 16000, 'low');
   const a = text.indexOf('['), b = text.lastIndexOf(']');
   let arr: Record<string, unknown>[] = [];
   try { arr = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : []; } catch { arr = []; }

@@ -9,6 +9,8 @@ export interface Env {
   ANTHROPIC_API_KEY?: string;
   GEMINI_API_KEY?: string;
   AI_MODEL?: string;
+  /** Gemini model used for text translation when GEMINI_API_KEY is set (default gemini-3.8-flash) */
+  GEMINI_MODEL?: string;
 }
 
 export type Role = 'owner' | 'lead_authenticator' | 'appraiser' | 'reviewer' | 'subscriber' | 'readonly';
