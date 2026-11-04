@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-export type Locale = 'km' | 'en';
+import { MORE } from './i18n.more.ts';
+
+export type Locale = 'km' | 'en' | 'vi' | 'th' | 'id';
+/** Language menu: short code shown in the header, full name in the list. */
+export const LOCALES: { code: Locale; short: string; name: string }[] = [
+  { code: 'km', short: 'KH', name: 'ខ្មែរ' }, { code: 'en', short: 'EN', name: 'English' }, { code: 'vi', short: 'VN', name: 'Tiếng Việt' },
+  { code: 'th', short: 'TH', name: 'ไทย' }, { code: 'id', short: 'ID', name: 'Bahasa Indonesia' },
+];
 
 const D: Record<string, { km: string; en: string }> = {
   appName: { km: 'HENGZ AUTHENTIC', en: 'HENGZ AUTHENTIC' },
@@ -324,6 +331,44 @@ const D: Record<string, { km: string; en: string }> = {
   'dc.eg': { km: 'ឧ.', en: 'e.g.' },
   'dc.windows': { km: 'ចន្លោះឆ្នាំដែលអាចទៅរួច', en: 'Possible years' },
   'dc.noYearCode': { km: 'ម៉ាកនេះមិនប្រើកូដដែលប្រាប់ឆ្នាំទេ។ មើលការណែនាំខាងក្រោម ថាលេខនេះនៅឯណា និងប្រើពិនិត្យយ៉ាងដូចម្ដេច។', en: 'This brand has no code that gives a year. See the guide below for where the number is and how to use it.' },
+  'sc.title': { km: 'លេខ article / style code', en: 'Article / style code' },
+  'sc.help': { km: 'វាយលេខវែងលើស្លាកក្រណាត់ ឬស្លាកខាងក្នុង (ឧ. MCM MWT4SED09PF001) ដើម្បីបំបែកជាផ្នែក ហើយរកម៉ូដែលពិតប្រាកដ។', en: 'Type the long code from the fabric or interior tag (e.g. MCM MWT4SED09PF001) to split it into parts and find the exact model.' },
+  'sc.placeholder': { km: 'ឧ. MWT4SED09PF001', en: 'e.g. MWT4SED09PF001' },
+  'sc.unknownPart': { km: 'មិនទាន់មានក្នុងតារាង', en: 'not in the table yet' },
+  'sc.noFit': { km: 'លេខនេះមិនត្រូវនឹងទម្រង់ article របស់ MCM ទេ (ឧ. M + W/M + T/K + ឆ្នាំ + S/A + …)។ ពិនិត្យថាវាយគ្រប់តួ ឬជាលេខលើបន្ទះ (មិនមែន article)។', en: 'This does not fit the MCM article format (M + W/M + T/K + year + S/A + …). Check every character, or it may be the plate number rather than the article code.' },
+  'sc.model': { km: 'ម៉ូដែល', en: 'Model' },
+  'sc.colour': { km: 'ពណ៌', en: 'Colour' },
+  'sc.sameModel': { km: 'ម៉ូដែលដូចគ្នា ពណ៌/ទំហំផ្សេង', en: 'Same model, other colour / size' },
+  'sc.notInDb': { km: 'លេខនេះមិនទាន់មានក្នុង database ទេ។ ឲ្យ AI ស្វែងរកលើ Google/web (គេហទំព័រផ្លូវការមុន) ហើយលទ្ធផលនឹងរក្សាទុកជា draft ឲ្យ admin ពិនិត្យ។', en: 'This code is not in the database yet. Let the AI search the web (official site first); the result is saved as a draft for an admin to check.' },
+  'sc.aiSearch': { km: 'AI ស្វែងរកម៉ូដែលលើ web', en: 'AI: search the web for this model' },
+  'sc.searching': { km: 'AI កំពុងស្វែងរក… (អាចយូរ 20–60 វិនាទី)', en: 'AI is searching… (20–60 s)' },
+  'sc.aiNotFound': { km: 'AI រកមិនឃើញទំព័រណាដែលមានលេខនេះពិតប្រាកដទេ', en: 'The AI found no page that shows this exact code' },
+  'sc.aiOff': { km: 'ការស្វែងរកលើ web ត្រូវការ ANTHROPIC_API_KEY (Secret ក្នុង Cloudflare)។', en: 'Web search needs ANTHROPIC_API_KEY (a Secret in Cloudflare).' },
+  'sc.disclaimer': { km: 'លេខត្រឹមត្រូវ និងម៉ូដែលត្រូវគ្នា មិនបញ្ជាក់ថាកាបូបពិតទេ — អ្នកក្លែងក៏ចម្លងលេខពិតដែរ។ ពិនិត្យ ស្លាក បន្ទះ កាត ថ្នេរ និងសម្ភារៈឲ្យស៊ីគ្នា។', en: 'A valid code that matches the model does not prove a bag is genuine — counterfeits copy real codes. Check that tag, plate, card, stitching and materials agree.' },
+  'lang.label': { km: 'ភាសា', en: 'Language' },
+  'install.open': { km: 'ដំឡើង App', en: 'Install app' },
+  'install.tagline': { km: 'បញ្ញាផ្ទៀងផ្ទាត់កាបូបប្រណីត', en: 'Luxury Authentication Intelligence' },
+  'install.title': { km: 'ដំឡើង App HENGZ', en: 'Install your HENGZ app' },
+  'install.body': { km: 'រៀនមើលកាបូបប្រណីត អានកូដ និងប្រៀបធៀបចំណុចលម្អិត — បើកភ្លាមពីអេក្រង់ដើមទូរស័ព្ទ។', en: 'Learn to read luxury bags, decode codes and compare details — straight from your home screen.' },
+  'install.f1': { km: 'បើកលឿន', en: 'Fast launch' },
+  'install.f1s': { km: 'ពេញអេក្រង់', en: 'Full screen' },
+  'install.f2': { km: 'ស្កេន និងអានកូដ', en: 'Scan & read codes' },
+  'install.f2s': { km: 'កាមេរ៉ា, NFC', en: 'Camera, NFC' },
+  'install.f3': { km: 'មេរៀន AI', en: 'AI lessons' },
+  'install.f3s': { km: 'គូសចំណុច', en: 'Marked points' },
+  'install.cta': { km: 'ដំឡើង APP', en: 'INSTALL APP' },
+  'install.continue': { km: 'បន្តលើគេហទំព័រ', en: 'Continue to website' },
+  'install.installed': { km: 'បានដំឡើងរួច — បើកពីអេក្រង់ដើម។', en: 'Installed — open it from your home screen.' },
+  'install.iosTitle': { km: 'iPhone / iPad (Safari)', en: 'iPhone / iPad (Safari)' },
+  'install.ios1': { km: 'ចុចប៊ូតុង Share (ការ៉េមានព្រួញឡើងលើ) នៅរបារខាងក្រោមនៃ Safari។', en: 'Tap the Share button (square with an up arrow) in Safari’s bottom bar.' },
+  'install.ios2': { km: 'រំកិលចុះ ហើយជ្រើស "Add to Home Screen"។', en: 'Scroll down and choose "Add to Home Screen".' },
+  'install.ios3': { km: 'ចុច "Add" នៅជ្រុងខាងលើស្ដាំ។', en: 'Tap "Add" in the top-right corner.' },
+  'install.androidTitle': { km: 'Android (Chrome)', en: 'Android (Chrome)' },
+  'install.and1': { km: 'ចុចម៉ឺនុយ ⋮ នៅជ្រុងខាងលើស្ដាំនៃ Chrome។', en: 'Tap the ⋮ menu in Chrome’s top-right corner.' },
+  'install.and2': { km: 'ជ្រើស "Install app" ឬ "Add to Home screen"។', en: 'Choose "Install app" or "Add to Home screen".' },
+  'install.and3': { km: 'ចុច "Install" ដើម្បីបញ្ជាក់។', en: 'Tap "Install" to confirm.' },
+  'install.step': { km: 'ជំហាន', en: 'Step' },
+  'install.close': { km: 'បិទ', en: 'Close' },
   'dcp.title': { km: 'Date code និងលេខសៀរៀល', en: 'Date codes & serial numbers' },
   'dcp.help': { km: 'ជ្រើសម៉ាក វាយកូដដែលឃើញលើកាបូប ហើយរៀនថាកូដនៅឯណា និងអានយ៉ាងដូចម្ដេច។', en: 'Pick a brand, type the code you see on the bag, and learn where it is and how to read it.' },
   'dcp.example': { km: 'ឧទាហរណ៍', en: 'Example' },
@@ -444,13 +489,13 @@ const I18n = createContext<Ctx>({ locale: 'km', setLocale: () => {}, t: (k) => k
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLoc] = useState<Locale>(() => {
-    try { return (localStorage.getItem('hz_locale') as Locale) || 'km'; } catch { return 'km'; }
+    try { const l = localStorage.getItem('hz_locale') as Locale; return LOCALES.some((x) => x.code === l) ? l : 'km'; } catch { return 'km'; }
   });
   useEffect(() => { document.documentElement.lang = locale; }, [locale]);
   const value = useMemo<Ctx>(() => ({
     locale,
     setLocale: (l) => { setLoc(l); try { localStorage.setItem('hz_locale', l); } catch { /* ignore */ } document.documentElement.lang = l; },
-    t: (k) => D[k]?.[locale] ?? D[k]?.en ?? k,
+    t: (k) => (locale === 'km' || locale === 'en' ? D[k]?.[locale] : MORE[k]?.[locale]) ?? D[k]?.en ?? k,
   }), [locale]);
   return <I18n.Provider value={value}>{children}</I18n.Provider>;
 }

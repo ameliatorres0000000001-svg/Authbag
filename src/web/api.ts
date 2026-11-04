@@ -3,7 +3,10 @@ export class ApiError extends Error {
 }
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const init: RequestInit = { method, credentials: 'same-origin', headers: {} };
+  // the UI language also tells the server which language the AI should write in
+  let lang = 'km';
+  try { lang = localStorage.getItem('hz_locale') || 'km'; } catch { /* private mode */ }
+  const init: RequestInit = { method, credentials: 'same-origin', headers: { 'x-hz-lang': lang } };
   if (body instanceof FormData) init.body = body;
   else if (body !== undefined) { (init.headers as Record<string, string>)['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
   const res = await fetch(url, init);

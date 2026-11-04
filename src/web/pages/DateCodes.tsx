@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useI18n } from '../i18n.tsx';
 import { Badge } from '../ui.tsx';
 import DateCodeDecoder from '../DateCodeDecoder.tsx';
+import StyleCodeBox from '../StyleCodeBox.tsx';
 import { DateCodeGuide } from '../DateCodeAppearance.tsx';
 import { useDateTables, type CodeGuide } from '../datecodeTables.ts';
 
@@ -26,6 +27,9 @@ export default function DateCodes() {
   }, [tables]);
   const brandId = pick || brands[0]?.id || '';
   const guides = tables?.guides.filter((g) => g.brand_id === brandId) ?? [];
+  const decodable = !!tables && (tables.formats.some((f) => f.brandId === brandId) || tables.lookups.some((l) => l.brand_id === brandId));
+  // article / style codes: brands whose codes name the product rather than a date (MCM, Gucci, Prada, Fendi, Bottega)
+  const styleBox = guides.some((g) => g.gives_year === 'none' || g.id === 'cg_mcm') || !decodable;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 px-4 pb-8 pt-4">
@@ -45,9 +49,12 @@ export default function DateCodes() {
             ))}
           </div>
 
-          <section className="card space-y-3">
-            <DateCodeDecoder key={brandId} brandId={brandId} bare />
-          </section>
+          {decodable && (
+            <section className="card space-y-3">
+              <DateCodeDecoder key={brandId} brandId={brandId} bare />
+            </section>
+          )}
+          {styleBox && <StyleCodeBox key={`s-${brandId}`} brandId={brandId} />}
 
           {guides.map((g) => {
             const gy = GIVES[g.gives_year];

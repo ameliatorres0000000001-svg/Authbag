@@ -11,8 +11,8 @@ export default {
         review: '#8C6A1A', 'review-bg': '#FDF8E8', telemetry: '#374151', 'telemetry-bg': '#EEF0F2',
       },
       fontFamily: {
-        serif: ['"EB Garamond"', '"Noto Serif Khmer"', 'serif'],
-        sans: ['Manrope', '"Noto Sans Khmer"', 'system-ui', 'sans-serif'],
+        serif: ['"EB Garamond"', '"Noto Serif Khmer"', '"Noto Sans Thai"', 'serif'],
+        sans: ['Manrope', '"Noto Sans Khmer"', '"Noto Sans Thai"', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', '"Noto Sans Khmer"', 'ui-monospace', 'monospace'],
       },
       borderRadius: { DEFAULT: '0.125rem', lg: '0.25rem', xl: '0.5rem' },
