@@ -22,6 +22,7 @@
   "triggers": { "crons": ["*/10 * * * *"] },
   "vars": { "AI_MODEL": "" }
   // Optional secrets (set with `wrangler secret put NAME`, never committed):
+  //   ANTHROPIC_BASE_URL – optional https gateway in front of Claude (empty = api.anthropic.com); its key goes in ANTHROPIC_API_KEY
   //   ENTRUPY_API_KEY   – only after Entrupy approves your business account
   //   ANTHROPIC_API_KEY (Claude, default model claude-sonnet-5-5) or GEMINI_API_KEY (default gemini-3.8-flash); AI_MODEL var overrides the model – enables AI observation *suggestions* (never verdicts)
 }

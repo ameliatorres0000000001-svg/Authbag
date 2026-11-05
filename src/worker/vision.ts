@@ -30,6 +30,14 @@ export const aiModel = (env: Env): string | null => {
 
 export const aiConfigured = (env: Env) => aiProvider(env) !== null;
 
+/** The gateway in front of Claude, if one is set (ANTHROPIC_BASE_URL, https only); otherwise Anthropic directly. */
+export function gatewayUrl(env: Env): string | null {
+  const u = env.ANTHROPIC_BASE_URL?.trim();
+  if (!u) return null;
+  try { const p = new URL(u); return p.protocol === 'https:' ? p.origin + p.pathname.replace(/\/$/, '') : null; } catch { return null; }
+}
+const anthropicClient = (env: Env) => new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, ...(gatewayUrl(env) ? { baseURL: gatewayUrl(env)! } : {}) });
+
 /** Drawing teaching points is the hardest vision task: it uses the strongest Claude model unless AI_MODEL pins one. */
 const POINTS_MODEL = 'claude-opus-5-5';
 export const pointsModel = (env: Env): string | null =>
@@ -47,7 +55,7 @@ export async function callVision(env: Env, system: string, images: VisionImage[]
   const model = provider === 'anthropic' && modelOverride ? modelOverride : aiModel(env);
   if (!provider || !model) throw new Error('ai_not_configured');
   if (provider === 'gemini') return callGemini(env, model, system, images, userText);
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env);
   let msg: Anthropic.Message;
   try {
     msg = await client.messages.create({
@@ -94,7 +102,7 @@ export async function testAi(env: Env): Promise<{ name: string; model: string; o
   };
   const ask = 'Reply with the single word: ok';
   if (env.ANTHROPIC_API_KEY) {
-    const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    const client = anthropicClient(env);
     const call = (model: string) => async () => {
       try {
         const m = await client.messages.create({ model, max_tokens: 2000, output_config: { effort: 'low' }, messages: [{ role: 'user', content: ask }] });
@@ -102,9 +110,10 @@ export async function testAi(env: Env): Promise<{ name: string; model: string; o
       } catch (e) { if (e instanceof Anthropic.APIError) throw new Error(`ai_http_${e.status ?? 0}: ${apiErrorText(e)}`); throw e; }
     };
     const main = env.AI_MODEL?.trim() || DEFAULT_MODEL.anthropic;
-    await run('Claude (explanations, translation, guides)', main, call(main));
+    const via = gatewayUrl(env) ? ` via ${new URL(gatewayUrl(env)!).host}` : '';
+    await run(`Claude${via} (explanations, translation, guides)`, main, call(main));
     const pm = pointsModel(env);
-    if (pm && pm !== main) await run('Claude (drawing points)', pm, call(pm));
+    if (pm && pm !== main) await run(`Claude${via} (drawing points)`, pm, call(pm));
   }
   if (env.GEMINI_API_KEY) {
     const gm = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini;
@@ -303,7 +312,7 @@ export interface StyleIdentification {
  */
 export async function identifyStyleCode(env: Env, brand: string, code: string, hint: string, lang: OutLang = 'km'): Promise<StyleIdentification> {
   if (aiProvider(env) !== 'anthropic') throw new Error('web_search_needs_claude');
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env);
   const system =
     `You identify luxury-goods products from their style / article code. ${NO_VERDICT} ` +
     'Search the web for the exact code. Prefer the brand\'s official site, then large resellers. ' +
