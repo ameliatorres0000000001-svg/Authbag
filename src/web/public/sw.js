@@ -1,6 +1,6 @@
 // HENGZ AUTHENTIC service worker: makes the app installable and keeps the shell available offline.
 // API calls and photos are never cached here, so every reading always comes from the server.
-const SHELL = 'hengz-shell-v1';
+const SHELL = 'hengz-shell-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])).then(() => self.skipWaiting()));
@@ -23,4 +23,23 @@ self.addEventListener('fetch', (e) => {
     // hashed build files never change: cache after the first load
     e.respondWith(caches.open(SHELL).then(async (c) => (await c.match(req)) ?? fetch(req).then((r) => { if (r.ok) c.put(req, r.clone()); return r; })));
   }
+});
+
+// Expert notifications (Web Push): show them with sound/vibration, open the request when tapped.
+self.addEventListener('push', (e) => {
+  let n = { title: 'HENGZ AUTHENTIC', body: '', url: '/', tag: undefined };
+  try { n = { ...n, ...e.data.json() }; } catch { /* plain or empty message */ }
+  e.waitUntil(self.registration.showNotification(n.title, {
+    body: n.body, tag: n.tag, renotify: !!n.tag, requireInteraction: true,
+    icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', vibrate: [120, 60, 120], data: { url: n.url },
+  }));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    for (const c of list) { if ('focus' in c) { c.navigate(url); return c.focus(); } }
+    return self.clients.openWindow(url);
+  }));
 });

@@ -106,3 +106,126 @@ export function AiCheck() {
     </div>
   );
 }
+
+/** This phone: turn expert notifications on (sound + vibration for each new request, price or answer). */
+export function NotifyCard() {
+  const { t } = useI18n();
+  const [state, setState] = useState<'on' | 'off' | 'denied' | 'unsupported' | 'install' | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      const m = await import('./push.ts');
+      if (m.needsInstallForPush()) return setState('install');
+      if (!m.pushSupported()) return setState('unsupported');
+      if (Notification.permission === 'denied') return setState('denied');
+      setState((await m.currentSubscription()) ? 'on' : 'off');
+    })();
+  }, []);
+  async function on() {
+    setMsg(null);
+    const m = await import('./push.ts');
+    try { const r = await m.enablePush(); setState(r === 'on' ? 'on' : r === 'denied' ? 'denied' : 'unsupported'); } catch (e) { setMsg(String((e as Error).message)); }
+  }
+  async function test() {
+    setMsg('…');
+    try { const r = await api.post<{ sent: number }>('/api/push/test'); setMsg(r.sent ? `✓ ${t('push.testSent')}` : t('push.noPhones')); } catch (e) { setMsg(String((e as Error).message)); }
+  }
+  async function off() { const m = await import('./push.ts'); await m.disablePush(); setState('off'); }
+  return (
+    <div className="card space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-semibold">🔔 {t('push.title')}</div>
+        {state === 'on' && <span className="rounded-full bg-verified px-2 py-0.5 text-[11px] font-semibold text-white">{t('push.on')}</span>}
+      </div>
+      <p className="text-xs text-muted">{t('push.help')}</p>
+      {state === 'install' && <p className="rounded-lg bg-gold-light p-2 text-xs">{t('push.install')}</p>}
+      {state === 'unsupported' && <p className="text-xs text-counterfeit">{t('push.unsupported')}</p>}
+      {state === 'denied' && <p className="text-xs text-counterfeit">{t('push.denied')}</p>}
+      <div className="flex flex-wrap gap-2">
+        {state === 'off' && <button type="button" className="btn-primary !py-1.5 text-xs" onClick={on}>🔔 {t('push.enable')}</button>}
+        {state === 'on' && <><button type="button" className="btn-ghost !py-1.5 text-xs" onClick={test}>{t('push.test')}</button>
+          <button type="button" className="btn-ghost !py-1.5 text-xs" onClick={off}>{t('push.disable')}</button></>}
+      </div>
+      {msg && <p className="text-xs">{msg}</p>}
+    </div>
+  );
+}
+
+/** Admins: expert accounts — create one, see which have notifications on, switch one off. */
+export function ExpertsCard() {
+  const { t } = useI18n();
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [f, setF] = useState({ name: '', email: '', password: '' });
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = () => api.get('/api/admin/experts').then((r) => setRows(r.experts)).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
+  async function add(e: React.FormEvent) {
+    e.preventDefault(); setMsg(null);
+    try { await api.post('/api/admin/experts', f); setF({ name: '', email: '', password: '' }); setMsg(`✓ ${t('exp.added')}`); load(); } catch (e2) { setMsg(String((e2 as Error).message)); }
+  }
+  const toggle = async (id: string, active: boolean) => { try { await api.post(`/api/admin/experts/${id}/active`, { active }); load(); } catch (e) { setMsg(String((e as Error).message)); } };
+  return (
+    <div className="card space-y-3">
+      <div className="font-semibold">👥 {t('exp.title')}</div>
+      {rows === null ? <p className="text-xs text-muted">…</p> : (
+        <ul className="divide-y divide-hairline text-sm">
+          {rows.map((u) => (
+            <li key={u.id} className={`flex items-center gap-2 py-1.5 ${u.active ? '' : 'opacity-50'}`}>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-semibold">{u.name} <span className="text-[10px] font-normal text-muted">{u.role}</span></div>
+                <div className="truncate text-[11px] text-muted">{u.email}</div>
+              </div>
+              <span className="shrink-0 text-[11px]" title={t('exp.phones')}>{u.phones > 0 ? `🔔 ${u.phones}` : '🔕'}</span>
+              {u.role === 'appraiser' && <button type="button" className="shrink-0 text-[11px] underline" onClick={() => toggle(u.id, !u.active)}>{u.active ? t('exp.disable') : t('exp.enable')}</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={add} className="space-y-1.5 border-t border-hairline pt-2">
+        <div className="text-xs font-semibold">{t('exp.new')}</div>
+        <input className="input !py-1.5 text-sm" placeholder={t('name')} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required maxLength={100} />
+        <input className="input !py-1.5 text-sm" type="email" placeholder={t('email')} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required autoComplete="off" />
+        <input className="input !py-1.5 text-sm" type="password" placeholder={t('exp.pw')} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} autoComplete="new-password" />
+        <button className="btn-primary !py-1.5 text-xs">+ {t('exp.create')}</button>
+      </form>
+      {msg && <p className="text-xs">{msg}</p>}
+    </div>
+  );
+}
+
+/** Admins: the contact customers see (QR code, LINE ID, phone, Telegram, a short note). */
+export function ContactAdmin() {
+  const { t } = useI18n();
+  const [f, setF] = useState({ lineId: '', phone: '', telegram: '', note: '' });
+  const [qr, setQr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = () => api.get('/api/contact').then((c) => { setF({ lineId: c.lineId ?? '', phone: c.phone ?? '', telegram: c.telegram ?? '', note: c.note ?? '' }); setQr(c.qr ? `/api/contact/qr?v=${c.qrVersion}` : null); }).catch(() => {});
+  useEffect(() => { load(); }, []);
+  async function save() { setMsg('…'); try { await api.put('/api/admin/contact', f); setMsg('✓'); } catch (e) { setMsg(String((e as Error).message)); } }
+  async function upload(file: File) {
+    const fd = new FormData(); fd.append('file', file);
+    setMsg('…'); try { await api.post('/api/admin/contact/qr', fd); setMsg('✓'); load(); } catch (e) { setMsg(String((e as Error).message)); }
+  }
+  async function removeQr() { await api.del('/api/admin/contact/qr').catch(() => {}); setQr(null); }
+  return (
+    <div className="card space-y-2">
+      <div className="font-semibold">📇 {t('contact.admin')}</div>
+      <div className="flex items-start gap-3">
+        <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-strong bg-white">
+          {qr ? <img src={qr} alt="QR" className="h-full w-full object-contain" /> : <span className="text-[10px] text-muted">QR</span>}
+        </div>
+        <div className="space-y-1.5 text-xs">
+          <label className="btn-ghost inline-block cursor-pointer !py-1">⤒ {t('contact.uploadQr')}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ''; if (x) upload(x); }} /></label>
+          {qr && <button type="button" className="block text-counterfeit underline" onClick={removeQr}>{t('contact.removeQr')}</button>}
+        </div>
+      </div>
+      <input className="input !py-1.5 text-sm" placeholder="LINE ID (e.g. @hengz)" value={f.lineId} onChange={(e) => setF({ ...f, lineId: e.target.value })} maxLength={80} />
+      <input className="input !py-1.5 text-sm" placeholder={t('contact.phone')} value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} maxLength={40} />
+      <input className="input !py-1.5 text-sm" placeholder="Telegram (@…)" value={f.telegram} onChange={(e) => setF({ ...f, telegram: e.target.value })} maxLength={80} />
+      <input className="input !py-1.5 text-sm" placeholder={t('contact.notePh')} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} maxLength={300} />
+      <button type="button" className="btn-primary !py-1.5 text-xs" onClick={save}>{t('vra.save')}</button>
+      {msg && <p className="text-xs">{msg}</p>}
+    </div>
+  );
+}

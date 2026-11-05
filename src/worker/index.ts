@@ -10,6 +10,7 @@ import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
 import { testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
+import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -151,6 +152,7 @@ const PUBLIC_GET = [
   /^\/api\/albums\/[^/]+$/,
   /^\/api\/assets\/[^/]+\/image$/,
   /^\/api\/studio\/assets\/[^/]+$/,
+  /^\/api\/contact(\/qr)?$/,
 ];
 
 // everything below requires a session (or is a public read above)
@@ -1464,6 +1466,8 @@ app.post('/api/verify', async (c) => {
   }
   await audit(c.env, me.id, 'verify.submit', 'verify_request', id, { brand: brand.slug, photos: photos.length, entrupy: !!entrupy });
 
+  const origin = new URL(c.req.url).origin;
+  c.executionCtx.waitUntil(notifyStaff(c.env, { title: '🔎 New verification request', body: `${brandName}${modelText ? ` · ${modelText}` : ''} — ${me.name} · ${photos.length} photos`, url: `/verify/r/${id}`, tag: id }, origin).catch(() => 0));
   if (telegramConfigured(c.env)) {
     const summary = [`🔎 Verification request ${id}`, `Brand: ${brandName}${brandText ? ' (not in the list yet)' : ''}`, modelText ? `Model: ${modelText}` : null,
       `Customer: ${me.name} (${me.email})`, `Mode: ${mode} · ${photos.length} photos`, entrupy ? '➕ Customer also asked for an official Entrupy certificate' : null,
@@ -1492,7 +1496,7 @@ const VR_COLS = `r.id, r.user_id, r.brand_id, COALESCE(r.brand_text, b.name) AS 
 
 app.get('/api/verify', async (c) => {
   const me = c.get('user');
-  const all = c.req.query('all') === '1' && ADMINS.includes(me.role);
+  const all = c.req.query('all') === '1' && STAFF.includes(me.role);
   const rows = await c.env.DB.prepare(`SELECT ${VR_COLS}, (SELECT id FROM verify_photos WHERE request_id = r.id ORDER BY created_at LIMIT 1) AS cover,
       (SELECT cert_no FROM hengz_certificates h WHERE h.request_id = r.id AND h.status = 'valid') AS cert_no,
       (SELECT public_code FROM hengz_certificates h WHERE h.request_id = r.id AND h.status = 'valid') AS cert_code,
@@ -1559,6 +1563,7 @@ app.post('/api/verify/:id/photos', async (c) => {
   await c.env.DB.prepare(`UPDATE verify_requests SET status = 'submitted', expert_outcome = NULL, answered_at = NULL WHERE id = ?`).bind(r.id).run();
   await audit(c.env, me.id, 'verify.more_photos', 'verify_request', r.id, { photos: photos.length });
   await revokeForRequest(c.env, r.id, me.id, 'Request reopened with new photos');
+  c.executionCtx.waitUntil(notifyStaff(c.env, { title: '📷 More photos', body: `${r.brand} — ${me.name} · ${photos.length} new photos`, url: `/verify/r/${r.id}`, tag: r.id }, new URL(c.req.url).origin).catch(() => 0));
   if (telegramConfigured(c.env)) {
     const summary = `📷 More photos for ${r.id} (${r.brand}) from ${me.name}`;
     c.executionCtx.waitUntil(sendReviewRequest(c.env, { id: r.id, summary, photos })
@@ -1673,6 +1678,9 @@ app.post('/api/verify/:id/offers', async (c) => {
   await c.env.DB.prepare(`INSERT INTO buyback_offers (id, request_id, from_side, amount_cents, currency, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`)
     .bind(id, r.id, body.side, cents, body.currency, body.note?.trim() || null, me.id).run();
   await audit(c.env, me.id, 'buyback.offer', 'verify_request', r.id, { side: body.side, amount_cents: cents, currency: body.currency });
+  if (body.side === 'customer') {
+    c.executionCtx.waitUntil(notifyStaff(c.env, { title: '💰 Customer price', body: `${me.name} asks ${money(cents, body.currency)} · ${r.brand}${r.model_text ? ` ${r.model_text}` : ''}`, url: `/verify/r/${r.id}`, tag: `offer-${r.id}` }, new URL(c.req.url).origin).catch(() => 0));
+  }
   if (body.side === 'customer' && telegramConfigured(c.env)) {
     c.executionCtx.waitUntil(sendText(c.env, `💰 ${me.name} asks ${money(cents, body.currency)} for ${r.brand}${r.model_text ? ` ${r.model_text}` : ''} (${r.id})${body.note ? `\n“${body.note.trim()}”` : ''}\nAnswer on the request page.`));
   }
@@ -1694,6 +1702,9 @@ app.post('/api/verify/offers/:oid/respond', async (c) => {
   const status = action === 'accept' ? 'accepted' : action === 'decline' ? 'declined' : 'withdrawn';
   await c.env.DB.prepare(`UPDATE buyback_offers SET status = ?, responded_by = ?, responded_at = ? WHERE id = ? AND status = 'open'`).bind(status, me.id, nowIso(), o.id).run();
   await audit(c.env, me.id, `buyback.${action}`, 'verify_request', o.request_id, { offer: o.id });
+  if (isCustomer && action !== 'withdraw') {
+    c.executionCtx.waitUntil(notifyStaff(c.env, { title: action === 'accept' ? '✅ Buy-back accepted' : '✖ Buy-back declined', body: `${me.name} · ${money(o.amount_cents, o.currency)} · ${o.brand}${o.model_text ? ` ${o.model_text}` : ''}`, url: `/verify/r/${o.request_id}`, tag: `offer-${o.request_id}` }, new URL(c.req.url).origin).catch(() => 0));
+  }
   if (isCustomer && action !== 'withdraw' && telegramConfigured(c.env)) {
     c.executionCtx.waitUntil(sendText(c.env, `${action === 'accept' ? '✅' : '✖'} ${me.name} ${action === 'accept' ? 'ACCEPTED' : 'declined'} the buy-back offer ${money(o.amount_cents, o.currency)} for ${o.brand}${o.model_text ? ` ${o.model_text}` : ''} (${o.request_id}).${action === 'accept' ? ' Please contact the customer to arrange the buy-back.' : ''}`));
   }
@@ -1713,6 +1724,90 @@ app.post('/api/nfc/scans', async (c) => {
     FROM nfc_scans WHERE uid_hash = ?`).bind(me.id, uidHash).first<{ total: number; others: number; first: string | null }>();
   await c.env.DB.prepare('INSERT INTO nfc_scans (id, uid_hash, brand, user_id) VALUES (?, ?, ?, ?)').bind(uid('nf_'), uidHash, body.brand, me.id).run();
   return c.json({ before: prev?.total ?? 0, otherAccounts: prev?.others ?? 0, firstSeen: prev?.first ?? null });
+});
+
+// ───────────────────────── expert phone notifications (Web Push) ─────────────────────────
+app.get('/api/push/key', need(STAFF), async (c) => c.json({ publicKey: (await vapidKeys(c.env)).publicKey }));
+app.get('/api/push/status', need(STAFF), async (c) =>
+  c.json({ phones: (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = ?').bind(c.get('user').id).first<{ n: number }>())?.n ?? 0 }));
+app.post('/api/push/subscribe', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ endpoint: z.string().url().startsWith('https://').max(1000), keys: z.object({ p256dh: z.string().min(40).max(200), auth: z.string().min(10).max(100) }) }));
+  await c.env.DB.prepare(`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth`)
+    .bind(uid('ps_'), c.get('user').id, b.endpoint, b.keys.p256dh, b.keys.auth).run();
+  return c.json({ ok: true });
+});
+app.post('/api/push/unsubscribe', async (c) => {
+  const { endpoint } = await parse(c, z.object({ endpoint: z.string().max(1000) }));
+  await c.env.DB.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').bind(endpoint, c.get('user').id).run();
+  return c.json({ ok: true });
+});
+app.post('/api/push/test', need(STAFF), async (c) => {
+  const sent = await notifyUser(c.env, c.get('user').id, { title: '🔔 HENGZ AUTHENTIC', body: 'Notifications work on this phone.', url: '/admin', tag: 'test' }, new URL(c.req.url).origin);
+  return c.json({ sent });
+});
+
+// ───────────────────────── expert accounts (set up by admins) ─────────────────────────
+app.get('/api/admin/experts', need(ADMINS), async (c) => c.json({ experts: (await c.env.DB.prepare(
+  `SELECT u.id, u.name, u.email, u.role, u.active, u.created_at, (SELECT COUNT(*) FROM push_subscriptions s WHERE s.user_id = u.id) AS phones
+   FROM users u WHERE u.role IN ('owner','lead_authenticator','appraiser') ORDER BY u.active DESC, u.created_at`).all()).results }));
+app.post('/api/admin/experts', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ name: z.string().trim().min(1).max(100), email: z.string().email().max(200), password: z.string().min(8).max(200) }));
+  const id = uid('u_'); const p = await hashPassword(b.password);
+  await c.env.DB.prepare('INSERT INTO users (id, email, name, role, pw_hash, pw_salt, pw_iter) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, b.email.toLowerCase(), b.name, 'appraiser', p.hash, p.salt, p.iter).run();
+  await audit(c.env, c.get('user').id, 'expert.create', 'user', id);
+  return c.json({ id });
+});
+app.post('/api/admin/experts/:id/active', need(ADMINS), async (c) => {
+  const { active } = await parse(c, z.object({ active: z.boolean() }));
+  const id = c.req.param('id');
+  if (id === c.get('user').id) return c.json({ error: 'cannot_change_self' }, 400);
+  const res = await c.env.DB.prepare(`UPDATE users SET active = ? WHERE id = ? AND role = 'appraiser'`).bind(active ? 1 : 0, id).run();
+  if (!res.meta.changes) return c.json({ error: 'not_found' }, 404);
+  if (!active) await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id).run();
+  await audit(c.env, c.get('user').id, active ? 'expert.activate' : 'expert.deactivate', 'user', id);
+  return c.json({ ok: true });
+});
+
+// ───────────────────────── HENGZ contact (LINE ID, phone, QR) shown to customers ─────────────────────────
+const CONTACT_KEYS = ['contact.line_id', 'contact.phone', 'contact.telegram', 'contact.note'] as const;
+app.get('/api/contact', async (c) => {
+  const rows = (await c.env.DB.prepare(`SELECT key, value FROM settings WHERE key LIKE 'contact.%'`).all<{ key: string; value: string }>()).results;
+  const v = (k: string) => rows.find((r) => r.key === k)?.value || null;
+  return c.json({ lineId: v('contact.line_id'), phone: v('contact.phone'), telegram: v('contact.telegram'), note: v('contact.note'), qr: !!v('contact.qr'), qrVersion: v('contact.qr') });
+});
+app.get('/api/contact/qr', async (c) => {
+  const obj = await c.env.VAULT.get('site/contact-qr');
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? 'image/png', 'cache-control': 'public, max-age=300' } });
+});
+app.put('/api/admin/contact', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ lineId: z.string().trim().max(80), phone: z.string().trim().max(40), telegram: z.string().trim().max(80), note: z.string().trim().max(300) }));
+  const vals: Record<string, string> = { 'contact.line_id': b.lineId, 'contact.phone': b.phone, 'contact.telegram': b.telegram, 'contact.note': b.note };
+  for (const k of CONTACT_KEYS) {
+    await c.env.DB.prepare(`INSERT INTO settings (key, value, updated_by) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
+      .bind(k, vals[k], c.get('user').id).run();
+  }
+  await audit(c.env, c.get('user').id, 'contact.update', 'settings', null);
+  return c.json({ ok: true });
+});
+app.post('/api/admin/contact/qr', need(ADMINS), async (c) => {
+  const f = (await c.req.formData()).get('file');
+  if (!(f instanceof File)) return c.json({ error: 'file_required' }, 400);
+  if (f.size > 5 * 1024 * 1024) return c.json({ error: 'file_too_large' }, 413);
+  const buf = await f.arrayBuffer(); const mime = sniffImage(new Uint8Array(buf, 0, 16));
+  if (!mime) return c.json({ error: 'not_a_supported_image' }, 415);
+  await c.env.VAULT.put('site/contact-qr', buf, { httpMetadata: { contentType: mime } });
+  await c.env.DB.prepare(`INSERT INTO settings (key, value, updated_by) VALUES ('contact.qr', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
+    .bind(String(Date.now()), c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'contact.qr', 'settings', null);
+  return c.json({ ok: true });
+});
+app.delete('/api/admin/contact/qr', need(ADMINS), async (c) => {
+  await c.env.VAULT.delete('site/contact-qr');
+  await c.env.DB.prepare(`DELETE FROM settings WHERE key = 'contact.qr'`).run();
+  return c.json({ ok: true });
 });
 
 /** Staff can also answer from the web (e.g. when Telegram is down). Same four outcomes. */
