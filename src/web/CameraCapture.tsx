@@ -33,10 +33,19 @@ export default function CameraCapture({ onCapture, locale, disabled }: Props) {
     setErr(null);
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-      streamRef.current = s; if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play(); }
+      streamRef.current = s;
       gate.current.reset(); prev.current = null; setOn(true);
     } catch (e) { setErr((e as Error).message || 'camera_unavailable'); }
   }
+
+  // The <video> is only rendered once the camera is on, so attach the stream after that render
+  // (attaching it inside start() found no element and left a black frame).
+  useEffect(() => {
+    const v = videoRef.current; const s = streamRef.current;
+    if (!on || !v || !s) return;
+    if (v.srcObject !== s) v.srcObject = s;
+    v.play().catch((e) => setErr((e as Error).message || 'camera_play_failed'));
+  }, [on]);
 
   const cropSide = (v: HTMLVideoElement) => Math.round(Math.min(v.videoWidth, v.videoHeight) * 0.6);
 

@@ -41,6 +41,7 @@ export default function Verify() {
   // the Scan hub sends the brand (and model) with the mode: open the photo steps straight away
   const [brandId] = useState(sp.get('brandId') ?? '');
   const [model] = useState(sp.get('model') ?? '');
+  const [brandText] = useState(sp.get('brandText') ?? '');
   const [mode, setMode] = useState<'scan' | 'upload' | null>(sp.get('brandId') ? preset : null);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [idx, setIdx] = useState(0); // current step; STEPS.length = review
@@ -76,7 +77,7 @@ export default function Verify() {
     if (!brandId || !mode) return;
     setBusy(true); setErr(null);
     const fd = new FormData();
-    fd.append('brandId', brandId); fd.append('model', model); fd.append('mode', mode); fd.append('entrupy', entrupy ? '1' : '0');
+    fd.append('brandId', brandId); if (brandText) fd.append('brandText', brandText); fd.append('model', model); fd.append('mode', mode); fd.append('entrupy', entrupy ? '1' : '0');
     for (const s of STEPS) (shots[s] ?? []).forEach((f) => fd.append(s, f, `${s}.jpg`));
     try { const r = await api.post<{ id: string }>('/api/verify', fd); nav(`/verify/r/${r.id}`); }
     catch (e) { setErr(errText(e)); setBusy(false); }
@@ -97,7 +98,7 @@ export default function Verify() {
     <div className="mx-auto max-w-3xl space-y-4 px-4 pb-10 pt-5 md:px-8">
       <button type="button" className="text-sm text-muted" onClick={() => setIdx(STEPS.length - 1)}>← {t('vr.back')}</button>
       <h1 className="text-[26px] leading-tight">{t('vr.review')}</h1>
-      <p className="text-sm text-muted">{brand?.name}{model ? ` · ${model}` : ''}</p>
+      <p className="text-sm text-muted">{brandText || brand?.name}{model ? ` · ${model}` : ''}</p>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {STEPS.flatMap((s) => (urls[s] ?? []).map((u, i) => (
           <button key={`${s}${i}`} type="button" onClick={() => setIdx(STEPS.indexOf(s))} className="relative overflow-hidden rounded-xl bg-charcoal">

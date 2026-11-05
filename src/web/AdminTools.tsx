@@ -7,6 +7,7 @@ import { OutcomeBadge } from './ui.tsx';
 // Sections moved out of the customer tab bar: they live here for staff.
 const GROUPS: { title: string; links: [string, string][] }[] = [
   { title: 'adm.gWork', links: [['/inspections', 'inspections'], ['/inspections/new', 'newInspection'], ['/knowledge', 'knowledge'], ['/coverage', 'coverage'], ['/library', 'library']] },
+  { title: 'adm.gTools', links: [['/check/nfc', 'check.nfc'], ['/datecode', 'datecode']] },
   { title: 'adm.gEntrupy', links: [['/providers', 'adm.entrupySdk'], ['/verify/entrupy', 'adm.entrupyGuide'], ['/certificates', 'adm.providerCerts']] },
   { title: 'adm.gSystem', links: [['/audit', 'audit'], ['/settings', 'settings']] },
 ];

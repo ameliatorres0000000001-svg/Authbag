@@ -124,4 +124,7 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'check.s3': { vi: 'Chuyên gia trả lời', th: 'ผู้เชี่ยวชาญตอบ', id: 'Ahli menjawab' },
   'check.s3b': { vi: '15–30 phút', th: '15–30 นาที', id: '15–30 menit' },
   'check.s4': { vi: 'Chứng nhận', th: 'ใบรับรอง', id: 'Sertifikat' },
+  'bp.search': { vi: 'Tìm thương hiệu…', th: 'ค้นหาแบรนด์…', id: 'Cari merek…' },
+  'bp.change': { vi: 'Đổi', th: 'เปลี่ยน', id: 'Ganti' },
+  'bp.add': { vi: 'Dùng thương hiệu', th: 'ใช้แบรนด์', id: 'Pakai merek' },
 };
