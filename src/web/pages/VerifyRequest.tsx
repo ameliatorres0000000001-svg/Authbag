@@ -8,6 +8,7 @@ import { STAFF_ROLES } from '../studio.ts';
 import { STATUS_TONE, money, shrink, type Plan } from './Verify.tsx';
 import AnnotatedPhoto, { PointCards, type Point } from '../AnnotatedPhoto.tsx';
 import { assetImg } from '../studio.ts';
+import ContactInfo from '../ContactInfo.tsx';
 
 type Offer = { id: string; from_side: 'hengz' | 'customer'; amount_cents: number; currency: string; note: string | null; status: string; created_at: string; responded_at: string | null; by_name: string };
 type Ref = { id: string; label: string; status: string; model: string | null; same_model: boolean; points: Point[] };
@@ -276,6 +277,7 @@ function BuybackBox({ requestId, offers, isOwner, staff, currency, onChange }: {
         <div className="rounded-xl bg-verified/10 p-3 text-sm">
           <div className="font-semibold text-verified">✅ {t('bb.agreed')} {fmtMoney(agreed.amount_cents, agreed.currency)}</div>
           <div className="text-xs">{isOwner ? t('bb.agreedCustomer') : t('bb.agreedStaff')}</div>
+          {isOwner && <div className="mt-2"><ContactInfo compact /></div>}
         </div>
       )}
 

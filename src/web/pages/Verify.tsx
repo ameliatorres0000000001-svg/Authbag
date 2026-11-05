@@ -4,6 +4,7 @@ import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
 import { Notice, OutcomeBadge, errText } from '../ui.tsx';
 import CameraCapture from '../CameraCapture.tsx';
+import ContactInfo from '../ContactInfo.tsx';
 import { assetImg } from '../studio.ts';
 
 export const STEPS = ['model', 'logo', 'serial', 'material', 'hardware', 'zipper', 'extra'] as const;
@@ -250,6 +251,7 @@ function MyChecks() {
           </ul>
         )}
       </section>
+      <ContactInfo />
     </div>
   );
 }
