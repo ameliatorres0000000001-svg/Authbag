@@ -130,4 +130,6 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'acct.signIn': { vi: 'Đăng nhập', th: 'เข้าสู่ระบบ', id: 'Masuk' },
   'acct.create': { vi: 'Tạo tài khoản', th: 'สร้างบัญชี', id: 'Buat akun' },
   'acct.gateTitle': { vi: 'Đăng nhập để kiểm tra túi', th: 'เข้าสู่ระบบเพื่อตรวจกระเป๋า', id: 'Masuk untuk cek tas' },
+  'acct.line': { vi: 'Tiếp tục với LINE', th: 'เข้าสู่ระบบด้วย LINE', id: 'Lanjut dengan LINE' },
+  'acct.or': { vi: 'hoặc', th: 'หรือ', id: 'atau' },
 };

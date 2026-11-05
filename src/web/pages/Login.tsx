@@ -7,11 +7,13 @@ import { Field, Notice, errText } from '../ui.tsx';
 export default function Login({ onDone, onClose }: { onDone: () => void; onClose?: () => void }) {
   const { t, locale, setLocale } = useI18n();
   const [bootstrap, setBootstrap] = useState(false);
+  const [line, setLine] = useState(false);
   const [register, setRegister] = useState(() => new URLSearchParams(window.location.search).get('mode') === 'register');
   const [email, setEmail] = useState(''); const [name, setName] = useState(''); const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
 
-  useEffect(() => { api.get<{ needsBootstrap: boolean }>('/api/auth/state').then((s) => setBootstrap(s.needsBootstrap)).catch(() => {}); }, []);
+  useEffect(() => { api.get<{ needsBootstrap: boolean; line?: boolean }>('/api/auth/state').then((s) => { setBootstrap(s.needsBootstrap); setLine(!!s.line); }).catch(() => {});
+    const e = new URLSearchParams(window.location.search).get('error'); if (e) setErr(e.startsWith('line') ? t('acct.lineFailed') : e); }, []);
   const creating = bootstrap || register;
 
   async function submit(e: React.FormEvent) {
@@ -41,6 +43,15 @@ export default function Login({ onDone, onClose }: { onDone: () => void; onClose
         {register && <p className="-mt-2 text-[11px] text-muted">{t('acct.pwHint')}</p>}
         {err && <Notice tone="bad">{err}</Notice>}
         <button className="btn-primary w-full !py-3" disabled={busy}>{busy ? '…' : bootstrap ? t('create') : register ? t('acct.create') : t('acct.signIn')}</button>
+        {!bootstrap && line && (
+          <>
+            <div className="flex items-center gap-2 text-[11px] text-muted"><span className="h-px flex-1 bg-hairline" />{t('acct.or')}<span className="h-px flex-1 bg-hairline" /></div>
+            <a href="/api/auth/line/start" className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold text-white" style={{ background: '#06C755' }}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden><path d="M12 3C6.5 3 2 6.6 2 11c0 3.9 3.6 7.2 8.4 7.9.3.1.8.2.9.5.1.3.1.7 0 1l-.1.9c0 .3-.2 1 .9.6 1.1-.5 5.9-3.5 8-6C21.4 14.4 22 12.8 22 11c0-4.4-4.5-8-10-8z" /></svg>
+              {t('acct.line')}
+            </a>
+          </>
+        )}
         {!bootstrap && (
           <p className="text-center text-sm">
             {register ? t('acct.haveAccount') : t('acct.noAccount')}{' '}

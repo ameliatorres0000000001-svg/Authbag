@@ -34,10 +34,15 @@ export function VerifyQueue() {
   const { t } = useI18n();
   const [rows, setRows] = useState<any[] | null>(null);
   const [certs, setCerts] = useState<any[] | null>(null);
+  const loadCerts = () => api.get('/api/hengz-certificates').then((r) => setCerts(r.certificates)).catch(() => setCerts([]));
   useEffect(() => {
     api.get('/api/verify?all=1').then((r) => setRows(r.requests)).catch(() => setRows([]));
-    api.get('/api/hengz-certificates').then((r) => setCerts(r.certificates)).catch(() => setCerts([]));
+    loadCerts();
   }, []);
+  const remove = async (id: string) => {
+    if (!window.confirm(t('cert.removeConfirm'))) return;
+    try { await api.post(`/api/hengz-certificates/${id}/remove`, { reason: 'Removed by admin (test)' }); loadCerts(); } catch { /* shown on next load */ }
+  };
   return (
     <div className="card space-y-3">
       <div className="font-semibold">🗂 {t('adm.queue')}</div>
@@ -62,6 +67,7 @@ export function VerifyQueue() {
                 <a href={`/certificate/${c.public_code}`} target="_blank" rel="noreferrer" className="font-mono underline">{c.cert_no}</a>
                 <span className="min-w-0 flex-1 truncate">{c.brand}{c.model_text ? ` · ${c.model_text}` : ''}</span>
                 <span className={c.status === 'valid' ? 'text-verified' : 'text-counterfeit'}>{c.status === 'valid' ? t('cert.validBadge') : t('cert.revokedBadge')}</span>
+                <button type="button" onClick={() => remove(c.id)} aria-label={t('cert.remove')} className="px-1 text-counterfeit">🗑</button>
               </li>
             ))}
           </ul>

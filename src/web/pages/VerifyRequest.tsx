@@ -182,6 +182,12 @@ function CertificateBox({ requestId, cert, canIssue, canRevoke, onChange }: { re
     try { await api.post(`/api/verify/${requestId}/certificate`, { itemDesc: desc || undefined }); onChange(); } catch (e) { setErr(errText(e)); }
     setBusy(false);
   }
+  async function remove() {
+    if (!window.confirm(t('cert.removeConfirm'))) return;
+    setBusy(true); setErr(null);
+    try { await api.post(`/api/hengz-certificates/${cert.id}/remove`, { reason: 'Removed by admin (test)' }); onChange(); } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
   async function revoke() {
     const reason = window.prompt(t('cert.revokeReason'));
     if (!reason || reason.trim().length < 3) return;
@@ -204,6 +210,7 @@ function CertificateBox({ requestId, cert, canIssue, canRevoke, onChange }: { re
         <div className="mt-3 flex flex-wrap gap-2">
           <a className="btn-primary !py-2 text-xs" href={`/certificate/${cert.public_code}`} target="_blank" rel="noreferrer">⎙ {t('cert.open')}</a>
           {canRevoke && !revoked && <button type="button" className="btn-ghost !py-2 text-xs" disabled={busy} onClick={revoke}>{t('cert.revoke')}</button>}
+          {canRevoke && <button type="button" className="btn-ghost !py-2 text-xs text-counterfeit" disabled={busy} onClick={remove}>🗑 {t('cert.remove')}</button>}
         </div>
         {err && <p className="mt-2 text-xs text-counterfeit">{err}</p>}
       </div>

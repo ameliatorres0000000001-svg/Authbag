@@ -14,6 +14,9 @@ export interface Env {
   /** Telegram bot for expert review: bot token, the experts' group chat id, and the webhook secret token */
   /** optional API gateway in front of Claude (https URL); empty = Anthropic directly */
   ANTHROPIC_BASE_URL?: string;
+  /** LINE Login channel (LINE Developers): channel ID and channel secret */
+  LINE_CHANNEL_ID?: string;
+  LINE_CHANNEL_SECRET?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
