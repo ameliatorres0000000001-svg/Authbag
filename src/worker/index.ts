@@ -8,9 +8,10 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
+import { parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -1542,7 +1543,13 @@ app.get('/api/verify/:id', async (c) => {
   const certificate = await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id WHERE c.request_id = ? AND NOT EXISTS (SELECT 1 FROM hengz_certificate_hidden h WHERE h.cert_id = c.id)`).bind(r.id).first().catch(() => null);
   const offers = (await c.env.DB.prepare(`SELECT o.id, o.from_side, o.amount_cents, o.currency, o.note, o.status, o.created_at, o.responded_at, u.name AS by_name
     FROM buyback_offers o JOIN users u ON u.id = o.created_by WHERE o.request_id = ? ORDER BY o.created_at`).bind(r.id).all().catch(() => ({ results: [] }))).results;
-  return c.json({ request: r, photos, plan, refs, certificate, offers });
+  let ai = null as Record<string, unknown> | null;
+  if (STAFF.includes(me.role)) {
+    const row = await c.env.DB.prepare('SELECT model, suggested_outcome, confidence, findings_json, summary_en, summary_km, error, created_at FROM verify_ai_reviews WHERE request_id = ? ORDER BY created_at DESC LIMIT 1')
+      .bind(r.id).first<Record<string, any>>().catch(() => null);
+    if (row) ai = { ...row, findings: JSON.parse(row.findings_json || '[]'), track: await aiTrack(c.env) };
+  }
+  return c.json({ request: r, photos, plan, refs, certificate, offers, ai });
 });
 
 app.get('/api/verify/photos/:pid/image', async (c) => {
@@ -1828,6 +1835,60 @@ app.delete('/api/admin/contact/qr', need(ADMINS), async (c) => {
   return c.json({ ok: true });
 });
 
+// ───────────────────────── AI analysis for the experts (never shown to the customer) ─────────────────────────
+async function runAiReview(env: AppEnv['Bindings'], requestId: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await env.DB.prepare(`SELECT r.id, r.brand_id, r.model_text, COALESCE(r.brand_text, b.name) AS brand FROM verify_requests r JOIN brands b ON b.id = r.brand_id WHERE r.id = ?`)
+    .bind(requestId).first<Record<string, any>>();
+  if (!r) return { ok: false, error: 'not_found' };
+  const rows = (await env.DB.prepare('SELECT step, r2_key, mime FROM verify_photos WHERE request_id = ? ORDER BY created_at LIMIT 10').bind(r.id).all<{ step: string; r2_key: string; mime: string }>()).results;
+  const photos: { step: string; image: { data: ArrayBuffer; mime: string } }[] = [];
+  for (const p of rows) { const o = await env.VAULT.get(p.r2_key); if (o) photos.push({ step: p.step, image: { data: await o.arrayBuffer(), mime: p.mime } }); }
+  if (!photos.length) return { ok: false, error: 'no_photos' };
+  const found = await verifyRefs(env, r.brand_id, r.model_text);
+  const refs: { step: string; image: { data: ArrayBuffer; mime: string }; model: string | null }[] = [];
+  for (const [step, x] of Object.entries(found)) {
+    if (!photos.some((p) => p.step === step)) continue;
+    const o = await env.VAULT.get(x.r2_key); if (o) refs.push({ step, image: { data: await o.arrayBuffer(), mime: o.httpMetadata?.contentType ?? 'image/jpeg' }, model: x.model });
+  }
+  const knowledge = (await env.DB.prepare(`SELECT DISTINCT p.label, p.note FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id
+    WHERE a.brand_id = ? AND p.source <> 'ai_suggested' AND a.label <> 'counterfeit' LIMIT 14`).bind(r.brand_id).all<{ label: string; note: string | null }>()).results
+    .map((p) => `${p.label}${p.note ? `: ${p.note.split('\n')[0]}` : ''}`.slice(0, 200));
+  // what the experts wrote on earlier answered bags of this brand (the AI learns what they look at)
+  const expertNotes = (await env.DB.prepare(`SELECT expert_note FROM verify_requests WHERE brand_id = ? AND id <> ? AND status = 'answered' AND expert_note IS NOT NULL
+    ORDER BY (model_text IS ?) DESC, answered_at DESC LIMIT 8`).bind(r.brand_id, r.id, r.model_text).all<{ expert_note: string }>()).results.map((x) => x.expert_note.slice(0, 240));
+  const id = uid('ar_');
+  try {
+    const text = await assessVerification(env, { brand: r.brand, model: r.model_text, photos, refs, knowledge, expertNotes });
+    const a = parseAiReview(text);
+    if (!a) throw new Error('ai_unreadable_reply');
+    await env.DB.prepare(`INSERT INTO verify_ai_reviews (id, request_id, model, suggested_outcome, confidence, findings_json, summary_en, summary_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, r.id, pointsModel(env), a.suggestion, a.confidence, JSON.stringify(a.findings), a.summary_en || null, a.summary_km || null).run();
+    return { ok: true };
+  } catch (e) {
+    const msg = String((e as Error).message ?? e).slice(0, 300);
+    await env.DB.prepare('INSERT INTO verify_ai_reviews (id, request_id, model, error) VALUES (?, ?, ?, ?)').bind(id, r.id, pointsModel(env), msg).run();
+    return { ok: false, error: msg };
+  }
+}
+
+/** Staff: run (or re-run) the AI analysis now. */
+app.post('/api/verify/:id/ai-review', need(STAFF), async (c) => {
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const res = await runAiReview(c.env, c.req.param('id'));
+  if (!res.ok) return c.json({ error: 'ai_failed', detail: res.error }, 502);
+  return c.json({ ok: true });
+});
+
+/** The AI's track record: how often its suggestion matched the expert's answer. */
+async function aiTrack(env: AppEnv['Bindings']) {
+  const rows = (await env.DB.prepare(`SELECT a.suggested_outcome AS suggested, r.expert_outcome AS expert FROM verify_requests r
+    JOIN verify_ai_reviews a ON a.id = (SELECT x.id FROM verify_ai_reviews x WHERE x.request_id = r.id AND x.suggested_outcome IS NOT NULL
+      AND (r.answered_at IS NULL OR x.created_at <= r.answered_at) ORDER BY x.created_at DESC LIMIT 1)
+    WHERE r.expert_outcome IS NOT NULL`).all<{ suggested: string; expert: string }>().catch(() => ({ results: [] as { suggested: string; expert: string }[] }))).results;
+  return trackRecord(rows);
+}
+app.get('/api/admin/ai/track', need(STAFF), async (c) => c.json(await aiTrack(c.env)));
+
 /** Staff can also answer from the web (e.g. when Telegram is down). Same four outcomes. */
 app.post('/api/verify/:id/answer', need(STAFF), async (c) => {
   const body = await parse(c, z.object({ code: z.enum(['c', 'f', 'm', 'r']), note: z.string().max(2000).optional() }));
@@ -1931,9 +1992,19 @@ async function translateBacklog(env: AppEnv['Bindings']) {
   }
 }
 
+/** Every 10 minutes: AI analysis for new requests that have none yet (a few per run), so experts find it ready. */
+async function aiReviewBacklog(env: AppEnv['Bindings']) {
+  if (!aiConfigured(env)) return;
+  const due = (await env.DB.prepare(`SELECT r.id FROM verify_requests r WHERE r.status IN ('submitted','in_review') AND r.created_at > datetime('now','-3 days')
+    AND NOT EXISTS (SELECT 1 FROM verify_ai_reviews a WHERE a.request_id = r.id AND (a.suggested_outcome IS NOT NULL OR a.created_at > datetime('now','-1 hour')))
+    ORDER BY r.created_at LIMIT 2`).all<{ id: string }>().catch(() => ({ results: [] as { id: string }[] }))).results;
+  for (const r of due) { const res = await runAiReview(env, r.id); console.log(`ai review ${r.id}: ${res.ok ? 'ok' : res.error}`); }
+}
+
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
     ctx.waitUntil(translateBacklog(env));
+    ctx.waitUntil(aiReviewBacklog(env));
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>;

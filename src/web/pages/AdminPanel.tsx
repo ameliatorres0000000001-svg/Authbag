@@ -11,7 +11,7 @@ import { aiCropPhotos } from '../cropImage.ts';
 import { ApiError } from '../api.ts';
 import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, annotateAfterUpload, assetImg, uploadReference } from '../studio.ts';
 import VerifyAdmin from '../VerifyAdmin.tsx';
-import AdminTools, { AiCheck, ContactAdmin, ExpertsCard, NotifyCard, VerifyQueue } from '../AdminTools.tsx';
+import AdminTools, { AiCheck, AiTrackCard, ContactAdmin, ExpertsCard, NotifyCard, VerifyQueue } from '../AdminTools.tsx';
 
 interface Tax { brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] }
 interface Comp { code: string; name_en: string; name_km: string }
@@ -49,6 +49,7 @@ export default function AdminPanel() {
         <div className="min-w-0 space-y-4 lg:col-span-2">
           <NotifyCard />
           <VerifyQueue />
+          <AiTrackCard />
           {ADMIN_ROLES.includes(me.role) && <ExpertsCard />}
           {ADMIN_ROLES.includes(me.role) && <ContactAdmin />}
           {ADMIN_ROLES.includes(me.role) && <AiCheck />}

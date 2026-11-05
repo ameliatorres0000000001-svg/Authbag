@@ -229,3 +229,29 @@ export function ContactAdmin() {
     </div>
   );
 }
+
+/** The AI's track record: how often its suggested outcome matched the expert's answer (updates with every answer). */
+export function AiTrackCard() {
+  const { t } = useI18n();
+  const [d, setD] = useState<{ n: number; agree: number; rate: number | null; bySuggestion: Record<string, { n: number; agree: number }> } | null>(null);
+  useEffect(() => { api.get('/api/admin/ai/track').then(setD).catch(() => setD(null)); }, []);
+  if (!d) return null;
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  return (
+    <div className="card space-y-2">
+      <div className="font-semibold">📈 {t('air.trackTitle')}</div>
+      <p className="text-xs text-muted">{t('air.trackHelp')}</p>
+      {d.rate == null ? <p className="text-sm text-muted">{t('air.trackNone')}</p> : (
+        <>
+          <div className="flex items-baseline gap-2"><span className="font-serif text-3xl">{pct(d.rate)}</span><span className="text-xs text-muted">{d.agree}/{d.n}</span></div>
+          <div className="h-2 w-full rounded bg-hairline"><div className="h-2 rounded bg-verified" style={{ width: pct(d.rate) }} /></div>
+          <ul className="space-y-1 text-xs">
+            {Object.entries(d.bySuggestion).map(([k, v]) => (
+              <li key={k} className="flex justify-between gap-2"><span>{t(`outcome.${k}`)}</span><span className="font-mono">{v.agree}/{v.n}</span></li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}

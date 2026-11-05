@@ -430,3 +430,38 @@ export async function suggestModelForPhoto(env: Env, image: VisionImage, brand: 
   const conf = Math.max(0, Math.min(1, Number(o?.confidence) || 0));
   return { modelId: id, confidence: id ? conf : 0, reason: typeof o?.reason === 'string' ? o.reason.slice(0, 200) : '' };
 }
+
+/**
+ * AI analysis of a verification request, for the experts: each customer photo is compared with a reference photo of
+ * the same part; per feature "matches / differs / unclear" with confidence, then ONE suggested outcome from the
+ * system's four. The expert decides; the customer never sees this.
+ */
+export async function assessVerification(env: Env, ctx: {
+  brand: string; model: string | null;
+  photos: { step: string; image: VisionImage }[];
+  refs: { step: string; image: VisionImage; model: string | null }[];
+  knowledge: string[]; expertNotes: string[];
+}): Promise<string> {
+  const images: VisionImage[] = [];
+  const lines: string[] = [];
+  for (const p of ctx.photos) { images.push(p.image); lines.push(`Image ${images.length}: CUSTOMER photo · step "${p.step}"`); }
+  for (const r of ctx.refs) { images.push(r.image); lines.push(`Image ${images.length}: REFERENCE photo (from HENGZ library${r.model ? `, ${r.model}` : ''}) · step "${r.step}"`); }
+  const system =
+    'You are a senior luxury-bag authenticator ASSISTING a human expert at HENGZ AUTHENTIC. The expert makes the decision; you prepare the evidence. ' +
+    'Never write the words authentic, genuine, real, fake, counterfeit or replica, and never state whether the bag is genuine. ' +
+    'For each customer photo, compare the visible features with the reference photo of the same step (stamp lettering and spacing, serial/date code characters and font, ' +
+    'stitch count, angle and colour, hardware engraving, screws and finish, material grain, zipper pull and markings, shape and proportions). ' +
+    'For each feature give status "matches" (consistent with the reference), "differs" (a visible difference from the reference) or "unclear" (not visible enough, ' +
+    'different angle or lighting, or no reference), with your confidence 0..1 in THAT observation. Lighting, angle and resolution often explain differences: say so. ' +
+    'Then suggest ONE outcome: "consistent_with_references" (all key features match), "concerns_found" (one or more clear differences on key features), ' +
+    '"insufficient_evidence" (key photos missing or too unclear) or "requires_expert_review" (mixed or uncertain), with your confidence 0..1 in that suggestion. ' +
+    'Write feature names and notes in English and natural Khmer. Keep brand names and codes exactly as written. ' +
+    'Reply with JSON only: {"suggestion":"…","confidence":0..1,"summary_en":"2-3 sentences","summary_km":"…","findings":[{"step":"model|logo|serial|material|hardware|zipper|extra","feature_en":"…","feature_km":"…","status":"matches|differs|unclear","confidence":0..1,"note_en":"one short line","note_km":"…"}]}';
+  const user = [
+    `Brand: ${ctx.brand}${ctx.model ? ` · Model: ${ctx.model}` : ''}`,
+    ...lines,
+    ctx.knowledge.length ? `What HENGZ experts teach for this brand / model (prefer these checkpoints):\n- ${ctx.knowledge.slice(0, 14).join('\n- ')}` : '',
+    ctx.expertNotes.length ? `Notes HENGZ experts wrote on earlier bags of this brand / model (learn what they look at; do not copy their decisions):\n- ${ctx.expertNotes.slice(0, 8).join('\n- ')}` : '',
+  ].filter(Boolean).join('\n');
+  return callVision(env, system, images, user, 16000, 'high', pointsModel(env) ?? undefined);
+}
