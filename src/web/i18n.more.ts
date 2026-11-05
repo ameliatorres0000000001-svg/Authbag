@@ -127,4 +127,7 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'bp.search': { vi: 'Tìm thương hiệu…', th: 'ค้นหาแบรนด์…', id: 'Cari merek…' },
   'bp.change': { vi: 'Đổi', th: 'เปลี่ยน', id: 'Ganti' },
   'bp.add': { vi: 'Dùng thương hiệu', th: 'ใช้แบรนด์', id: 'Pakai merek' },
+  'acct.signIn': { vi: 'Đăng nhập', th: 'เข้าสู่ระบบ', id: 'Masuk' },
+  'acct.create': { vi: 'Tạo tài khoản', th: 'สร้างบัญชี', id: 'Buat akun' },
+  'acct.gateTitle': { vi: 'Đăng nhập để kiểm tra túi', th: 'เข้าสู่ระบบเพื่อตรวจกระเป๋า', id: 'Masuk untuk cek tas' },
 };
