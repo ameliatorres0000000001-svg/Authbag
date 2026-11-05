@@ -154,7 +154,7 @@ export default function Verify() {
       </div>
 
       {(urls[step] ?? []).length > 0 && (
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(urls[step] ?? []).map((u, i) => <img key={u} src={u} alt="" className="h-20 w-20 shrink-0 rounded-lg object-cover" title={String(i + 1)} />)}
         </div>
       )}

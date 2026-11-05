@@ -86,7 +86,7 @@ export default function AlbumView() {
           <Dots n={d.photos.length} i={i} onGo={go} />
 
           {/* thumbnails */}
-          <div className="flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none]">
+          <div className="flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {d.photos.map((p, k) => (
               <button key={p.id} type="button" onClick={() => go(k)} aria-label={String(k + 1)}
                 className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-lg ring-2 ${k === i ? 'ring-gold' : 'ring-transparent opacity-70'}`}>
@@ -125,7 +125,7 @@ export default function AlbumView() {
       {d.similar.length > 0 && (
         <section className="space-y-2 pt-2">
           <h2 className="px-4 text-lg leading-tight">{t('album.similar')}</h2>
-          <div className="flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+          <div className="flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {d.similar.map((m) => (
               <Link key={m.id} to={`/album/${m.id}`} className="w-[104px] shrink-0 snap-start">
                 <div className="relative aspect-square overflow-hidden rounded-lg bg-charcoal">

@@ -64,7 +64,7 @@ export default function Lesson() {
 
       {/* step tabs */}
       <div className="sticky top-[49px] z-10 mt-3 border-y border-hairline bg-surface/95 backdrop-blur md:top-0">
-        <div className="flex gap-2 overflow-x-auto px-4 py-2 md:px-8">
+        <div className="flex gap-2 overflow-x-auto px-4 py-2 md:px-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {d.steps.map((s, i) => (
             <button key={s.id} type="button" onClick={() => go(i)}
               className={`flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left ${i === idx ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card'}`}>
