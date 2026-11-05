@@ -50,7 +50,59 @@ const pwSchema = z.string().min(12).max(200);
 
 app.get('/api/auth/state', async (c) => {
   const n = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>();
-  return c.json({ needsBootstrap: (n?.n ?? 0) === 0 });
+  return c.json({ needsBootstrap: (n?.n ?? 0) === 0, line: !!(c.env.LINE_CHANNEL_ID && c.env.LINE_CHANNEL_SECRET) });
+});
+
+// ───────────────────────── LINE Login (OAuth 2.1 / OpenID Connect) ─────────────────────────
+// Channel ID + secret come from LINE Developers (Cloudflare Secrets LINE_CHANNEL_ID / LINE_CHANNEL_SECRET).
+// The callback URL to register in the LINE channel: https://<your domain>/api/auth/line/callback
+const LINE_COOKIE = 'hz_line';
+const lineRedirect = (c: any) => `${new URL(c.req.url).origin}/api/auth/line/callback`;
+
+app.get('/api/auth/line/start', async (c) => {
+  if (!c.env.LINE_CHANNEL_ID || !c.env.LINE_CHANNEL_SECRET) return c.redirect('/login?error=line_not_configured');
+  const state = crypto.randomUUID(); const nonce = crypto.randomUUID();
+  setCookie(c, LINE_COOKIE, `${state}.${nonce}`, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/api/auth/line', maxAge: 600 });
+  const q = new URLSearchParams({ response_type: 'code', client_id: c.env.LINE_CHANNEL_ID, redirect_uri: lineRedirect(c), state, nonce, scope: 'profile openid' });
+  return c.redirect(`https://access.line.me/oauth2/v2.1/authorize?${q}`);
+});
+
+app.get('/api/auth/line/callback', async (c) => {
+  const fail = (why: string) => c.redirect(`/login?error=${encodeURIComponent(why)}`);
+  const [state, nonce] = (getCookie(c, LINE_COOKIE) ?? '').split('.');
+  deleteCookie(c, LINE_COOKIE, { path: '/api/auth/line' });
+  const code = c.req.query('code');
+  if (!code || !state || c.req.query('state') !== state) return fail('line_state');
+  if (!c.env.LINE_CHANNEL_ID || !c.env.LINE_CHANNEL_SECRET) return fail('line_not_configured');
+  // exchange the code, then let LINE verify the ID token (signature, audience, expiry, nonce)
+  const tok = await fetch('https://api.line.me/oauth2/v2.1/token', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: lineRedirect(c), client_id: c.env.LINE_CHANNEL_ID, client_secret: c.env.LINE_CHANNEL_SECRET }),
+  }).then((r) => r.json() as Promise<{ id_token?: string }>).catch(() => ({} as { id_token?: string }));
+  if (!tok.id_token) return fail('line_token');
+  const who = await fetch('https://api.line.me/oauth2/v2.1/verify', {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ id_token: tok.id_token, client_id: c.env.LINE_CHANNEL_ID, nonce }),
+  }).then((r) => (r.ok ? r.json() as Promise<{ sub?: string; name?: string; email?: string }> : null)).catch(() => null);
+  if (!who?.sub) return fail('line_verify');
+
+  // an existing LINE account signs in; otherwise a new customer account is created (never linked to staff by email)
+  let user = await c.env.DB.prepare('SELECT id FROM users WHERE line_sub = ? AND active = 1').bind(who.sub).first<{ id: string }>();
+  if (!user) {
+    const taken = who.email ? await c.env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(who.email.toLowerCase()).first() : null;
+    const email = who.email && !taken ? who.email.toLowerCase() : `line-${who.sub}@line.hengz`;
+    const id = uid('u_');
+    const p = await hashPassword(crypto.randomUUID() + crypto.randomUUID()); // LINE accounts sign in through LINE only
+    await c.env.DB.prepare('INSERT INTO users (id, email, name, role, pw_hash, pw_salt, pw_iter, line_sub) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, email, (who.name || 'LINE user').slice(0, 100), 'subscriber', p.hash, p.salt, p.iter, who.sub).run();
+    await audit(c.env, id, 'user.register_line', 'user', id);
+    user = { id };
+  }
+  const token = await createSession(c.env, user.id);
+  setCookie(c, COOKIE, token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/', maxAge: SESSION_DAYS * 86400 });
+  await audit(c.env, user.id, 'auth.login_line', 'user', user.id);
+  // a Strict session cookie is not sent on a redirect that started at LINE; a tiny page hops to the app instead
+  return c.html('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><script>location.replace("/")</script>');
 });
 
 app.post('/api/auth/bootstrap', async (c) => {
@@ -1465,7 +1517,7 @@ app.get('/api/verify/:id', async (c) => {
   const ids = Object.values(found).map((x) => x.id);
   const pts = ids.length ? (await c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, source FROM reference_points WHERE asset_id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at`).bind(...ids).all<Record<string, any>>()).results : [];
   const refs = Object.fromEntries(Object.entries(found).map(([step, x]) => [step, { id: x.id, label: x.label, status: x.status, model: x.model, same_model: x.same_model, points: pts.filter((p) => p.asset_id === x.id) }]));
-  const certificate = await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id WHERE c.request_id = ?`).bind(r.id).first().catch(() => null);
+  const certificate = await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id WHERE c.request_id = ? AND NOT EXISTS (SELECT 1 FROM hengz_certificate_hidden h WHERE h.cert_id = c.id)`).bind(r.id).first().catch(() => null);
   const offers = (await c.env.DB.prepare(`SELECT o.id, o.from_side, o.amount_cents, o.currency, o.note, o.status, o.created_at, o.responded_at, u.name AS by_name
     FROM buyback_offers o JOIN users u ON u.id = o.created_by WHERE o.request_id = ? ORDER BY o.created_at`).bind(r.id).all().catch(() => ({ results: [] }))).results;
   return c.json({ request: r, photos, plan, refs, certificate, offers });
@@ -1563,8 +1615,25 @@ app.post('/api/hengz-certificates/:id/revoke', need(ADMINS), async (c) => {
   return c.json({ ok: true });
 });
 
+/**
+ * Admin "delete" (e.g. after a test): revokes the certificate if it is still valid, then takes it out of every list.
+ * The record stays, immutable, so its QR code keeps showing "revoked" (DB triggers forbid real deletion).
+ */
+app.post('/api/hengz-certificates/:id/remove', need(ADMINS), async (c) => {
+  const { reason } = await parse(c, z.object({ reason: z.string().trim().min(3).max(300).default('Removed by admin') }));
+  const id = c.req.param('id'); const me = c.get('user');
+  const cert = await c.env.DB.prepare('SELECT status FROM hengz_certificates WHERE id = ?').bind(id).first<{ status: string }>();
+  if (!cert) return c.json({ error: 'not_found' }, 404);
+  if (cert.status === 'valid') {
+    await c.env.DB.prepare(`UPDATE hengz_certificates SET status = 'revoked', revoked_reason = ?, revoked_at = ? WHERE id = ? AND status = 'valid'`).bind(reason, nowIso(), id).run();
+  }
+  await c.env.DB.prepare('INSERT OR IGNORE INTO hengz_certificate_hidden (cert_id, hidden_by) VALUES (?, ?)').bind(id, me.id).run();
+  await audit(c.env, me.id, 'certificate.remove', 'hengz_certificate', id, { reason });
+  return c.json({ ok: true });
+});
+
 app.get('/api/hengz-certificates', need(STAFF), async (c) =>
-  c.json({ certificates: (await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id ORDER BY c.issued_at DESC LIMIT 200`).all()).results }));
+  c.json({ certificates: (await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id WHERE NOT EXISTS (SELECT 1 FROM hengz_certificate_hidden h WHERE h.cert_id = c.id) ORDER BY c.issued_at DESC LIMIT 200`).all()).results }));
 
 /** Public check (the QR code on the certificate): shows the certificate as issued, or that it was revoked. */
 app.get('/api/public/cert/:code', async (c) => {
