@@ -78,12 +78,42 @@ app.post('/api/auth/login', async (c) => {
   return c.json({ ok: true });
 });
 
-// everything below requires a session
+/** Customers create their own account (role: subscriber) to send bags for verification. */
+app.post('/api/auth/register', async (c) => {
+  const body = await parse(c, z.object({ email: z.string().email().max(200), name: z.string().trim().min(1).max(100), password: z.string().min(8).max(200) }));
+  const n = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>();
+  if ((n?.n ?? 0) === 0) return c.json({ error: 'needs_bootstrap' }, 409);
+  const id = uid('u_');
+  const p = await hashPassword(body.password);
+  await c.env.DB.prepare('INSERT INTO users (id, email, name, role, pw_hash, pw_salt, pw_iter) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, body.email.toLowerCase(), body.name, 'subscriber', p.hash, p.salt, p.iter).run();
+  await audit(c.env, id, 'user.register', 'user', id);
+  const token = await createSession(c.env, id);
+  setCookie(c, COOKIE, token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/', maxAge: SESSION_DAYS * 86400 });
+  return c.json({ ok: true });
+});
+
+// Read-only pages a guest can open before signing in: the feed, albums, photos and the date-code tools.
+const PUBLIC_GET = [
+  /^\/api\/(taxonomy|datecode|style-codes|feed|feed\/timeline|feed\/folders)$/,
+  /^\/api\/albums\/[^/]+$/,
+  /^\/api\/assets\/[^/]+\/image$/,
+  /^\/api\/studio\/assets\/[^/]+$/,
+];
+
+// everything below requires a session (or is a public read above)
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
   if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p.startsWith('/api/public/cert/')) return next();
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
-  if (!user) return c.json({ error: 'unauthenticated' }, 401);
+  if (!user) {
+    // guests can browse the public teaching pages (read only); everything else needs an account
+    if (c.req.method === 'GET' && PUBLIC_GET.some((r) => r.test(p))) {
+      c.set('user', { id: '', email: '', name: 'Guest', role: 'readonly', locale: 'km' });
+      return next();
+    }
+    return c.json({ error: 'unauthenticated' }, 401);
+  }
   c.set('user', user);
   await next();
 });
@@ -1599,6 +1629,21 @@ app.post('/api/verify/offers/:oid/respond', async (c) => {
     c.executionCtx.waitUntil(sendText(c.env, `${action === 'accept' ? '✅' : '✖'} ${me.name} ${action === 'accept' ? 'ACCEPTED' : 'declined'} the buy-back offer ${money(o.amount_cents, o.currency)} for ${o.brand}${o.model_text ? ` ${o.model_text}` : ''} (${o.request_id}).${action === 'accept' ? ' Please contact the customer to arrange the buy-back.' : ''}`));
   }
   return c.json({ ok: true, status });
+});
+
+// ───────────────────────── NFC chip reads ─────────────────────────
+/**
+ * Record a chip read (hash of the UID only) and say how often the same chip ID was read before,
+ * in total and on other accounts. A signal for the expert, never a verdict.
+ */
+app.post('/api/nfc/scans', async (c) => {
+  const body = await parse(c, z.object({ uid: z.string().trim().min(4).max(64), brand: z.enum(['lv', 'chanel', 'other']) }));
+  const me = c.get('user');
+  const uidHash = await sha256Hex(body.uid.toLowerCase().replace(/[^0-9a-f]/g, ''));
+  const prev = await c.env.DB.prepare(`SELECT COUNT(*) AS total, COUNT(DISTINCT CASE WHEN user_id <> ? THEN user_id END) AS others, MIN(created_at) AS first
+    FROM nfc_scans WHERE uid_hash = ?`).bind(me.id, uidHash).first<{ total: number; others: number; first: string | null }>();
+  await c.env.DB.prepare('INSERT INTO nfc_scans (id, uid_hash, brand, user_id) VALUES (?, ?, ?, ?)').bind(uid('nf_'), uidHash, body.brand, me.id).run();
+  return c.json({ before: prev?.total ?? 0, otherAccounts: prev?.others ?? 0, firstSeen: prev?.first ?? null });
 });
 
 /** Staff can also answer from the web (e.g. when Telegram is down). Same four outcomes. */

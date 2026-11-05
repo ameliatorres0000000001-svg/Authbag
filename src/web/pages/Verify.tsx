@@ -159,7 +159,7 @@ export default function Verify() {
       )}
 
       {mode === 'scan'
-        ? <CameraCapture locale={lc} onCapture={take} disabled={step === 'extra' && (shots.extra?.length ?? 0) >= MAX_EXTRA} />
+        ? <CameraCapture locale={lc} onCapture={take} example={ex ? assetImg(ex) : null} disabled={step === 'extra' && (shots.extra?.length ?? 0) >= MAX_EXTRA} />
         : (
           <label className="btn-primary flex w-full cursor-pointer justify-center !py-3">
             {shots[step]?.length ? t('vr.replace') : t('vr.choose')}

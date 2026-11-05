@@ -35,6 +35,8 @@ import Verify from './pages/Verify.tsx';
 import VerifyRequest from './pages/VerifyRequest.tsx';
 
 export interface Me { id: string; email: string; name: string; role: string; locale: 'km' | 'en' }
+/** Stand-in for a visitor who has not signed in: read-only, no id. */
+const GUEST: Me = { id: '', email: '', name: 'Guest', role: 'guest', locale: 'km' };
 export const MeContext = React.createContext<Me | null>(null);
 
 // Customer-facing sections; inspections, knowledge & rules, Entrupy, audit and settings live in the admin panel.
@@ -84,15 +86,21 @@ export default function App() {
   if (loc.pathname.startsWith('/certificate/')) return <Routes><Route path="/certificate/:code" element={<CertificatePage />} /></Routes>;
   if (firstPhoneVisit && !installSeen()) return <Navigate to="/install" replace />;
   if (me === undefined) return <div className="p-8 text-muted">…</div>;
-  if (me === null) return <Login onDone={refresh} />;
+  const back = () => (window.history.length > 1 ? nav(-1) : nav('/'));
+  if (loc.pathname === '/login') return <Login onDone={() => { refresh(); back(); }} onClose={back} />;
+  // guests browse the feed, albums and date codes; checking a bag needs an account
+  const guest = me === null;
+  const user: Me = me ?? GUEST;
+  const publicPath = loc.pathname === '/' || /^\/(album|posts)\//.test(loc.pathname) || loc.pathname === '/datecode';
+  const signOut = async () => { await api.post('/api/auth/logout'); setMe(null); nav('/'); };
 
   return (
-    <MeContext.Provider value={me}>
+    <MeContext.Provider value={user}>
       <div className="min-h-screen md:flex">
         <aside className="hidden w-60 shrink-0 border-r border-hairline bg-surface-low md:block">
           <div className="px-5 py-5">
             <Link to="/" onClick={logoTap} className="select-none font-serif text-xl tracking-wide">HENGZ <span className="text-gold">AUTHENTIC</span></Link>
-            <div className="mt-1 font-mono text-[10px] uppercase tracking-widest text-muted">{me.name} · {me.role}</div>
+            <div className="mt-2"><AccountButton me={me} onSignOut={signOut} /></div>
           </div>
           <nav className="flex flex-col px-2 pb-6">
             {NAV.map(([to, key]) => (
@@ -107,17 +115,18 @@ export default function App() {
               <LangPicker />
               <Link to="/install" className="btn-ghost !px-2 !py-1 text-xs">⤓ {t('install.open')}</Link>
             </div>
-            <button className="mt-3 text-xs text-muted underline" onClick={async () => { await api.post('/api/auth/logout'); setMe(null); nav('/'); }}>{t('signOut')}</button>
           </div>
         </aside>
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-hairline bg-surface/95 px-4 py-3 backdrop-blur md:hidden">
           <Link to="/" onClick={logoTap} className="select-none font-serif text-lg tracking-wide">HENGZ <span className="text-gold">AUTHENTIC</span></Link>
           <div className="flex items-center gap-1.5">
             {!isStandalone() && <Link to="/install" aria-label={t('install.open')} className="btn-ghost !px-2 !py-0.5 text-xs">⤓</Link>}
+            <AccountButton me={me} onSignOut={signOut} />
             <LangPicker />
           </div>
         </header>
         <main className="min-w-0 flex-1 pb-24 md:pb-0">
+          {guest && !publicPath ? <SignInGate /> : (
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/posts/:modelId" element={<FolderPosts />} />
@@ -145,6 +154,7 @@ export default function App() {
             <Route path="/audit" element={<Audit />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
+          )}
         </main>
         <nav className={`fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-end border-t border-hairline bg-surface/95 px-1 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-1.5 backdrop-blur md:hidden`}>
           {TABS.map(([to, key, icon]) => to === '/check' ? (
@@ -160,5 +170,45 @@ export default function App() {
         </nav>
       </div>
     </MeContext.Provider>
+  );
+}
+
+/** Top-right account button: "Sign in" for guests; the person's initial with a small menu once signed in. */
+function AccountButton({ me, onSignOut }: { me: Me | null; onSignOut: () => void }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  if (!me) return <Link to="/login" className="btn-primary !px-3 !py-1 text-xs">{t('acct.signIn')}</Link>;
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(!open)} aria-label={t('acct.menu')}
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-charcoal font-serif text-sm text-gold">{(me.name || '?').slice(0, 1).toUpperCase()}</button>
+      {open && (
+        <>
+          <button type="button" className="fixed inset-0 z-30 cursor-default" aria-hidden tabIndex={-1} onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-40 mt-2 w-56 rounded-xl border border-hairline bg-surface-card p-3 text-sm shadow-lg md:left-0 md:right-auto">
+            <div className="font-semibold">{me.name}</div>
+            <div className="truncate text-xs text-muted">{me.email}</div>
+            <Link to="/verify" onClick={() => setOpen(false)} className="mt-2 block rounded-lg px-2 py-1.5 hover:bg-surface-low">🏅 {t('nav.verify')}</Link>
+            <button type="button" onClick={() => { setOpen(false); onSignOut(); }} className="block w-full rounded-lg px-2 py-1.5 text-left text-counterfeit hover:bg-surface-low">{t('signOut')}</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Shown to guests on pages that need an account (scan, NFC, certificates). */
+function SignInGate() {
+  const { t } = useI18n();
+  return (
+    <div className="mx-auto max-w-md space-y-4 px-4 pt-14 text-center">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-charcoal text-2xl text-gold" aria-hidden>✦</div>
+      <h1 className="text-2xl leading-tight">{t('acct.gateTitle')}</h1>
+      <p className="text-sm text-muted">{t('acct.gateBody')}</p>
+      <div className="flex flex-col gap-2">
+        <Link to="/login?mode=register" className="btn-primary !py-3">{t('acct.create')}</Link>
+        <Link to="/login" className="btn-ghost !py-3">{t('acct.signIn')}</Link>
+      </div>
+    </div>
   );
 }

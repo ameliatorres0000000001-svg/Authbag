@@ -11,7 +11,7 @@ type Props = { locale?: string; disabled?: boolean; onRead: (info: NfcInfo) => v
 
 export const nfcSupported = () => typeof window !== 'undefined' && 'NDEFReader' in window;
 
-function decodeRecord(r: any): NfcRecord {
+export function decodeRecord(r: any): NfcRecord {
   const bytes = r.data?.byteLength ?? 0;
   const out: NfcRecord = { type: String(r.recordType ?? 'unknown'), mediaType: r.mediaType || undefined, bytes };
   try {
@@ -63,4 +63,40 @@ export default function NfcRead({ disabled, onRead, big }: Props) {
       {msg && <p className="text-xs text-muted">{msg}</p>}
     </div>
   );
+}
+
+/**
+ * Scanner state for a full-screen reader: idle → scanning (with seconds left) → done / error.
+ * Cancel stops the scan. Vibrates briefly when a chip is read.
+ */
+export function useNfcScan(onRead: (info: NfcInfo) => void, seconds = 15) {
+  const { t } = useI18n();
+  const [state, setState] = useState<'idle' | 'scanning' | 'done' | 'error'>('idle');
+  const [msg, setMsg] = useState('');
+  const [left, setLeft] = useState(seconds);
+  const ctrl = useRef<AbortController | null>(null);
+  const timers = useRef<number[]>([]);
+  const clear = () => { timers.current.forEach((x) => window.clearTimeout(x)); timers.current.forEach((x) => window.clearInterval(x)); timers.current = []; };
+  const cancel = () => { ctrl.current?.abort(); clear(); setState('idle'); setMsg(''); };
+  const start = async () => {
+    if (!nfcSupported()) return;
+    cancel(); setState('scanning'); setLeft(seconds);
+    try {
+      const c = new AbortController(); ctrl.current = c;
+      const reader = new (window as any).NDEFReader();
+      await reader.scan({ signal: c.signal });
+      timers.current.push(window.setInterval(() => setLeft((n) => Math.max(0, n - 1)), 1000));
+      timers.current.push(window.setTimeout(() => { c.abort(); clear(); setState('error'); setMsg(t('nfc.timeout')); }, seconds * 1000));
+      reader.onreading = (ev: any) => {
+        c.abort(); clear();
+        try { navigator.vibrate?.(80); } catch { /* ignore */ }
+        setState('done');
+        onRead({ serial: ev.serialNumber || '', records: (ev.message?.records ?? []).map(decodeRecord) });
+      };
+      reader.onreadingerror = () => { c.abort(); clear(); setState('error'); setMsg(t('nfc.unreadable')); };
+    } catch (e: any) {
+      clear(); setState('error'); setMsg(e?.name === 'NotAllowedError' ? t('nfc.denied') : (e?.message || String(e)));
+    }
+  };
+  return { state, msg, left, seconds, start, cancel };
 }
