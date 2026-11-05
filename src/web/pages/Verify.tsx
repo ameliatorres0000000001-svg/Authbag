@@ -38,9 +38,10 @@ export default function Verify() {
   // the Scan hub opens this page with ?mode=scan or ?mode=upload already chosen
   const preset = (['scan', 'upload'] as const).find((m) => m === sp.get('mode')) ?? null;
   const [tax, setTax] = useState<{ brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] } | null>(null);
-  const [brandId, setBrandId] = useState('');
-  const [model, setModel] = useState('');
-  const [mode, setMode] = useState<'scan' | 'upload' | null>(null);
+  // the Scan hub sends the brand (and model) with the mode: open the photo steps straight away
+  const [brandId] = useState(sp.get('brandId') ?? '');
+  const [model] = useState(sp.get('model') ?? '');
+  const [mode, setMode] = useState<'scan' | 'upload' | null>(sp.get('brandId') ? preset : null);
   const [meta, setMeta] = useState<Meta | null>(null);
   const [idx, setIdx] = useState(0); // current step; STEPS.length = review
   const [shots, setShots] = useState<Partial<Record<Step, File[]>>>({});
@@ -82,64 +83,12 @@ export default function Verify() {
   }
 
   // ── step 0: brand, model and how to take the photos
-  if (!mode) return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 pb-10 pt-5 md:px-8">
-      <header>
-        <h1 className="text-[28px] leading-tight">{t('vr.title')}</h1>
-        <p className="mt-1 text-sm text-muted">{t('vr.subtitle')}</p>
-      </header>
-      {meta && !meta.telegram && <Notice tone="warn">{t('vr.noTelegram')}</Notice>}
-      {meta && !meta.trial.unlimited && (
-        <div className={`rounded-2xl border p-3 text-sm ${blocked ? 'border-counterfeit/40 bg-counterfeit/5' : 'border-gold bg-gold-light'}`}>
-          🎁 {t('vr.trial')}: <b>{trialLeft}/{meta.trial.limit}</b> {t('vr.trialLeft')}
-          {blocked && <div className="mt-1 text-xs">{t('vr.trialUsed')}</div>}
-        </div>
-      )}
-
-      <section className="space-y-2">
-        <div className="font-serif text-lg">1. {t('vr.pickBrand')}</div>
-        <div className="flex flex-wrap gap-2">
-          {tax?.brands.map((b) => (
-            <button key={b.id} type="button" onClick={() => { setBrandId(b.id); setModel(''); }}
-              className={`rounded-full border px-3 py-1.5 text-sm ${brandId === b.id ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>{b.name}</button>
-          ))}
-          {tax && !tax.brands.length && <p className="text-sm text-muted">{t('noData')}</p>}
-        </div>
-        {brandId && (
-          <>
-            <input className="input" list="vr-models" placeholder={t('vr.modelPh')} value={model} onChange={(e) => setModel(e.target.value)} maxLength={120} />
-            <datalist id="vr-models">{tax?.models.filter((m) => m.brand_id === brandId).map((m) => <option key={m.id} value={m.name} />)}</datalist>
-            {meta?.plan && (
-              <p className="text-xs text-muted">{t('vr.plan')}: {lc === 'km' ? meta.plan.name_km : meta.plan.name_en} · {money(meta.plan.price_cents, meta.plan.currency, t('vr.priceLater'))}</p>
-            )}
-          </>
-        )}
-      </section>
-
-      <section className="space-y-2">
-        {preset ? (
-          <button type="button" disabled={!brandId || blocked} onClick={() => { setMode(preset); setIdx(0); }} className="btn-primary w-full !py-3.5 disabled:opacity-40">
-            {preset === 'scan' ? '📷' : '🖼️'} {t(preset === 'scan' ? 'vr.startScan' : 'vr.startUpload')} →
-          </button>
-        ) : (<>
-        <div className="font-serif text-lg">2. {t('vr.how')}</div>
-        <div className="grid grid-cols-2 gap-3">
-          {(['scan', 'upload'] as const).map((m) => (
-            <button key={m} type="button" disabled={!brandId || blocked} onClick={() => { setMode(m); setIdx(0); }}
-              className={`flex min-h-[8.5rem] flex-col justify-between rounded-2xl border p-4 text-left transition disabled:opacity-40 ${m === 'scan' ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>
-              <span className="text-2xl" aria-hidden>{m === 'scan' ? '📷' : '🖼️'}</span>
-              <span>
-                <span className="block font-serif text-xl leading-tight">{t(`vr.${m}`)}</span>
-                <span className={`mt-0.5 block text-xs ${m === 'scan' ? 'text-white/70' : 'text-muted'}`}>{t(`vr.${m}Help`)}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-        </>)}
-      </section>
-
-      {err && <Notice tone="bad">{err}</Notice>}
-      <MyRequests />
+  // without a brand + mode this page is the customer's list: requests, certificates and buy-back
+  if (!mode) return <MyChecks />;
+  if (blocked) return (
+    <div className="mx-auto max-w-xl space-y-3 px-4 pt-6">
+      <Notice tone="warn">🎁 {t('vr.trialUsed')}</Notice>
+      <Link to="/check" className="btn-ghost">← {t('vr.back')}</Link>
     </div>
   );
 
@@ -181,7 +130,7 @@ export default function Verify() {
   return (
     <div className="mx-auto max-w-xl space-y-3 px-4 pb-10 pt-4">
       <div className="flex items-center justify-between text-sm">
-        <button type="button" className="text-muted" onClick={() => (idx === 0 ? setMode(null) : setIdx(idx - 1))}>← {t('vr.back')}</button>
+        <button type="button" className="text-muted" onClick={() => (idx === 0 ? nav('/check') : setIdx(idx - 1))}>← {t('vr.back')}</button>
         <span className="font-mono text-xs text-muted">{Math.min(idx + 1, 6)}/6{step === 'extra' ? '+' : ''}</span>
       </div>
       <div className="flex gap-1" aria-hidden>
@@ -236,29 +185,70 @@ export const STATUS_TONE: Record<string, string> = {
   answered: 'bg-verified/10 text-verified', cancelled: 'bg-surface-high text-muted',
 };
 
-function MyRequests() {
+/** "Certificate & buy-back" tab: the customer's requests with their expert answer, HENGZ certificate and buy-back status. */
+function MyChecks() {
   const { t } = useI18n();
   const [rows, setRows] = useState<any[] | null>(null);
   useEffect(() => { api.get('/api/verify').then((r) => setRows(r.requests)).catch(() => setRows([])); }, []);
+  const certs = rows?.filter((r) => r.cert_code) ?? [];
   return (
-    <section className="space-y-2 pt-2">
-      <div className="font-serif text-lg">{t('vr.mine')}</div>
-      {rows === null ? <p className="text-sm text-muted">…</p> : !rows.length ? <p className="text-sm text-muted">{t('noData')}</p> : (
-        <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface-card">
-          {rows.map((r) => (
-            <li key={r.id}>
-              <Link to={`/verify/r/${r.id}`} className="flex items-center gap-3 p-3">
+    <div className="mx-auto max-w-3xl space-y-5 px-4 pb-10 pt-5 md:px-8">
+      <header>
+        <h1 className="text-[28px] leading-tight">{t('mc.title')}</h1>
+        <p className="mt-1 text-sm text-muted">{t('mc.subtitle')}</p>
+      </header>
+
+      {certs.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="font-serif text-lg">🏅 {t('mc.certs')}</h2>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {certs.map((r) => (
+              <a key={r.id} href={`/certificate/${r.cert_code}`} target="_blank" rel="noreferrer"
+                className="flex items-center gap-3 rounded-2xl border border-gold bg-gold-light p-3">
                 <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-charcoal">{r.cover && <img src={`/api/verify/photos/${r.cover}/image`} alt="" className="h-full w-full object-cover" loading="lazy" />}</div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold">{r.brand}{r.model_text ? ` · ${r.model_text}` : ''}</div>
-                  <div className="text-xs text-muted">{new Date(r.created_at).toLocaleString()}</div>
+                  <div className="font-mono text-[11px]">{r.cert_no}</div>
                 </div>
-                {r.expert_outcome && r.status === 'answered' ? <OutcomeBadge outcome={r.expert_outcome} /> : <span className={`rounded-full px-2 py-0.5 text-[11px] ${STATUS_TONE[r.status]}`}>{t(`vr.status.${r.status}`)}</span>}
-              </Link>
-            </li>
-          ))}
-        </ul>
+                <span className="text-xs underline">⎙ PDF</span>
+              </a>
+            ))}
+          </div>
+        </section>
       )}
-    </section>
+
+      <section className="space-y-2">
+        <h2 className="font-serif text-lg">{t('vr.mine')}</h2>
+        {rows === null ? <p className="text-sm text-muted">…</p> : !rows.length ? (
+          <div className="rounded-2xl border border-dashed border-strong p-5 text-center text-sm text-muted">
+            {t('noData')}<br /><Link to="/check" className="mt-2 inline-block font-semibold underline">{t('mc.start')} →</Link>
+          </div>
+        ) : (
+          <ul className="divide-y divide-hairline rounded-2xl border border-hairline bg-surface-card">
+            {rows.map((r) => (
+              <li key={r.id}>
+                <Link to={`/verify/r/${r.id}`} className="flex items-center gap-3 p-3">
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-charcoal">{r.cover && <img src={`/api/verify/photos/${r.cover}/image`} alt="" className="h-full w-full object-cover" loading="lazy" />}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold">{r.brand}{r.model_text ? ` · ${r.model_text}` : ''}</div>
+                    <div className="text-xs text-muted">{new Date(r.created_at).toLocaleString()}</div>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {r.cert_code && <span className="rounded-full bg-gold px-2 py-0.5 text-[10px] font-semibold text-charcoal">🏅 Certificate</span>}
+                      {r.offer_status && (
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.offer_status === 'accepted' ? 'bg-verified text-white' : r.offer_status === 'open' ? 'bg-gold-light text-charcoal' : 'bg-surface-high text-muted'}`}>
+                          💰 {r.offer_status === 'accepted' ? t('bb.st.accepted') : r.offer_status === 'open' ? (r.offer_from === 'hengz' ? t('mc.newOffer') : t('bb.st.open')) : t(`bb.st.${r.offer_status}`)}
+                          {r.offer_cents ? ` · ${(r.offer_cents / 100).toLocaleString()} ${r.offer_currency}` : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {r.expert_outcome && r.status === 'answered' ? <OutcomeBadge outcome={r.expert_outcome} /> : <span className={`rounded-full px-2 py-0.5 text-[11px] ${STATUS_TONE[r.status]}`}>{t(`vr.status.${r.status}`)}</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }

@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
+import { MeContext } from '../App.tsx';
+import { STAFF_ROLES } from '../studio.ts';
 import DateCodeDecoder from '../DateCodeDecoder.tsx';
 
 type Mode = 'code' | null;
@@ -19,7 +22,25 @@ const ICON: Record<string, string> = {
  */
 export default function Check() {
   const { t } = useI18n();
+  const me = useContext(MeContext)!;
   const [mode, setMode] = useState<Mode>(null);
+  const [tax, setTax] = useState<{ brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] } | null>(null);
+  const [meta, setMeta] = useState<{ trial: { used: number; limit: number; unlimited: boolean }; telegram: boolean } | null>(null);
+  const [brandId, setBrandId] = useState(() => { try { return sessionStorage.getItem('hz_brand') ?? ''; } catch { return ''; } });
+  const [model, setModel] = useState('');
+  const [hint, setHint] = useState(false);
+  const pickRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    api.get('/api/taxonomy').then(setTax).catch(() => setTax({ brands: [], models: [] }));
+    api.get('/api/verify/meta').then(setMeta).catch(() => {});
+  }, []);
+  const pick = (id: string) => { setBrandId(id); setModel(''); setHint(false); try { sessionStorage.setItem('hz_brand', id); } catch { /* ignore */ } };
+  const trialLeft = meta ? Math.max(0, meta.trial.limit - meta.trial.used) : null;
+  // with a brand chosen, Scan / Upload open the photo steps directly
+  const go = (m: 'scan' | 'upload') => brandId
+    ? `/verify?${new URLSearchParams({ mode: m, brandId, ...(model.trim() ? { model: model.trim() } : {}) })}`
+    : undefined;
+  const needBrand = () => { setHint(true); pickRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-4 pb-10 pt-5 md:px-8">
@@ -27,6 +48,35 @@ export default function Check() {
         <h1 className="text-[28px] leading-tight">{t('check.title')}</h1>
         <p className="mt-1 text-sm text-muted">{t('check.subtitle')}</p>
       </header>
+      {meta && !meta.telegram && STAFF_ROLES.includes(me.role) && <p className="text-xs text-counterfeit">⚠ {t('vr.noTelegram')}</p>}
+
+      {/* 1. brand */}
+      <div ref={pickRef} className={`space-y-2 rounded-2xl border p-3 transition ${hint ? 'border-counterfeit ring-2 ring-counterfeit/30' : 'border-hairline bg-surface-card'}`}>
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="font-serif text-lg">1. {t('vr.pickBrand')}</div>
+          {trialLeft !== null && !meta!.trial.unlimited && <span className="text-[11px] text-muted">🎁 {t('vr.trial')} {trialLeft}/{meta!.trial.limit}</span>}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {tax?.brands.map((b) => (
+            <button key={b.id} type="button" onClick={() => pick(b.id)}
+              className={`rounded-full border px-3 py-1.5 text-[13px] transition ${brandId === b.id ? 'border-gold bg-gold font-semibold text-charcoal' : 'border-hairline bg-surface-low'}`}>{b.name}</button>
+          ))}
+          {tax && !tax.brands.length && <p className="text-sm text-muted">{t('noData')}</p>}
+        </div>
+        {brandId && (
+          <>
+            <input className="input text-sm" list="hub-models" placeholder={t('vr.modelPh')} value={model} onChange={(e) => setModel(e.target.value)} maxLength={120} />
+            <datalist id="hub-models">{tax?.models.filter((m) => m.brand_id === brandId).map((m) => <option key={m.id} value={m.name} />)}</datalist>
+          </>
+        )}
+        {hint && <p className="text-xs text-counterfeit">{t('check.needBrand')}</p>}
+      </div>
+
+      {/* 2. scan or upload → straight into the photo steps */}
+      <div className="grid grid-cols-2 gap-3">
+        <Tile id="photo" title={t('check.photo')} help={t('check.photoHelp')} to={go('scan')} onClick={needBrand} primary dim={!brandId} />
+        <Tile id="upload" title={t('check.upload')} help={t('check.uploadHelp')} to={go('upload')} onClick={needBrand} dim={!brandId} />
+      </div>
 
       {/* how it works: one dark card, four steps joined by a gold line */}
       <div className="rounded-2xl bg-charcoal px-2 pb-4 pt-5 text-white shadow-sm">
@@ -45,16 +95,10 @@ export default function Check() {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Tile id="photo" title={t('check.photo')} help={t('check.photoHelp')} to="/verify?mode=scan" primary />
-        <Tile id="upload" title={t('check.upload')} help={t('check.uploadHelp')} to="/verify?mode=upload" />
         <Tile id="nfc" title={t('check.nfc')} help={t('check.nfcHelp')} to="/check/nfc" />
         <Tile id="code" title={t('check.code')} help={t('check.codeHelp')} active={mode === 'code'} onClick={() => setMode(mode === 'code' ? null : 'code')} />
       </div>
       {mode === 'code' && <DateCodeDecoder />}
-
-      <Link to="/verify" className="flex items-center justify-between rounded-2xl border border-hairline bg-surface-card px-4 py-3 text-sm">
-        <span>🗂 {t('vr.mine')}</span><span className="text-muted">→</span>
-      </Link>
     </div>
   );
 }
@@ -63,9 +107,9 @@ const Svg = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
 );
 
-function Tile({ id, title, help, to, onClick, active, primary }: { id: string; title: string; help: string; to?: string; onClick?: () => void; active?: boolean; primary?: boolean }) {
+function Tile({ id, title, help, to, onClick, active, primary, dim }: { id: string; title: string; help: string; to?: string; onClick?: () => void; active?: boolean; primary?: boolean; dim?: boolean }) {
   const cls = `flex min-h-[9.5rem] flex-col justify-between rounded-2xl border p-4 text-left transition ${
-    primary ? 'border-charcoal bg-charcoal text-white' : active ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card hover:border-strong'} ${active && primary ? 'ring-2 ring-gold' : ''}`;
+    primary ? 'border-charcoal bg-charcoal text-white' : active ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card hover:border-strong'} ${active && primary ? 'ring-2 ring-gold' : ''} ${dim ? 'opacity-50' : ''}`;
   const body = (
     <>
       <span className={`flex h-11 w-11 items-center justify-center rounded-full ${primary ? 'bg-gold text-charcoal' : 'bg-charcoal text-gold'}`}><Svg d={ICON[id]} /></span>
