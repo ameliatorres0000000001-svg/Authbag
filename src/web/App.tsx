@@ -40,7 +40,7 @@ const GUEST: Me = { id: '', email: '', name: 'Guest', role: 'guest', locale: 'km
 export const MeContext = React.createContext<Me | null>(null);
 
 // Customer-facing sections; inspections, knowledge & rules, Entrupy, audit and settings live in the admin panel.
-const NAV: [string, string][] = [['/', 'dashboard'], ['/datecode', 'datecode'], ['/check', 'check.title'], ['/verify', 'nav.verify']];
+const NAV: [string, string][] = [['/', 'dashboard'], ['/datecode', 'datecode'], ['/check', 'check.title'], ['/check/nfc', 'nav.nfc'], ['/verify', 'nav.verify']];
 
 /** Hidden entry to the admin panel: 5 taps on the logo within 3 s. Only a shortcut; the server enforces roles. */
 function useSecretTaps(onUnlock: () => void, taps = 5, windowMs = 3000) {
@@ -104,7 +104,7 @@ export default function App() {
           </div>
           <nav className="flex flex-col px-2 pb-6">
             {NAV.map(([to, key]) => (
-              <NavLink key={to} to={to} end={to === '/' || to === '/inspections'}
+              <NavLink key={to} to={to} end={to === '/' || to === '/check'}
                 className={({ isActive }) => `rounded px-3 py-2 text-sm ${isActive ? 'bg-charcoal text-white' : 'text-charcoal hover:bg-surface-high'}`}>
                 {t(key)}
               </NavLink>
