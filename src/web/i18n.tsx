@@ -24,7 +24,7 @@ const D: Record<string, { km: string; en: string }> = {
   signIn: { km: 'ចូលប្រើ', en: 'Sign in' },
   signOut: { km: 'ចាកចេញ', en: 'Sign out' },
   email: { km: 'អ៊ីមែល', en: 'Email' },
-  password: { km: 'ពាក្យសម្ងាត់ (យ៉ាងតិច 12 តួ)', en: 'Password (min 12 characters)' },
+  password: { km: 'ពាក្យសម្ងាត់', en: 'Password' },
   name: { km: 'ឈ្មោះ', en: 'Name' },
   createOwner: { km: 'បង្កើតគណនីម្ចាស់ (ដំបូង)', en: 'Create owner account (first run)' },
   save: { km: 'រក្សាទុក', en: 'Save' },
