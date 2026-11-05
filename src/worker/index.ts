@@ -1407,7 +1407,13 @@ const VR_COLS = `r.id, r.user_id, r.brand_id, b.name AS brand, r.model_text, r.m
 app.get('/api/verify', async (c) => {
   const me = c.get('user');
   const all = c.req.query('all') === '1' && ADMINS.includes(me.role);
-  const rows = await c.env.DB.prepare(`SELECT ${VR_COLS}, (SELECT id FROM verify_photos WHERE request_id = r.id ORDER BY created_at LIMIT 1) AS cover
+  const rows = await c.env.DB.prepare(`SELECT ${VR_COLS}, (SELECT id FROM verify_photos WHERE request_id = r.id ORDER BY created_at LIMIT 1) AS cover,
+      (SELECT cert_no FROM hengz_certificates h WHERE h.request_id = r.id AND h.status = 'valid') AS cert_no,
+      (SELECT public_code FROM hengz_certificates h WHERE h.request_id = r.id AND h.status = 'valid') AS cert_code,
+      (SELECT status FROM buyback_offers o WHERE o.request_id = r.id ORDER BY o.created_at DESC LIMIT 1) AS offer_status,
+      (SELECT from_side FROM buyback_offers o WHERE o.request_id = r.id ORDER BY o.created_at DESC LIMIT 1) AS offer_from,
+      (SELECT amount_cents FROM buyback_offers o WHERE o.request_id = r.id ORDER BY o.created_at DESC LIMIT 1) AS offer_cents,
+      (SELECT currency FROM buyback_offers o WHERE o.request_id = r.id ORDER BY o.created_at DESC LIMIT 1) AS offer_currency
     FROM verify_requests r JOIN brands b ON b.id = r.brand_id ${all ? '' : 'WHERE r.user_id = ?'} ORDER BY r.created_at DESC LIMIT 100`)
     .bind(...(all ? [] : [me.id])).all();
   return c.json({ requests: rows.results });

@@ -38,7 +38,7 @@ export interface Me { id: string; email: string; name: string; role: string; loc
 export const MeContext = React.createContext<Me | null>(null);
 
 // Customer-facing sections; inspections, knowledge & rules, Entrupy, audit and settings live in the admin panel.
-const NAV: [string, string][] = [['/', 'dashboard'], ['/datecode', 'datecode'], ['/check', 'check.title'], ['/verify', 'vr.mine']];
+const NAV: [string, string][] = [['/', 'dashboard'], ['/datecode', 'datecode'], ['/check', 'check.title'], ['/verify', 'nav.verify']];
 
 /** Hidden entry to the admin panel: 5 taps on the logo within 3 s. Only a shortcut; the server enforces roles. */
 function useSecretTaps(onUnlock: () => void, taps = 5, windowMs = 3000) {
@@ -55,7 +55,7 @@ const TABS: [string, string, string][] = [
   ['/', 'home', 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z'],
   ['/datecode', 'datecode', 'M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12M3 4h3M3 20h3M18 4h3M18 20h3'],
   ['/check', 'scan', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8'],
-  ['/verify', 'nav.verify', 'M9 12l2 2 4-4M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z'],
+  ['/verify', 'nav.verify', 'M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8.5 14 7 22l5-3 5 3-1.5-8'],
 ];
 const ADMIN_TAB: [string, string, string] = ['/admin', 'nav.admin', 'M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4'];
 const TabIcon = ({ d }: { d: string }) => (
@@ -69,6 +69,9 @@ export default function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const nav = useNavigate();
   const logoTap = useSecretTaps(() => nav('/admin'));
+  // the photo steps live under /verify?mode=… but belong to the Scan tab, not to Certificate
+  const inSteps = loc.pathname === '/verify' && new URLSearchParams(loc.search).has('mode');
+  const on = (to: string, isActive: boolean) => isActive && !(to === '/verify' && inSteps);
 
   const refresh = useCallback(() => {
     api.get<Me>('/api/me').then(setMe).catch(() => setMe(null));
@@ -150,8 +153,8 @@ export default function App() {
             </NavLink>
           ) : (
             <NavLink key={to} to={to} end={to === '/'}
-              className={({ isActive }) => `flex flex-col items-center gap-0.5 py-0.5 text-[10px] ${isActive ? 'font-bold text-charcoal' : 'text-muted'}`}>
-              {({ isActive }) => <><span className={`flex h-7 w-12 items-center justify-center rounded-full ${isActive ? 'bg-gold-light text-charcoal' : ''}`}><TabIcon d={icon} /></span>{t(key)}</>}
+              className={({ isActive }) => `flex flex-col items-center gap-0.5 py-0.5 text-[10px] ${on(to, isActive) ? 'font-bold text-charcoal' : 'text-muted'}`}>
+              {({ isActive }) => <><span className={`flex h-7 w-12 items-center justify-center rounded-full ${on(to, isActive) ? 'bg-gold-light text-charcoal' : ''}`}><TabIcon d={icon} /></span>{t(key)}</>}
             </NavLink>
           ))}
         </nav>
