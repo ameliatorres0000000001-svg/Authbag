@@ -57,24 +57,42 @@ app.get('/api/auth/state', async (c) => {
 // ───────────────────────── LINE Login (OAuth 2.1 / OpenID Connect) ─────────────────────────
 // Channel ID + secret come from LINE Developers (Cloudflare Secrets LINE_CHANNEL_ID / LINE_CHANNEL_SECRET).
 // The callback URL to register in the LINE channel: https://<your domain>/api/auth/line/callback
-const LINE_COOKIE = 'hz_line';
 const lineRedirect = (c: any) => `${new URL(c.req.url).origin}/api/auth/line/callback`;
+
+// The state is signed (HMAC with the channel secret) and expires in 10 minutes, so it does not depend on a cookie:
+// on a phone LINE often signs in through the LINE app and returns in another browser that never saw our cookie.
+const b64url = (b: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+async function lineSign(secret: string, data: string) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return b64url(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data)));
+}
+async function lineState(secret: string) {
+  const nonce = crypto.randomUUID(); const exp = String(Date.now() + 10 * 60_000);
+  return { state: `${nonce}.${exp}.${await lineSign(secret, `${nonce}.${exp}`)}`, nonce };
+}
+async function lineCheck(secret: string, state: string): Promise<string | null> {
+  const [nonce, exp, sig] = state.split('.');
+  if (!nonce || !exp || !sig || Number(exp) < Date.now()) return null;
+  const want = await lineSign(secret, `${nonce}.${exp}`);
+  if (want.length !== sig.length) return null;
+  let diff = 0; for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0 ? nonce : null;
+}
 
 app.get('/api/auth/line/start', async (c) => {
   if (!c.env.LINE_CHANNEL_ID || !c.env.LINE_CHANNEL_SECRET) return c.redirect('/login?error=line_not_configured');
-  const state = crypto.randomUUID(); const nonce = crypto.randomUUID();
-  setCookie(c, LINE_COOKIE, `${state}.${nonce}`, { httpOnly: true, secure: true, sameSite: 'Lax', path: '/api/auth/line', maxAge: 600 });
+  const { state, nonce } = await lineState(c.env.LINE_CHANNEL_SECRET);
   const q = new URLSearchParams({ response_type: 'code', client_id: c.env.LINE_CHANNEL_ID, redirect_uri: lineRedirect(c), state, nonce, scope: 'profile openid' });
   return c.redirect(`https://access.line.me/oauth2/v2.1/authorize?${q}`);
 });
 
 app.get('/api/auth/line/callback', async (c) => {
   const fail = (why: string) => c.redirect(`/login?error=${encodeURIComponent(why)}`);
-  const [state, nonce] = (getCookie(c, LINE_COOKIE) ?? '').split('.');
-  deleteCookie(c, LINE_COOKIE, { path: '/api/auth/line' });
-  const code = c.req.query('code');
-  if (!code || !state || c.req.query('state') !== state) return fail('line_state');
   if (!c.env.LINE_CHANNEL_ID || !c.env.LINE_CHANNEL_SECRET) return fail('line_not_configured');
+  if (c.req.query('error')) return fail(`line_${c.req.query('error')}`); // e.g. the person cancelled on LINE
+  const code = c.req.query('code');
+  const nonce = await lineCheck(c.env.LINE_CHANNEL_SECRET, c.req.query('state') ?? '');
+  if (!code || !nonce) return fail('line_state');
   // exchange the code, then let LINE verify the ID token (signature, audience, expiry, nonce)
   const tok = await fetch('https://api.line.me/oauth2/v2.1/token', {
     method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
