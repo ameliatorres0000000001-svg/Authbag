@@ -1346,6 +1346,10 @@ app.post('/api/verify', async (c) => {
   if (!['scan', 'upload'].includes(mode)) return c.json({ error: 'invalid_mode' }, 400);
   const brand = await c.env.DB.prepare('SELECT id, slug, name FROM brands WHERE id = ?').bind(brandId).first<{ id: string; slug: string; name: string }>();
   if (!brand) return c.json({ error: 'brand_required' }, 400);
+  // a brand that is not in the list yet: the placeholder "Other" brand plus the name the customer typed
+  const brandText = brand.slug === 'other' ? String(form.get('brandText') ?? '').trim().slice(0, 80) || null : null;
+  if (brand.slug === 'other' && !brandText) return c.json({ error: 'brand_name_required' }, 400);
+  const brandName = brandText ?? brand.name;
 
   const photos: { step: string; data: ArrayBuffer; mime: string }[] = [];
   for (const step of VERIFY_STEPS) {
@@ -1369,8 +1373,8 @@ app.post('/api/verify', async (c) => {
   const plan = await planForBrand(c.env, brand.slug);
 
   const id = uid('vr_');
-  await c.env.DB.prepare('INSERT INTO verify_requests (id, user_id, brand_id, model_text, mode, plan_id, free_trial, entrupy_requested) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, me.id, brand.id, modelText, mode, plan?.id ?? null, staff ? 0 : 1, entrupy).run();
+  await c.env.DB.prepare('INSERT INTO verify_requests (id, user_id, brand_id, brand_text, model_text, mode, plan_id, free_trial, entrupy_requested) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, me.id, brand.id, brandText, modelText, mode, plan?.id ?? null, staff ? 0 : 1, entrupy).run();
   for (const p of photos) {
     const pid = uid('vp_'); const key = `verify/${id}/${p.step}/${pid}`;
     await c.env.VAULT.put(key, p.data, { httpMetadata: { contentType: p.mime } });
@@ -1379,7 +1383,7 @@ app.post('/api/verify', async (c) => {
   await audit(c.env, me.id, 'verify.submit', 'verify_request', id, { brand: brand.slug, photos: photos.length, entrupy: !!entrupy });
 
   if (telegramConfigured(c.env)) {
-    const summary = [`🔎 Verification request ${id}`, `Brand: ${brand.name}`, modelText ? `Model: ${modelText}` : null,
+    const summary = [`🔎 Verification request ${id}`, `Brand: ${brandName}${brandText ? ' (not in the list yet)' : ''}`, modelText ? `Model: ${modelText}` : null,
       `Customer: ${me.name} (${me.email})`, `Mode: ${mode} · ${photos.length} photos`, entrupy ? '➕ Customer also asked for an official Entrupy certificate' : null,
       staff ? null : `Free trial ${used + 1}/${VERIFY_TRIAL}`].filter(Boolean).join('\n');
     c.executionCtx.waitUntil((async () => {
@@ -1401,7 +1405,7 @@ app.post('/api/verify', async (c) => {
   return c.json({ id });
 });
 
-const VR_COLS = `r.id, r.user_id, r.brand_id, b.name AS brand, r.model_text, r.mode, r.plan_id, r.free_trial, r.entrupy_requested, r.status,
+const VR_COLS = `r.id, r.user_id, r.brand_id, COALESCE(r.brand_text, b.name) AS brand, r.model_text, r.mode, r.plan_id, r.free_trial, r.entrupy_requested, r.status,
   r.expert_outcome, r.expert_note, r.expert_name, r.created_at, r.answered_at, (r.telegram_message_id IS NOT NULL) AS sent, r.telegram_error`;
 
 app.get('/api/verify', async (c) => {
@@ -1496,7 +1500,7 @@ async function revokeForRequest(env: AppEnv['Bindings'], requestId: string, acto
   if (res?.meta.changes) await audit(env, actor, 'certificate.revoke', 'verify_request', requestId, { reason, automatic: true });
 }
 
-const CERT_COLS = `c.id, c.cert_no, c.public_code, c.request_id, c.brand_id, b.name AS brand, c.model_text, c.item_desc, c.photo_id, c.customer_name,
+const CERT_COLS = `c.id, c.cert_no, c.public_code, c.request_id, c.brand_id, COALESCE((SELECT v.brand_text FROM verify_requests v WHERE v.id = c.request_id), b.name) AS brand, c.model_text, c.item_desc, c.photo_id, c.customer_name,
   c.expert_name, c.issued_at, c.status, c.revoked_reason, c.revoked_at`;
 
 app.post('/api/verify/:id/certificate', need(STAFF), async (c) => {
@@ -1556,7 +1560,7 @@ const money = (cents: number, cur: string) => `${(cents / 100).toFixed(2)} ${cur
 app.post('/api/verify/:id/offers', async (c) => {
   const body = await parse(c, z.object({ side: z.enum(['hengz', 'customer']), amount: z.number().positive().max(10_000_000), currency: z.string().regex(/^[A-Z]{3}$/).default('USD'), note: z.string().max(500).optional() }));
   const me = c.get('user');
-  const r = await c.env.DB.prepare(`SELECT r.id, r.user_id, r.status, r.expert_outcome, r.model_text, b.name AS brand FROM verify_requests r JOIN brands b ON b.id = r.brand_id WHERE r.id = ?`)
+  const r = await c.env.DB.prepare(`SELECT r.id, r.user_id, r.status, r.expert_outcome, r.model_text, COALESCE(r.brand_text, b.name) AS brand FROM verify_requests r JOIN brands b ON b.id = r.brand_id WHERE r.id = ?`)
     .bind(c.req.param('id')).first<Record<string, any>>();
   if (!r) return c.json({ error: 'not_found' }, 404);
   if (body.side === 'hengz' && !STAFF.includes(me.role)) return c.json({ error: 'forbidden' }, 403);
@@ -1580,7 +1584,7 @@ app.post('/api/verify/:id/offers', async (c) => {
 app.post('/api/verify/offers/:oid/respond', async (c) => {
   const { action } = await parse(c, z.object({ action: z.enum(['accept', 'decline', 'withdraw']) }));
   const me = c.get('user');
-  const o = await c.env.DB.prepare(`SELECT o.*, r.user_id, r.model_text, b.name AS brand FROM buyback_offers o JOIN verify_requests r ON r.id = o.request_id JOIN brands b ON b.id = r.brand_id WHERE o.id = ?`)
+  const o = await c.env.DB.prepare(`SELECT o.*, r.user_id, r.model_text, COALESCE(r.brand_text, b.name) AS brand FROM buyback_offers o JOIN verify_requests r ON r.id = o.request_id JOIN brands b ON b.id = r.brand_id WHERE o.id = ?`)
     .bind(c.req.param('oid')).first<Record<string, any>>();
   if (!o || o.status !== 'open') return c.json({ error: 'not_open' }, 409);
   const isCustomer = o.user_id === me.id; const isStaff = STAFF.includes(me.role);

@@ -57,7 +57,6 @@ const TABS: [string, string, string][] = [
   ['/check', 'scan', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8'],
   ['/verify', 'nav.verify', 'M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8.5 14 7 22l5-3 5 3-1.5-8'],
 ];
-const ADMIN_TAB: [string, string, string] = ['/admin', 'nav.admin', 'M4 6h16M4 12h16M4 18h16M8 4v4M16 10v4M10 16v4'];
 const TabIcon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
 );
@@ -95,7 +94,7 @@ export default function App() {
             <div className="mt-1 font-mono text-[10px] uppercase tracking-widest text-muted">{me.name} · {me.role}</div>
           </div>
           <nav className="flex flex-col px-2 pb-6">
-            {[...NAV, ...(STAFF_ROLES.includes(me.role) ? [['/admin', 'nav.admin'] as [string, string]] : [])].map(([to, key]) => (
+            {NAV.map(([to, key]) => (
               <NavLink key={to} to={to} end={to === '/' || to === '/inspections'}
                 className={({ isActive }) => `rounded px-3 py-2 text-sm ${isActive ? 'bg-charcoal text-white' : 'text-charcoal hover:bg-surface-high'}`}>
                 {t(key)}
@@ -146,8 +145,8 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
-        <nav className={`fixed inset-x-0 bottom-0 z-20 grid ${STAFF_ROLES.includes(me.role) ? 'grid-cols-5' : 'grid-cols-4'} items-end border-t border-hairline bg-surface/95 px-1 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-1.5 backdrop-blur md:hidden`}>
-          {[...TABS, ...(STAFF_ROLES.includes(me.role) ? [ADMIN_TAB] : [])].map(([to, key, icon]) => to === '/check' ? (
+        <nav className={`fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 items-end border-t border-hairline bg-surface/95 px-1 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-1.5 backdrop-blur md:hidden`}>
+          {TABS.map(([to, key, icon]) => to === '/check' ? (
             <NavLink key={to} to={to} className="flex flex-col items-center gap-0.5 text-[10px] font-semibold text-charcoal">
               <span className="-mt-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-surface bg-charcoal text-gold shadow-lg"><TabIcon d={icon} /></span>{t(key)}
             </NavLink>

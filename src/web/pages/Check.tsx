@@ -4,9 +4,8 @@ import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
 import { MeContext } from '../App.tsx';
 import { STAFF_ROLES } from '../studio.ts';
-import DateCodeDecoder from '../DateCodeDecoder.tsx';
+import BrandPicker, { type BrandChoice } from '../BrandPicker.tsx';
 
-type Mode = 'code' | null;
 
 const ICON: Record<string, string> = {
   photo: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
@@ -23,22 +22,23 @@ const ICON: Record<string, string> = {
 export default function Check() {
   const { t } = useI18n();
   const me = useContext(MeContext)!;
-  const [mode, setMode] = useState<Mode>(null);
-  const [tax, setTax] = useState<{ brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] } | null>(null);
+  const [tax, setTax] = useState<{ brands: { id: string; name: string; slug: string }[]; models: { id: string; brand_id: string; name: string }[] } | null>(null);
   const [meta, setMeta] = useState<{ trial: { used: number; limit: number; unlimited: boolean }; telegram: boolean } | null>(null);
-  const [brandId, setBrandId] = useState(() => { try { return sessionStorage.getItem('hz_brand') ?? ''; } catch { return ''; } });
+  const [choice, setChoice] = useState<BrandChoice | null>(() => { try { const v = sessionStorage.getItem('hz_brand2'); return v ? JSON.parse(v) : null; } catch { return null; } });
+  const brandId = choice?.brandId ?? '';
   const [model, setModel] = useState('');
   const [hint, setHint] = useState(false);
   const pickRef = useRef<HTMLDivElement>(null);
+  const loadTax = () => api.get('/api/taxonomy').then(setTax).catch(() => setTax({ brands: [], models: [] }));
   useEffect(() => {
-    api.get('/api/taxonomy').then(setTax).catch(() => setTax({ brands: [], models: [] }));
+    loadTax();
     api.get('/api/verify/meta').then(setMeta).catch(() => {});
   }, []);
-  const pick = (id: string) => { setBrandId(id); setModel(''); setHint(false); try { sessionStorage.setItem('hz_brand', id); } catch { /* ignore */ } };
+  const pick = (v: BrandChoice | null) => { setChoice(v); setModel(''); setHint(false); try { if (v) sessionStorage.setItem('hz_brand2', JSON.stringify(v)); else sessionStorage.removeItem('hz_brand2'); } catch { /* ignore */ } };
   const trialLeft = meta ? Math.max(0, meta.trial.limit - meta.trial.used) : null;
   // with a brand chosen, Scan / Upload open the photo steps directly
   const go = (m: 'scan' | 'upload') => brandId
-    ? `/verify?${new URLSearchParams({ mode: m, brandId, ...(model.trim() ? { model: model.trim() } : {}) })}`
+    ? `/verify?${new URLSearchParams({ mode: m, brandId, ...(choice?.brandText ? { brandText: choice.brandText } : {}), ...(model.trim() ? { model: model.trim() } : {}) })}`
     : undefined;
   const needBrand = () => { setHint(true); pickRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
 
@@ -56,14 +56,9 @@ export default function Check() {
           <div className="font-serif text-lg">1. {t('vr.pickBrand')}</div>
           {trialLeft !== null && !meta!.trial.unlimited && <span className="text-[11px] text-muted">🎁 {t('vr.trial')} {trialLeft}/{meta!.trial.limit}</span>}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {tax?.brands.map((b) => (
-            <button key={b.id} type="button" onClick={() => pick(b.id)}
-              className={`rounded-full border px-3 py-1.5 text-[13px] transition ${brandId === b.id ? 'border-gold bg-gold font-semibold text-charcoal' : 'border-hairline bg-surface-low'}`}>{b.name}</button>
-          ))}
-          {tax && !tax.brands.length && <p className="text-sm text-muted">{t('noData')}</p>}
-        </div>
-        {brandId && (
+        {tax ? <BrandPicker brands={tax.brands} value={choice} onChange={pick} canAdd={['owner', 'lead_authenticator'].includes(me.role)} onAdded={loadTax} />
+          : <div className="h-11 animate-pulse rounded-xl bg-surface-low" />}
+        {brandId && !choice?.brandText && (
           <>
             <input className="input text-sm" list="hub-models" placeholder={t('vr.modelPh')} value={model} onChange={(e) => setModel(e.target.value)} maxLength={120} />
             <datalist id="hub-models">{tax?.models.filter((m) => m.brand_id === brandId).map((m) => <option key={m.id} value={m.name} />)}</datalist>
@@ -94,11 +89,6 @@ export default function Check() {
         </ol>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Tile id="nfc" title={t('check.nfc')} help={t('check.nfcHelp')} to="/check/nfc" />
-        <Tile id="code" title={t('check.code')} help={t('check.codeHelp')} active={mode === 'code'} onClick={() => setMode(mode === 'code' ? null : 'code')} />
-      </div>
-      {mode === 'code' && <DateCodeDecoder />}
     </div>
   );
 }
