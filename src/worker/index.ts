@@ -1601,6 +1601,21 @@ app.post('/api/verify/offers/:oid/respond', async (c) => {
   return c.json({ ok: true, status });
 });
 
+// ───────────────────────── NFC chip reads ─────────────────────────
+/**
+ * Record a chip read (hash of the UID only) and say how often the same chip ID was read before,
+ * in total and on other accounts. A signal for the expert, never a verdict.
+ */
+app.post('/api/nfc/scans', async (c) => {
+  const body = await parse(c, z.object({ uid: z.string().trim().min(4).max(64), brand: z.enum(['lv', 'chanel', 'other']) }));
+  const me = c.get('user');
+  const uidHash = await sha256Hex(body.uid.toLowerCase().replace(/[^0-9a-f]/g, ''));
+  const prev = await c.env.DB.prepare(`SELECT COUNT(*) AS total, COUNT(DISTINCT CASE WHEN user_id <> ? THEN user_id END) AS others, MIN(created_at) AS first
+    FROM nfc_scans WHERE uid_hash = ?`).bind(me.id, uidHash).first<{ total: number; others: number; first: string | null }>();
+  await c.env.DB.prepare('INSERT INTO nfc_scans (id, uid_hash, brand, user_id) VALUES (?, ?, ?, ?)').bind(uid('nf_'), uidHash, body.brand, me.id).run();
+  return c.json({ before: prev?.total ?? 0, otherAccounts: prev?.others ?? 0, firstSeen: prev?.first ?? null });
+});
+
 /** Staff can also answer from the web (e.g. when Telegram is down). Same four outcomes. */
 app.post('/api/verify/:id/answer', need(STAFF), async (c) => {
   const body = await parse(c, z.object({ code: z.enum(['c', 'f', 'm', 'r']), note: z.string().max(2000).optional() }));
