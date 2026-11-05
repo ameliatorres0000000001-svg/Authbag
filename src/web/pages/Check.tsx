@@ -50,6 +50,22 @@ export default function Check() {
       </header>
       {meta && !meta.telegram && STAFF_ROLES.includes(me.role) && <p className="text-xs text-counterfeit">⚠ {t('vr.noTelegram')}</p>}
 
+      {/* how it works: one dark card, four steps joined by a gold line */}
+      <div className="rounded-2xl bg-charcoal px-2 pb-4 pt-5 text-white shadow-sm">
+        <ol className="relative grid grid-cols-4">
+          <span className="absolute left-[12.5%] right-[12.5%] top-[15px] h-px bg-gradient-to-r from-gold/30 via-gold to-gold/30" aria-hidden />
+          {(['check.s1', 'check.s2', 'check.s3', 'check.s4'] as const).map((k, i) => (
+            <li key={k} className="relative flex flex-col items-center px-1 text-center">
+              <span className={`flex h-[30px] w-[30px] items-center justify-center rounded-full border font-mono text-[12px] font-bold ${i === 3 ? 'border-gold bg-gold text-charcoal' : 'border-gold bg-charcoal text-gold'}`}>
+                {i === 3 ? '✦' : i + 1}
+              </span>
+              <span className="mt-2 text-[12.5px] font-semibold leading-tight">{t(k)}</span>
+              <span className="mt-0.5 text-[10.5px] leading-tight text-white/60">{t(`${k}b`)}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
       {/* 1. brand */}
       <div ref={pickRef} className={`space-y-2 rounded-2xl border p-3 transition ${hint ? 'border-counterfeit ring-2 ring-counterfeit/30' : 'border-hairline bg-surface-card'}`}>
         <div className="flex items-baseline justify-between gap-2">
@@ -73,21 +89,6 @@ export default function Check() {
         <Tile id="upload" title={t('check.upload')} help={t('check.uploadHelp')} to={go('upload')} onClick={needBrand} dim={!brandId} />
       </div>
 
-      {/* how it works: one dark card, four steps joined by a gold line */}
-      <div className="rounded-2xl bg-charcoal px-2 pb-4 pt-5 text-white shadow-sm">
-        <ol className="relative grid grid-cols-4">
-          <span className="absolute left-[12.5%] right-[12.5%] top-[15px] h-px bg-gradient-to-r from-gold/30 via-gold to-gold/30" aria-hidden />
-          {(['check.s1', 'check.s2', 'check.s3', 'check.s4'] as const).map((k, i) => (
-            <li key={k} className="relative flex flex-col items-center px-1 text-center">
-              <span className={`flex h-[30px] w-[30px] items-center justify-center rounded-full border font-mono text-[12px] font-bold ${i === 3 ? 'border-gold bg-gold text-charcoal' : 'border-gold bg-charcoal text-gold'}`}>
-                {i === 3 ? '✦' : i + 1}
-              </span>
-              <span className="mt-2 text-[12.5px] font-semibold leading-tight">{t(k)}</span>
-              <span className="mt-0.5 text-[10.5px] leading-tight text-white/60">{t(`${k}b`)}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
 
     </div>
   );
