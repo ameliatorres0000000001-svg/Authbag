@@ -571,6 +571,7 @@ const D: Record<string, { km: string; en: string }> = {
   'bp.add': { km: 'ប្រើ brand', en: 'Use brand' },
   'bp.addList': { km: 'បន្ថែមក្នុងបញ្ជី', en: 'Add to the list' },
   'bp.notListed': { km: 'មិនទាន់មានក្នុងបញ្ជី', en: 'not in the list yet' },
+  'nav.nfc': { km: 'NFC', en: 'NFC' },
   'check.title': { km: 'ផ្ទៀងផ្ទាត់ដោយអ្នកជំនាញ', en: 'Verified by experts' },
   'check.subtitle': { km: 'ថត ឬ upload ចំណុចសំខាន់ៗរបស់កាបូប ហើយអ្នកជំនាញ HENGZ ពិនិត្យ និងឆ្លើយតប។', en: 'Scan or upload the key points of the bag, and a HENGZ expert reviews them and answers.' },
   'check.photo': { km: 'ថតរូប / ស្កេន', en: 'Photo / scan' },
