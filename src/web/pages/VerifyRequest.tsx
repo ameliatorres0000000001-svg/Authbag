@@ -20,7 +20,7 @@ export default function VerifyRequest() {
   const { id } = useParams();
   const { t } = useI18n();
   const me = useContext(MeContext)!;
-  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null; refs?: Record<string, Ref>; certificate?: any; offers?: Offer[] } | null>(null);
+  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null; refs?: Record<string, Ref>; certificate?: any; offers?: Offer[]; ai?: any } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -77,6 +77,8 @@ export default function VerifyRequest() {
         {r.entrupy_requested ? <p className="mt-2 text-xs">➕ {t('vr.entrupy')} · {money(data.plan?.entrupy_price_cents, data.plan?.currency ?? 'USD', t('vr.priceLater'))}</p> : null}
         <p className="mt-3 text-[11px] text-muted">{t('vr.disclaimer')}</p>
       </div>
+
+      {staff && <AiReviewCard requestId={r.id} ai={data.ai ?? null} onChange={load} />}
 
       <CertificateBox requestId={r.id} cert={data.certificate ?? null} canIssue={staff && r.status === 'answered' && r.expert_outcome === 'consistent_with_references'}
         canRevoke={['owner', 'lead_authenticator'].includes(me.role)} onChange={load} />
@@ -321,6 +323,74 @@ function BuybackBox({ requestId, offers, isOwner, staff, currency, onChange }: {
             {busy ? '…' : `💰 ${t('bb.send')}`}
           </button>
         </div>
+      )}
+      {err && <p className="text-xs text-counterfeit">{err}</p>}
+    </section>
+  );
+}
+
+const FIND_ICON: Record<string, string> = { matches: '✓', differs: '⚠', unclear: '?' };
+const FIND_TONE: Record<string, string> = { matches: 'text-verified', differs: 'text-counterfeit', unclear: 'text-muted' };
+
+/**
+ * For experts only: the AI's comparison of each photo with the reference of the same part, and its suggested outcome
+ * with confidence. The expert decides; the AI's track record (agreement with experts) is shown beside it.
+ */
+function AiReviewCard({ requestId, ai, onChange }: { requestId: string; ai: any | null; onChange: () => void }) {
+  const { t, locale } = useI18n();
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  const km = locale === 'km';
+  async function run() {
+    setBusy(true); setErr(null);
+    try { await api.post(`/api/verify/${requestId}/ai-review`); onChange(); } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  }
+  const track = ai?.track;
+  const ok = ai && ai.suggested_outcome;
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  return (
+    <section className="space-y-3 rounded-2xl border border-charcoal/20 bg-surface-card p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-serif text-lg leading-tight">🤖 {t('air.title')}</h2>
+          <p className="text-[11px] text-muted">{t('air.staffOnly')}</p>
+        </div>
+        <button type="button" className="btn-ghost !py-1.5 text-xs" disabled={busy} onClick={run}>{busy ? `… ${t('air.running')}` : ai ? `↻ ${t('air.rerun')}` : `▶ ${t('air.run')}`}</button>
+      </div>
+      {!ai && !busy && <p className="text-sm text-muted">{t('air.none')}</p>}
+      {ai?.error && !ok && <p className="font-mono text-[11px] text-counterfeit">{ai.error}</p>}
+      {ok && (
+        <>
+          <div className="rounded-xl bg-surface-low p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted">{t('air.suggests')}</span>
+              <OutcomeBadge outcome={ai.suggested_outcome} />
+              <span className="font-mono text-sm font-semibold">{pct(ai.confidence ?? 0)}</span>
+            </div>
+            <div className="mt-2 h-1.5 w-full rounded bg-hairline"><div className="h-1.5 rounded bg-gold" style={{ width: pct(ai.confidence ?? 0) }} /></div>
+            {(km ? ai.summary_km : ai.summary_en) && <p className="mt-2 text-sm leading-snug">{km ? (ai.summary_km || ai.summary_en) : ai.summary_en}</p>}
+          </div>
+          <ul className="space-y-1.5">
+            {ai.findings.map((f: any, i: number) => (
+              <li key={i} className="flex gap-2.5 rounded-lg border border-hairline px-3 py-2 text-sm">
+                <span className={`mt-0.5 w-4 shrink-0 text-center font-bold ${FIND_TONE[f.status]}`}>{FIND_ICON[f.status]}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                    <span className="font-semibold">{km ? (f.feature_km || f.feature_en) : f.feature_en}</span>
+                    <span className="font-mono text-[10px] text-muted">{t(`vr.step.${f.step}`)} · {pct(f.confidence)}</span>
+                  </div>
+                  {(km ? f.note_km || f.note_en : f.note_en) && <p className="text-[13px] leading-snug text-muted">{km ? (f.note_km || f.note_en) : f.note_en}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-muted">{ai.model} · {new Date(ai.created_at).toLocaleString()}</p>
+        </>
+      )}
+      {track && (
+        <p className="rounded-lg bg-gold-light px-3 py-2 text-xs">
+          📈 {t('air.track')}: {track.rate == null ? t('air.trackNone') : `${pct(track.rate)} (${track.agree}/${track.n})`}
+        </p>
       )}
       {err && <p className="text-xs text-counterfeit">{err}</p>}
     </section>
