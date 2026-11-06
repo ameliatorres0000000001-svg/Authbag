@@ -33,6 +33,10 @@ import NfcCheck from './pages/NfcCheck.tsx';
 import EntrupyGuide from './pages/EntrupyGuide.tsx';
 import Verify from './pages/Verify.tsx';
 import VerifyRequest from './pages/VerifyRequest.tsx';
+import Trends from './pages/Trends.tsx';
+import Restore from './pages/Restore.tsx';
+import Authenticity from './pages/Authenticity.tsx';
+import Chat from './pages/Chat.tsx';
 
 export interface Me { id: string; email: string; name: string; role: string; locale: 'km' | 'en' }
 /** Stand-in for a visitor who has not signed in: read-only, no id. */
@@ -40,7 +44,10 @@ const GUEST: Me = { id: '', email: '', name: 'Guest', role: 'guest', locale: 'km
 export const MeContext = React.createContext<Me | null>(null);
 
 // Customer-facing sections; inspections, knowledge & rules, Entrupy, audit and settings live in the admin panel.
-const NAV: [string, string][] = [['/', 'dashboard'], ['/datecode', 'datecode'], ['/check', 'check.title'], ['/check/nfc', 'nav.nfc'], ['/verify', 'nav.verify']];
+const NAV: [string, string][] = [
+  ['/', 'dashboard'], ['/trends', 'home.trends'], ['/restore', 'home.restore'], ['/authenticity', 'home.authentic'], ['/chat', 'home.chat'],
+  ['/datecode', 'datecode'], ['/check', 'check.title'], ['/check/nfc', 'nav.nfc'], ['/verify', 'nav.verify'],
+];
 
 /** Hidden entry to the admin panel: 5 taps on the logo within 3 s. Only a shortcut; the server enforces roles. */
 function useSecretTaps(onUnlock: () => void, taps = 5, windowMs = 3000) {
@@ -55,10 +62,10 @@ function useSecretTaps(onUnlock: () => void, taps = 5, windowMs = 3000) {
 // Mobile tab bar: [route, i18n key, 24×24 SVG path]
 const TABS: [string, string, string][] = [
   ['/', 'home', 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z'],
-  ['/datecode', 'datecode', 'M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12M3 4h3M3 20h3M18 4h3M18 20h3'],
+  ['/trends', 'tab.trends', 'M3 17l6-6 4 4 8-8M14 7h7v7'],
   ['/check', 'scan', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8'],
-  ['/check/nfc', 'nav.nfc', 'M6 18a8 8 0 0 1 0-12M9.5 15a4 4 0 0 1 0-6M18 6a8 8 0 0 1 0 12M14.5 9a4 4 0 0 1 0 6'],
-  ['/verify', 'nav.verify', 'M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8.5 14 7 22l5-3 5 3-1.5-8'],
+  ['/chat', 'tab.chat', 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM8.5 12h.01M12 12h.01M15.5 12h.01'],
+  ['/authenticity', 'tab.learn', 'M9 12l2 2 4-4M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z'],
 ];
 const TabIcon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
@@ -91,7 +98,7 @@ export default function App() {
   // guests browse the feed, albums and date codes; checking a bag needs an account
   const guest = me === null;
   const user: Me = me ?? GUEST;
-  const publicPath = loc.pathname === '/' || /^\/(album|posts)\//.test(loc.pathname) || loc.pathname === '/datecode';
+  const publicPath = loc.pathname === '/' || /^\/(album|posts)\//.test(loc.pathname) || ['/datecode', '/trends', '/restore', '/authenticity'].includes(loc.pathname);
   const signOut = async () => { await api.post('/api/auth/logout'); setMe(null); nav('/'); };
 
   return (
@@ -99,7 +106,7 @@ export default function App() {
       <div className="min-h-screen md:flex">
         <aside className="hidden w-60 shrink-0 border-r border-hairline bg-surface-low md:block">
           <div className="px-5 py-5">
-            <Link to="/" onClick={logoTap} className="select-none font-serif text-xl tracking-wide">HENGZ <span className="text-gold">AUTHENTIC</span></Link>
+            <Link to="/" onClick={logoTap} className="flex select-none items-center gap-2 font-serif text-xl tracking-wide"><img src="/icons/icon-192.png" alt="" width={28} height={28} className="rounded-md" />Anajak <span className="text-gold">Secondhand</span></Link>
             <div className="mt-2"><AccountButton me={me} onSignOut={signOut} /></div>
           </div>
           <nav className="flex flex-col px-2 pb-6">
@@ -118,7 +125,7 @@ export default function App() {
           </div>
         </aside>
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-hairline bg-surface/95 px-4 py-3 backdrop-blur md:hidden">
-          <Link to="/" onClick={logoTap} className="select-none font-serif text-lg tracking-wide">HENGZ <span className="text-gold">AUTHENTIC</span></Link>
+          <Link to="/" onClick={logoTap} className="flex select-none items-center gap-2 font-serif text-lg tracking-wide"><img src="/icons/icon-192.png" alt="" width={26} height={26} className="rounded-md" />Anajak <span className="text-gold">Secondhand</span></Link>
           <div className="flex items-center gap-1.5">
             {!isStandalone() && <Link to="/install" aria-label={t('install.open')} className="btn-ghost !px-2 !py-0.5 text-xs">⤓</Link>}
             <AccountButton me={me} onSignOut={signOut} />
@@ -129,6 +136,10 @@ export default function App() {
           {guest && !publicPath ? <SignInGate /> : (
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/trends" element={<Trends />} />
+            <Route path="/restore" element={<Restore />} />
+            <Route path="/authenticity" element={<Authenticity />} />
+            <Route path="/chat" element={<Chat />} />
             <Route path="/posts/:modelId" element={<FolderPosts />} />
             <Route path="/album/:modelId" element={<AlbumView />} />
             <Route path="/inspections" element={<Inspections />} />

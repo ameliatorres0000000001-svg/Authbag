@@ -1,7 +1,7 @@
 {
-  "name": "HENGZ AUTHENTIC",
-  "short_name": "HENGZ",
-  "description": "Learn to read luxury bags: photos with marked points, date codes and serial numbers.",
+  "name": "Anajak Secondhand",
+  "short_name": "Anajak",
+  "description": "AI assistant for second-hand luxury bags: market trends in Thailand, Indonesia and Malaysia, repair lessons, how experts inspect, and an AI chat.",
   "id": "/",
   "start_url": "/?source=pwa",
   "scope": "/",
@@ -11,9 +11,29 @@
   "theme_color": "#131315",
   "lang": "km",
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ]
 }

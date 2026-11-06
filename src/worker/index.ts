@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { parseAiReview, trackRecord } from '../shared/aiReview.ts';
@@ -172,6 +172,7 @@ const PUBLIC_GET = [
   /^\/api\/assets\/[^/]+\/image$/,
   /^\/api\/studio\/assets\/[^/]+$/,
   /^\/api\/contact(\/qr)?$/,
+  /^\/api\/market\/(trends|overview|updates)$/,
 ];
 
 // everything below requires a session (or is a public read above)
@@ -1971,6 +1972,151 @@ app.post('/api/telegram/webhook', async (c) => {
     if (res.meta.changes) await sendText(c.env, '📝 Note saved for the customer.', m.message_id);
   }
   return c.json({ ok: true });
+});
+
+// ───────────────────────── Anajak Secondhand: market data (TH / ID / MY), entered by staff ─────────────────────────
+const COUNTRIES = ['TH', 'ID', 'MY'] as const;
+const countrySchema = z.enum(COUNTRIES);
+const periodSchema = z.string().regex(/^20\d\d-(0[1-9]|1[0-2])$/);
+type TrendRow = { id: string; country: string; period: string; rank: number; brand: string; model: string; movement: string | null;
+  price_min: number | null; price_max: number | null; currency: string | null; note: string | null; source: string; created_at: string };
+
+const latestPeriod = async (env: AppEnv['Bindings'], country: string) =>
+  (await env.DB.prepare('SELECT MAX(period) AS p FROM market_trends WHERE country = ?').bind(country).first<{ p: string | null }>())?.p ?? null;
+const monthRows = async (env: AppEnv['Bindings'], country: string, period: string, limit = 50) =>
+  (await env.DB.prepare(`SELECT id, country, period, rank, brand, model, movement, price_min, price_max, currency, note, source, created_at
+    FROM market_trends WHERE country = ? AND period = ? ORDER BY rank LIMIT ?`).bind(country, period, limit).all<TrendRow>()).results;
+
+/** One country: the chosen (or latest) month's ranking, the months on file, and the year so far built from those months. */
+app.get('/api/market/trends', async (c) => {
+  const country = countrySchema.parse(c.req.query('country') ?? 'TH');
+  const periods = (await c.env.DB.prepare('SELECT DISTINCT period FROM market_trends WHERE country = ? ORDER BY period DESC LIMIT 36').bind(country).all<{ period: string }>()).results.map((r) => r.period);
+  const asked = c.req.query('period');
+  const period = asked && periodSchema.safeParse(asked).success && periods.includes(asked) ? asked : periods[0] ?? null;
+  const rows = period ? await monthRows(c.env, country, period) : [];
+  // the year view: models ranked in the most months of that year, then by their best and average rank
+  const year = period ? period.slice(0, 4) : null;
+  const yearRows = year ? (await c.env.DB.prepare(`SELECT brand, model, COUNT(*) AS months, MIN(rank) AS best_rank, ROUND(AVG(rank), 1) AS avg_rank
+    FROM market_trends WHERE country = ? AND substr(period, 1, 4) = ? GROUP BY lower(brand), lower(model)
+    ORDER BY months DESC, avg_rank ASC, best_rank ASC LIMIT 20`).bind(country, year).all()).results : [];
+  const yearMonths = year ? periods.filter((p) => p.startsWith(year)).length : 0;
+  return c.json({ country, period, periods, rows, year: year ? { year, months: yearMonths, rows: yearRows } : null });
+});
+
+/** Every country's latest month (top N) and the newest market updates: for the install screen and the home screen. */
+app.get('/api/market/overview', async (c) => {
+  const top = Math.min(20, Math.max(1, Number(c.req.query('top')) || 10));
+  const countries = [];
+  for (const country of COUNTRIES) {
+    const period = await latestPeriod(c.env, country);
+    countries.push({ country, period, rows: period ? await monthRows(c.env, country, period, top) : [] });
+  }
+  const updates = (await c.env.DB.prepare('SELECT id, country, title, body, source, created_at FROM market_updates ORDER BY created_at DESC LIMIT 6').all()).results;
+  return c.json({ countries, updates });
+});
+
+app.get('/api/market/updates', async (c) => {
+  const limit = Math.min(50, Math.max(1, Number(c.req.query('limit')) || 20));
+  return c.json({ updates: (await c.env.DB.prepare('SELECT id, country, title, body, source, created_at FROM market_updates ORDER BY created_at DESC LIMIT ?').bind(limit).all()).results });
+});
+
+const trendInput = z.object({
+  rank: z.number().int().min(1).max(50),
+  brand: z.string().trim().min(1).max(80),
+  model: z.string().trim().min(1).max(120),
+  movement: z.enum(['up', 'down', 'same', 'new']).nullable().optional(),
+  price_min: z.number().int().min(0).nullable().optional(),
+  price_max: z.number().int().min(0).nullable().optional(),
+  currency: z.enum(['THB', 'IDR', 'MYR', 'USD']).nullable().optional(),
+  note: z.string().trim().max(500).nullable().optional(),
+}).refine((r) => (r.price_min == null && r.price_max == null) || !!r.currency, { message: 'currency_required', path: ['currency'] })
+  .refine((r) => r.price_min == null || r.price_max == null || r.price_max >= r.price_min, { message: 'price_range', path: ['price_max'] });
+
+/** Save one country's ranking for one month (replaces what was on file for that month). */
+app.post('/api/admin/market/trends', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ country: countrySchema, period: periodSchema, source: z.string().trim().min(3).max(300), rows: z.array(trendInput).min(1).max(50) }));
+  const ranks = new Set(b.rows.map((r) => r.rank));
+  if (ranks.size !== b.rows.length) return c.json({ error: 'duplicate_rank' }, 400);
+  const me = c.get('user');
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM market_trends WHERE country = ? AND period = ?').bind(b.country, b.period),
+    ...b.rows.map((r) => c.env.DB.prepare(`INSERT INTO market_trends (id, country, period, rank, brand, model, movement, price_min, price_max, currency, note, source, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(uid('mt_'), b.country, b.period, r.rank, r.brand, r.model, r.movement ?? null,
+      r.price_min ?? null, r.price_max ?? null, r.currency ?? null, r.note || null, b.source, me.id)),
+  ]);
+  await audit(c.env, me.id, 'market.trends_saved', 'market_trends', `${b.country}:${b.period}`, { rows: b.rows.length });
+  return c.json({ ok: true, rows: b.rows.length });
+});
+
+app.delete('/api/admin/market/trends', need(ADMINS), async (c) => {
+  const country = countrySchema.parse(c.req.query('country')); const period = periodSchema.parse(c.req.query('period'));
+  const r = await c.env.DB.prepare('DELETE FROM market_trends WHERE country = ? AND period = ?').bind(country, period).run();
+  await audit(c.env, c.get('user').id, 'market.trends_deleted', 'market_trends', `${country}:${period}`);
+  return c.json({ ok: true, deleted: r.meta.changes });
+});
+
+app.post('/api/admin/market/updates', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ country: countrySchema.nullable().optional(), title: z.string().trim().min(3).max(160), body: z.string().trim().max(2000).nullable().optional(), source: z.string().trim().min(3).max(300) }));
+  const id = uid('mu_');
+  await c.env.DB.prepare('INSERT INTO market_updates (id, country, title, body, source, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(id, b.country ?? null, b.title, b.body || null, b.source, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'market.update_posted', 'market_updates', id);
+  return c.json({ ok: true, id });
+});
+
+app.delete('/api/admin/market/updates/:id', need(ADMINS), async (c) => {
+  await c.env.DB.prepare('DELETE FROM market_updates WHERE id = ?').bind(c.req.param('id')).run();
+  await audit(c.env, c.get('user').id, 'market.update_deleted', 'market_updates', c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+// ───────────────────────── Anajak Secondhand: AI assistant chat (signed-in users) ─────────────────────────
+const chatDay = () => new Date().toISOString().slice(0, 10);
+
+/** Staff-entered market data as plain text for the assistant (latest month per country + newest updates). */
+async function marketContext(env: AppEnv['Bindings']): Promise<string> {
+  const out: string[] = [];
+  for (const country of COUNTRIES) {
+    const period = await latestPeriod(env, country);
+    if (!period) continue;
+    const rows = await monthRows(env, country, period, 10);
+    out.push(`${country} ${period}: ` + rows.map((r) => `#${r.rank} ${r.brand} ${r.model}${r.price_min != null || r.price_max != null ? ` (${r.price_min ?? '?'}–${r.price_max ?? '?'} ${r.currency ?? ''})` : ''}`).join('; ') + ` [source: ${rows[0]?.source ?? ''}]`);
+  }
+  const ups = (await env.DB.prepare('SELECT country, title, body, source, created_at FROM market_updates ORDER BY created_at DESC LIMIT 5').all<Record<string, string | null>>()).results;
+  for (const u of ups) out.push(`Update ${u.created_at?.slice(0, 10)} ${u.country ?? ''}: ${u.title}${u.body ? ` — ${String(u.body).slice(0, 300)}` : ''} [source: ${u.source}]`);
+  return out.join('\n');
+}
+
+app.get('/api/chat/status', async (c) => {
+  const me = c.get('user');
+  const limit = await getSettingNumber(c.env, 'ai_chat_daily_limit', 30);
+  const used = (await c.env.DB.prepare('SELECT n FROM ai_chat_usage WHERE user_id = ? AND day = ?').bind(me.id, chatDay()).first<{ n: number }>())?.n ?? 0;
+  return c.json({ configured: aiConfigured(c.env), limit, used });
+});
+
+app.post('/api/chat', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const b = await parse(c, z.object({ messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(4000) })).min(1).max(30) }));
+  if (b.messages[b.messages.length - 1].role !== 'user') return c.json({ error: 'invalid_input' }, 400);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const limit = await getSettingNumber(c.env, 'ai_chat_daily_limit', 30);
+  const day = chatDay();
+  // count first, so parallel requests cannot go over the daily limit
+  const res = await c.env.DB.prepare(`INSERT INTO ai_chat_usage (user_id, day, n) VALUES (?, ?, 1)
+    ON CONFLICT (user_id, day) DO UPDATE SET n = n + 1 WHERE n < ?`).bind(me.id, day, limit).run();
+  if (!res.meta.changes) return c.json({ error: 'chat_limit', limit }, 429);
+  // the conversation must start with the user; keep the last turns only
+  const turns = b.messages.slice(-12);
+  while (turns.length && turns[0].role !== 'user') turns.shift();
+  try {
+    const reply = await chatAssistant(c.env, turns, reqLang(c), await marketContext(c.env));
+    return c.json({ reply: reply.trim() });
+  } catch (e) {
+    await c.env.DB.prepare('UPDATE ai_chat_usage SET n = MAX(n - 1, 0) WHERE user_id = ? AND day = ?').bind(me.id, day).run();
+    const m = String((e as Error).message);
+    return c.json({ error: m === 'ai_refused' ? 'ai_refused' : 'ai_failed' }, 502);
+  }
 });
 
 app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404));

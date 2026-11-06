@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n.tsx';
 import LangPicker from '../LangPicker.tsx';
 import { isIos, isStandalone, markInstallSeen, useInstallPrompt } from '../pwa.ts';
+import { api } from '../api.ts';
+import { COUNTRIES, TrendTable, type Overview } from '../Market.tsx';
 
-// Gold accents from design-reference/stitch/hengz_pwa_install, on a deep-space background
+// Gold accents from design-reference/stitch/hengz_pwa_install, on a deep-space background (Anajak Secondhand)
 const C = { card: '#15131f', deep: '#0b0a14', text: '#ece8f2', soft: '#cfc6dc', gold: '#f2ca50', gold2: '#d4af37' };
 
 // simple platform marks (Android robot head, Apple)
@@ -15,13 +17,23 @@ const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
 );
 
-/** Simple install screen on a black background: native prompt where the browser offers one, otherwise iPhone / Android steps. */
+/**
+ * Anajak Secondhand install screen on a black background: logo and name, the native install prompt where the
+ * browser offers one (otherwise iPhone / Android steps), and one "trending" table per country (TH, ID, MY)
+ * from the staff-entered market data — "no data" until a month is entered.
+ */
 export default function Install() {
   const { t, locale } = useI18n();
   const nav = useNavigate();
   const { canPrompt, prompt } = useInstallPrompt();
   const [guide, setGuide] = useState<null | 'ios' | 'android'>(null);
   const installed = isStandalone();
+  const [market, setMarket] = useState<Overview | null>(null);
+  useEffect(() => {
+    let on = true;
+    api.get<Overview>('/api/market/overview?top=5').then((r) => on && setMarket(r)).catch(() => on && setMarket({ countries: [], updates: [] }));
+    return () => { on = false; };
+  }, []);
   // letter-spacing breaks Khmer and Thai clusters
   const track = locale === 'km' || locale === 'th' ? '' : 'tracking-[0.15em]';
 
@@ -35,20 +47,20 @@ export default function Install() {
   return (
     <div className="relative min-h-[100dvh] overflow-hidden" style={{ background: '#000', color: C.text }}>
       <Galaxy />
-      <div className="relative mx-auto flex min-h-[100dvh] max-w-md flex-col px-6 pb-8 pt-4">
+      <div className="relative mx-auto flex min-h-[100dvh] max-w-md flex-col px-4 pb-4 pt-4 sm:px-6 lg:max-w-5xl">
         <div className="flex justify-end"><LangPicker dark /></div>
 
-        <div className="flex flex-1 flex-col items-center justify-center text-center">
-          <img src="/icons/icon-192.png" alt="" width={104} height={104} className="rounded-[24px]"
+        <div className="mx-auto flex w-full max-w-md flex-col items-center pt-4 text-center">
+          <img src="/icons/icon-192.png" alt="Anajak Secondhand" width={104} height={104} className="rounded-[24px]"
             style={{ boxShadow: '0 0 0 1px rgba(242,202,80,0.35), 0 0 70px rgba(242,202,80,0.35)' }} />
           {/* one type scale: 12 kicker · 30 brand · 16 subtitle · 15 rows */}
           <div className="mt-7 text-[12px] font-semibold uppercase" style={{ color: C.gold, letterSpacing: track ? '0.3em' : undefined }}>{t('install.welcome')}</div>
           <h1 className="mt-2 font-serif text-[30px] font-medium leading-tight tracking-[0.04em]"
-            style={{ color: '#f6ecd0', textShadow: '0 0 24px rgba(242,202,80,0.25)' }}>HENGZ <span style={{ color: C.gold }}>AUTHENTIC</span></h1>
+            style={{ color: '#f6ecd0', textShadow: '0 0 24px rgba(242,202,80,0.25)' }}>ANAJAK <span style={{ color: C.gold }}>SECONDHAND</span></h1>
           <p className="mt-2 max-w-[19rem] text-[16px] leading-snug" style={{ color: C.soft }}>{t('install.sub')}</p>
           <div className="mx-auto my-5 h-px w-14" style={{ background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />
           <ul className="w-full max-w-[20rem] space-y-2.5 text-left">
-            {([['M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 15.4 7.2 17.9l.9-5.4L4.2 8.7l5.4-.8z', 'install.row1'], ['M9 12l2 2 4-4M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z', 'install.row2']] as const).map(([d, k]) => (
+            {([['M3 17l6-6 4 4 8-8M14 7h7v7', 'install.row1'], ['M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM8.5 12h.01M12 12h.01M15.5 12h.01', 'install.row2']] as const).map(([d, k]) => (
               <li key={k} className="flex items-center gap-3 rounded-2xl px-4 py-3 backdrop-blur" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: 'rgba(242,202,80,0.14)', color: C.gold }}><Icon d={d} /></span>
                 <span className="text-[15px] leading-snug" style={{ color: C.text }}>{t(k)}</span>
@@ -73,9 +85,29 @@ export default function Install() {
           </div>
         </div>
 
-        <div className="space-y-3">
+        {/* trending second-hand models: one table per country */}
+        <section className="mt-8 w-full" aria-labelledby="trending-h">
+          <div className="mb-3 text-center">
+            <div className="text-[12px] font-semibold uppercase" style={{ color: C.gold, letterSpacing: track ? '0.3em' : undefined }}>🔥 {t('install.trending')}</div>
+            <h2 id="trending-h" className="mt-1 text-[15px]" style={{ color: C.soft }}>{t('install.trendingSub')}</h2>
+          </div>
+          <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {COUNTRIES.map((cc) => {
+              const m = market?.countries.find((x) => x.country === cc);
+              return (
+                <div key={cc} className="w-[85%] shrink-0 snap-center sm:w-[70%] lg:w-auto">
+                  {market ? <TrendTable dark compact country={cc} period={m?.period ?? null} rows={m?.rows ?? []} />
+                    : <div className="h-64 animate-pulse rounded-2xl" style={{ background: 'rgba(255,255,255,0.06)' }} />}
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-center text-[11px]" style={{ color: '#8f889c' }}>{t('market.info')}</p>
+        </section>
+
+        <div className="sticky bottom-0 -mx-4 mt-6 px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-3 sm:-mx-6 sm:px-6" style={{ background: 'linear-gradient(transparent, #000 35%)' }}>
           {/* most people look around first: the website is the main action */}
-          <button type="button" onClick={continueWeb} className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-bold text-[#3c2f00] ${track}`}
+          <button type="button" onClick={continueWeb} className={`mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-bold text-[#3c2f00] ${track}`}
             style={{ background: `linear-gradient(135deg, ${C.gold}, ${C.gold2})`, boxShadow: '0 10px 40px rgba(242,202,80,0.25)' }}>
             {t('install.continue')} →
           </button>
@@ -130,7 +162,7 @@ function Galaxy() {
     ['✦', '12%', '22px', 26, 0], ['✦', '78%', '16px', 22, 4], ['✦', '64%', '18px', 30, 14], ['✦', '88%', '12px', 24, 2],
   ];
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
       <style>{`
         @keyframes hz-glow { from { opacity: .55; transform: scale(.95) } to { opacity: 1; transform: scale(1.05) } }
         @keyframes hz-twinkle { 0%,100% { opacity: .4 } 50% { opacity: 1 } }

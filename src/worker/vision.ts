@@ -465,3 +465,53 @@ export async function assessVerification(env: Env, ctx: {
   ].filter(Boolean).join('\n');
   return callVision(env, system, images, user, 16000, 'high', pointsModel(env) ?? undefined);
 }
+
+export interface ChatTurn { role: 'user' | 'assistant'; content: string }
+
+/**
+ * Anajak Secondhand AI assistant: answers questions about second-hand luxury bags (market, care, repair,
+ * materials, history, how experts inspect). Teaching only: it never says whether a particular bag is
+ * genuine or counterfeit, and only quotes market figures from the staff-entered data it is given.
+ */
+export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, marketContext: string): Promise<string> {
+  const provider = aiProvider(env);
+  const model = aiModel(env);
+  if (!provider || !model) throw new Error('ai_not_configured');
+  const system = [
+    'You are the Anajak Secondhand assistant, helping second-hand luxury bag sellers and buyers in Southeast Asia (Cambodia, Thailand, Indonesia, Malaysia).',
+    'You teach and explain: brands and models, materials and hardware, how date codes and serial systems work, how experts inspect a bag, care, cleaning, edge paint and leather restoration, pricing logic and the second-hand market.',
+    'Hard rules:',
+    '1. Never state, imply or estimate whether a specific bag, photo or listing is authentic, genuine, real, fake, counterfeit or a replica, and never give a probability or percentage. If asked, explain which points experts look at and suggest sending the bag to the Anajak Secondhand expert verification (Certificate tab), where a named human expert answers.',
+    '2. Never invent market numbers, rankings, prices or statistics. For current market facts, use only the "Market data" below; if it has nothing relevant, say there is no data yet and explain general factors instead.',
+    '3. For repair and chemical work (dyes, solvents, edge paint), give safety notes and suggest testing on a hidden spot first; say when a professional should do it.',
+    '4. Never help make, label or sell counterfeit goods, or remove or alter serial numbers, date codes or brand marks.',
+    `Answer in ${LANG_NAME[lang]} unless the user writes in another language, then use theirs. Keep brand names, model names and codes as written. Be concise and practical; use short lists when steps help.`,
+    '',
+    'Market data (entered by Anajak Secondhand staff, with sources):',
+    marketContext || '(no data yet)',
+  ].join('\n');
+  if (provider === 'gemini') {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: turns.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] })),
+      }),
+    });
+    if (!res.ok) throw new Error(`ai_http_${res.status}`);
+    const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+  }
+  try {
+    const msg = await anthropicClient(env).messages.create({
+      model, max_tokens: 8000, output_config: { effort: 'low' }, system,
+      messages: turns.map((t) => ({ role: t.role, content: t.content })),
+    });
+    if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
+    return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
+  } catch (e) {
+    if (e instanceof Anthropic.APIError) { console.error(`ai chat: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
+    throw e;
+  }
+}
