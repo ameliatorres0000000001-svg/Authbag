@@ -1,6 +1,6 @@
-// HENGZ AUTHENTIC service worker: makes the app installable and keeps the shell available offline.
+// Anajak Secondhand service worker: makes the app installable and keeps the shell available offline.
 // API calls and photos are never cached here, so every reading always comes from the server.
-const SHELL = 'hengz-shell-v2';
+const SHELL = 'hengz-shell-v3';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])).then(() => self.skipWaiting()));
@@ -27,7 +27,7 @@ self.addEventListener('fetch', (e) => {
 
 // Expert notifications (Web Push): show them with sound/vibration, open the request when tapped.
 self.addEventListener('push', (e) => {
-  let n = { title: 'HENGZ AUTHENTIC', body: '', url: '/', tag: undefined };
+  let n = { title: 'Anajak Secondhand', body: '', url: '/', tag: undefined };
   try { n = { ...n, ...e.data.json() }; } catch { /* plain or empty message */ }
   e.waitUntil(self.registration.showNotification(n.title, {
     body: n.body, tag: n.tag, renotify: !!n.tag, requireInteraction: true,
