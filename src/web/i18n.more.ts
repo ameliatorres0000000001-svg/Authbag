@@ -54,7 +54,7 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'pt.photo': { vi: 'Trong ảnh này:', th: 'ในภาพนี้:', id: 'Di foto ini:' },
   'lang.label': { vi: 'Ngôn ngữ', th: 'ภาษา', id: 'Bahasa' },
   'install.welcome': { vi: 'Chào mừng đến với', th: 'ยินดีต้อนรับสู่', id: 'Selamat datang di' },
-  'install.sub': { vi: 'Trợ lý AI cho người bán túi hàng hiệu đã qua sử dụng', th: 'ผู้ช่วย AI สำหรับผู้ขายกระเป๋าแบรนด์เนมมือสอง', id: 'Asisten AI untuk penjual tas branded bekas' },
+  'install.sub': { vi: 'Người bạn đồng hành cho người bán túi hàng hiệu cũ', th: 'คู่หูที่ไว้ใจได้ของผู้ขายกระเป๋าแบรนด์เนมมือสอง', id: 'Pendamping tepercaya penjual tas branded bekas' },
   'install.row1': { vi: 'Theo dõi mẫu túi hot ở Thái Lan, Indonesia và Malaysia', th: 'ติดตามรุ่นยอดนิยมในไทย อินโดนีเซีย และมาเลเซีย', id: 'Ikuti model tren di Thailand, Indonesia, dan Malaysia' },
   'install.open': { vi: 'Cài ứng dụng', th: 'ติดตั้งแอป', id: 'Pasang aplikasi' },
   'install.tagline': { vi: 'Trí tuệ xác thực xa xỉ', th: 'ปัญญาการตรวจสอบสินค้าหรู', id: 'Kecerdasan autentikasi barang mewah' },
@@ -163,4 +163,9 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'market.why': { vi: 'Vì sao bán chạy', th: 'ทำไมขายดี', id: 'Kenapa laris' },
   'market.noReason': { vi: 'Chưa có lý do', th: 'ยังไม่มีเหตุผล', id: 'Belum ada alasan' },
   'market.top5': { vi: 'Top 5 theo quốc gia', th: 'Top 5 ตามประเทศ', id: 'Top 5 per negara' },
+  'install.topTitle': { vi: 'Bán chạy tháng này', th: 'ขายดีเดือนนี้', id: 'Terlaris bulan ini' },
+  'install.installTitle': { vi: 'Cài ứng dụng lên điện thoại', th: 'ติดตั้งแอปบนโทรศัพท์', id: 'Pasang aplikasi di ponsel' },
+  'install.go': { vi: 'Vào ANAJAK SECONDHAND', th: 'เข้าสู่ ANAJAK SECONDHAND', id: 'Masuk ke ANAJAK SECONDHAND' },
+  'market.topBrand': { vi: 'Thương hiệu hàng đầu', th: 'แบรนด์อันดับหนึ่ง', id: 'Merek teratas' },
+  'market.modelStyle': { vi: 'Mẫu / kiểu', th: 'รุ่น / สไตล์', id: 'Model / gaya' },
 };
