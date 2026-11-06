@@ -4,7 +4,7 @@ import { useI18n } from '../i18n.tsx';
 import LangPicker from '../LangPicker.tsx';
 import { isIos, isStandalone, markInstallSeen, useInstallPrompt } from '../pwa.ts';
 import { api } from '../api.ts';
-import { COUNTRIES, HotPicks, TrendTable, type Overview } from '../Market.tsx';
+import { COUNTRIES, CountrySpotlight, type Overview } from '../Market.tsx';
 
 // Gold accents from design-reference/stitch/hengz_pwa_install, on a deep-space background (Anajak Secondhand)
 const C = { card: '#15131f', deep: '#0b0a14', text: '#ece8f2', soft: '#cfc6dc', gold: '#f2ca50', gold2: '#d4af37' };
@@ -31,7 +31,7 @@ export default function Install() {
   const [market, setMarket] = useState<Overview | null>(null);
   useEffect(() => {
     let on = true;
-    api.get<Overview>('/api/market/overview?top=5').then((r) => on && setMarket(r)).catch(() => on && setMarket({ countries: [], updates: [] }));
+    api.get<Overview>('/api/market/overview?top=1').then((r) => on && setMarket(r)).catch(() => on && setMarket({ countries: [], updates: [] }));
     return () => { on = false; };
   }, []);
   // letter-spacing breaks Khmer and Thai clusters
@@ -67,11 +67,17 @@ export default function Install() {
             <div className="text-[12px] font-semibold uppercase" style={{ color: C.gold, letterSpacing: track ? '0.3em' : undefined }}>🔥 {t('install.trending')}</div>
             <h2 id="hot-h" className="mt-1 font-serif text-[20px]" style={{ color: '#f6ecd0' }}>{t('market.hotTitle')}</h2>
           </div>
-          <HotPicks dark countries={market?.countries ?? null} />
+          <div className="grid gap-4 lg:grid-cols-3">
+            {COUNTRIES.map((cc, i) => {
+              const m = market?.countries.find((x) => x.country === cc);
+              return <CountrySpotlight key={cc} index={i} country={cc} period={m?.period ?? null} top={m?.rows[0]} loading={!market} />;
+            })}
+          </div>
+          <p className="mt-3 text-center text-[11px]" style={{ color: '#8f889c' }}>{t('market.info')}</p>
         </section>
 
         <div className="mx-auto flex w-full max-w-md flex-col items-center text-center">
-          <div className="mt-5 w-full max-w-[20rem]">
+          <div className="mt-6 w-full max-w-[20rem]">
             {installed ? (
               <p className="text-center text-xs" style={{ color: C.gold }}>✓ {t('install.installed')}</p>
             ) : (
@@ -88,26 +94,6 @@ export default function Install() {
             )}
           </div>
         </div>
-
-        {/* trending second-hand models: one table per country */}
-        <section className="mt-8 w-full" aria-labelledby="trending-h">
-          <div className="mb-3 text-center">
-            <div className="text-[12px] font-semibold uppercase" style={{ color: C.gold, letterSpacing: track ? '0.3em' : undefined }}>{t('market.top5')}</div>
-            <h2 id="trending-h" className="mt-1 text-[15px]" style={{ color: C.soft }}>{t('install.trendingSub')}</h2>
-          </div>
-          <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {COUNTRIES.map((cc) => {
-              const m = market?.countries.find((x) => x.country === cc);
-              return (
-                <div key={cc} className="w-[85%] shrink-0 snap-center sm:w-[70%] lg:w-auto">
-                  {market ? <TrendTable dark compact country={cc} period={m?.period ?? null} rows={m?.rows ?? []} />
-                    : <div className="h-64 animate-pulse rounded-2xl" style={{ background: 'rgba(255,255,255,0.06)' }} />}
-                </div>
-              );
-            })}
-          </div>
-          <p className="mt-2 text-center text-[11px]" style={{ color: '#8f889c' }}>{t('market.info')}</p>
-        </section>
 
         <div className="sticky bottom-0 -mx-4 mt-6 px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-3 sm:-mx-6 sm:px-6" style={{ background: 'linear-gradient(transparent, #000 35%)' }}>
           {/* most people look around first: the website is the main action */}
@@ -147,39 +133,65 @@ export default function Install() {
 }
 
 /**
- * Black night-sky background: a soft breathing gold glow behind the logo, twinkling stars and a few
- * slowly rising gold sparkles. Pure CSS; motion stops for users who prefer reduced motion.
+ * Live galaxy background: drifting violet / blue / gold nebula clouds, three layers of stars that twinkle and
+ * slowly drift (parallax), shooting stars every few seconds, a breathing gold glow behind the logo and gold
+ * sparkles rising. Pure CSS, fixed behind the scrolling page; all motion stops for users who prefer reduced motion.
+ * Also defines the keyframes used by the country cards (hz-spin, hz-pulse, hz-rise-in).
  */
 function Galaxy() {
   const stars = (n: number, size: number, seed: number) => {
     let x = seed;
     const r = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
-    return Array.from({ length: n }, () => `radial-gradient(${size}px ${size}px at ${Math.round(r() * 1000) / 10}% ${Math.round(r() * 1000) / 10}%, rgba(255,255,255,${(0.5 + r() * 0.5).toFixed(2)}), transparent)`).join(',');
+    return Array.from({ length: n }, () => {
+      const warm = r() < 0.18; // a few gold-tinted stars
+      return `radial-gradient(${size}px ${size}px at ${Math.round(r() * 1000) / 10}% ${Math.round(r() * 1000) / 10}%, ${warm ? `rgba(255,226,150,${(0.6 + r() * 0.4).toFixed(2)})` : `rgba(255,255,255,${(0.45 + r() * 0.55).toFixed(2)})`}, transparent)`;
+    }).join(',');
   };
-  // black night sky: one soft gold glow behind the logo that slowly breathes
-  const blobs: [string, string, string, string, string][] = [
-    // colour, size, left, top, animation
-    ['rgba(242,202,80,0.22)', '80vmin', 'calc(50% - 40vmin)', '4%', 'hz-glow 9s ease-in-out infinite alternate'],
+  // nebula clouds: colour, size, left, top, animation
+  const clouds: [string, string, string, string, string][] = [
+    ['rgba(242,202,80,0.20)', '80vmin', 'calc(50% - 40vmin)', '0%', 'hz-glow 9s ease-in-out infinite alternate'],
+    ['rgba(108,64,170,0.30)', '95vmin', '-35vmin', '28%', 'hz-drift 38s ease-in-out infinite alternate'],
+    ['rgba(30,64,160,0.28)', '90vmin', '45%', '55%', 'hz-drift 46s ease-in-out -12s infinite alternate-reverse'],
+    ['rgba(190,70,120,0.16)', '70vmin', '55%', '8%', 'hz-drift 52s ease-in-out -20s infinite alternate'],
   ];
-  const floaters: [string, string, string, number, number][] = [
-    // shape, left, size, duration s, delay s
-    ['✦', '12%', '22px', 26, 0], ['✦', '78%', '16px', 22, 4], ['✦', '64%', '18px', 30, 14], ['✦', '88%', '12px', 24, 2],
+  // star layers: count, size, seed, drift seconds (slower = farther), twinkle
+  const layers: [number, number, number, number, string][] = [
+    [110, 1, 7, 240, 'hz-twinkle 5s ease-in-out infinite'],
+    [45, 1.6, 13, 160, 'hz-twinkle 7s ease-in-out -2s infinite reverse'],
+    [16, 2.4, 29, 100, 'hz-twinkle 4s ease-in-out -1s infinite'],
   ];
+  // shooting stars: top, left, cycle seconds, delay seconds
+  const meteors: [string, string, number, number][] = [['8%', '70%', 9, 1.5], ['22%', '95%', 13, 6], ['40%', '60%', 17, 11]];
+  const sparkles: [string, string, number, number][] = [['12%', '22px', 26, 0], ['78%', '16px', 22, 4], ['64%', '18px', 30, 14], ['88%', '12px', 24, 2], ['35%', '14px', 28, 9]];
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+    <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden" style={{ background: 'radial-gradient(130% 90% at 50% 0%, #120c22 0%, #06050c 45%, #000 100%)' }}>
       <style>{`
         @keyframes hz-glow { from { opacity: .55; transform: scale(.95) } to { opacity: 1; transform: scale(1.05) } }
-        @keyframes hz-twinkle { 0%,100% { opacity: .4 } 50% { opacity: 1 } }
+        @keyframes hz-drift { from { transform: translate(0,0) scale(1) } to { transform: translate(12vmin,-8vmin) scale(1.15) } }
+        @keyframes hz-twinkle { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+        @keyframes hz-stars { from { transform: translateY(0) } to { transform: translateY(-100vh) } }
+        @keyframes hz-meteor { 0% { transform: translate(0,0) rotate(-35deg); opacity: 0 } 2% { opacity: 1 } 9% { transform: translate(-60vmin,42vmin) rotate(-35deg); opacity: 0 } 100% { opacity: 0 } }
         @keyframes hz-rise { 0% { transform: translateY(0) rotate(0deg); opacity: 0 } 10% { opacity: .55 } 90% { opacity: .55 } 100% { transform: translateY(-110vh) rotate(180deg); opacity: 0 } }
-        @media (prefers-reduced-motion: reduce) { .hz-anim { animation: none !important } }
+        @keyframes hz-spin { to { transform: rotate(360deg) } }
+        @keyframes hz-pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.07) } }
+        @keyframes hz-in { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+        .hz-rise-in { animation: hz-in .7s cubic-bezier(.2,.7,.2,1) both }
+        @media (prefers-reduced-motion: reduce) { .hz-anim, .hz-rise-in { animation: none !important } }
       `}</style>
-      {blobs.map(([c, size, left, top, anim], i) => (
-        <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 65%)`, filter: 'blur(40px)', animation: anim }} />
+      {clouds.map(([c, size, left, top, anim], i) => (
+        <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 65%)`, filter: 'blur(50px)', animation: anim }} />
       ))}
-      <div className="hz-anim absolute inset-0" style={{ backgroundImage: stars(90, 1, 7), animation: 'hz-twinkle 5s ease-in-out infinite' }} />
-      <div className="hz-anim absolute inset-0" style={{ backgroundImage: stars(30, 2, 13), animation: 'hz-twinkle 8s ease-in-out infinite reverse' }} />
-      {floaters.map(([ch, left, size, dur, delay], i) => (
-        <span key={i} className="hz-anim absolute bottom-[-40px]" style={{ left, fontSize: size, color: '#f2ca50', textShadow: '0 0 12px rgba(242,202,80,0.6)', animation: `hz-rise ${dur}s linear ${delay}s infinite`, opacity: 0 }}>{ch}</span>
+      {layers.map(([n, size, seed, drift, tw], i) => (
+        // 200vh tall, the same star tile twice: moving it up by 100vh loops without a seam
+        <div key={i} className="hz-anim absolute inset-x-0 top-0 h-[200vh]" style={{ animation: `hz-stars ${drift}s linear infinite` }}>
+          <div className="hz-anim h-full w-full" style={{ backgroundImage: stars(n, size, seed), backgroundSize: '100% 100vh', animation: tw }} />
+        </div>
+      ))}
+      {meteors.map(([top, left, cycle, delay], i) => (
+        <span key={i} className="hz-anim absolute h-px w-[22vmin]" style={{ top, left, opacity: 0, background: 'linear-gradient(90deg, rgba(255,255,255,0.95), rgba(242,202,80,0.5) 30%, transparent)', boxShadow: '0 0 8px rgba(255,255,255,0.6)', animation: `hz-meteor ${cycle}s ease-out ${delay}s infinite` }} />
+      ))}
+      {sparkles.map(([left, size, dur, delay], i) => (
+        <span key={i} className="hz-anim absolute bottom-[-40px]" style={{ left, fontSize: size, color: '#f2ca50', textShadow: '0 0 12px rgba(242,202,80,0.6)', animation: `hz-rise ${dur}s linear ${delay}s infinite`, opacity: 0 }}>✦</span>
       ))}
     </div>
   );
