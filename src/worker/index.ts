@@ -2080,7 +2080,7 @@ async function marketContext(env: AppEnv['Bindings']): Promise<string> {
     const period = await latestPeriod(env, country);
     if (!period) continue;
     const rows = await monthRows(env, country, period, 10);
-    out.push(`${country} ${period}: ` + rows.map((r) => `#${r.rank} ${r.brand} ${r.model}${r.price_min != null || r.price_max != null ? ` (${r.price_min ?? '?'}–${r.price_max ?? '?'} ${r.currency ?? ''})` : ''}`).join('; ') + ` [source: ${rows[0]?.source ?? ''}]`);
+    out.push(`${country} ${period}: ` + rows.map((r) => `#${r.rank} ${r.brand} ${r.model}${r.price_min != null || r.price_max != null ? ` (${r.price_min ?? '?'}–${r.price_max ?? '?'} ${r.currency ?? ''})` : ''}${r.note ? ` — why it sells: ${r.note}` : ''}`).join('; ') + ` [source: ${rows[0]?.source ?? ''}]`);
   }
   const ups = (await env.DB.prepare('SELECT country, title, body, source, created_at FROM market_updates ORDER BY created_at DESC LIMIT 5').all<Record<string, string | null>>()).results;
   for (const u of ups) out.push(`Update ${u.created_at?.slice(0, 10)} ${u.country ?? ''}: ${u.title}${u.body ? ` — ${String(u.body).slice(0, 300)}` : ''} [source: ${u.source}]`);

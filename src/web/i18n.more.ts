@@ -159,4 +159,8 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'chat.title': { vi: 'Trợ lý AI', th: 'ผู้ช่วย AI', id: 'Asisten AI' },
   'chat.placeholder': { vi: 'Nhập câu hỏi…', th: 'พิมพ์คำถามของคุณ…', id: 'Ketik pertanyaan Anda…' },
   'chat.send': { vi: 'Gửi', th: 'ส่ง', id: 'Kirim' },
+  'market.hotTitle': { vi: 'Bán chạy nhất tháng này', th: 'ขายดีที่สุดเดือนนี้', id: 'Terlaris bulan ini' },
+  'market.why': { vi: 'Vì sao bán chạy', th: 'ทำไมขายดี', id: 'Kenapa laris' },
+  'market.noReason': { vi: 'Chưa có lý do', th: 'ยังไม่มีเหตุผล', id: 'Belum ada alasan' },
+  'market.top5': { vi: 'Top 5 theo quốc gia', th: 'Top 5 ตามประเทศ', id: 'Top 5 per negara' },
 };

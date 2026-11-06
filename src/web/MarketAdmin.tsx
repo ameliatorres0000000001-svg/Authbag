@@ -93,7 +93,7 @@ export default function MarketAdmin() {
       <Field label={t('madm.source')}><input className="input" value={source} maxLength={300} onChange={(e) => setSource(e.target.value)} /></Field>
       <Field label={t('madm.rows')}>
         <textarea className="input min-h-[160px] font-mono text-xs" value={lines} onChange={(e) => setLines(e.target.value)}
-          placeholder={'brand | model | min | max | up/down/same/new | note'} />
+          placeholder={'brand | model | min | max | up/down/same/new | why it sells'} />
       </Field>
       <p className="text-xs text-muted">{t('madm.help')}</p>
       <div className="flex flex-wrap gap-2">

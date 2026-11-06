@@ -86,3 +86,68 @@ export function TrendTable({ country, period, rows, dark, showSource = true, com
     </div>
   );
 }
+
+/**
+ * "Best sellers this month" spotlight: one card per country with its #1 model, the reason it sells
+ * (the note staff entered with the ranking) and #2–#3 underneath. Empty month → "no data".
+ */
+export function HotPicks({ countries, dark }: { countries: Overview['countries'] | null; dark?: boolean }) {
+  const { t, locale } = useI18n();
+  const card = dark ? 'border-[rgba(242,202,80,0.28)] bg-[linear-gradient(160deg,rgba(242,202,80,0.14),rgba(255,255,255,0.04)_45%,rgba(255,255,255,0.03))]' : 'border-hairline bg-surface-card';
+  const sub = dark ? 'text-[#a9a2b6]' : 'text-muted';
+  const strong = dark ? 'text-[#f6ecd0]' : 'text-charcoal';
+  const gold = dark ? 'text-[#f2ca50]' : 'text-gold';
+  const line = dark ? 'border-white/10' : 'border-hairline';
+  return (
+    <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {COUNTRIES.map((cc) => {
+        const m = countries?.find((x) => x.country === cc);
+        const [top, ...rest] = m?.rows ?? [];
+        return (
+          <article key={cc} className={`relative flex w-[85%] shrink-0 snap-center flex-col overflow-hidden rounded-2xl border p-4 text-left sm:w-[70%] lg:w-auto ${card}`}>
+            {!countries ? <div className="h-48 animate-pulse rounded-xl bg-white/5" /> : (
+              <>
+                <header className="flex items-center justify-between gap-2">
+                  <span className={`flex items-center gap-2 text-sm font-semibold ${strong}`}><span className="text-lg leading-none" aria-hidden>{FLAG[cc]}</span>{t(`market.country.${cc}`)}</span>
+                  <span className={`text-[11px] ${sub}`}>{m?.period ? monthLabel(m.period, locale) : ''}</span>
+                </header>
+                {!top ? <p className={`py-10 text-center text-sm ${sub}`}>{t('noData')}</p> : (
+                  <>
+                    <div className="mt-3 flex items-start gap-3">
+                      <span className={`font-serif text-4xl leading-none ${gold}`}>#1</span>
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-[11px] font-semibold uppercase tracking-wide ${sub}`}>{top.brand}</div>
+                        <div className={`text-lg font-semibold leading-snug ${strong}`}>{top.model}</div>
+                        <div className="mt-0.5 flex items-center gap-2">
+                          <span className={`font-mono text-[11px] ${dark ? 'text-[#cfc6dc]' : 'text-charcoal'}`}>{priceText(top)}</span>
+                          <Movement m={top.movement} dark={dark} />
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-[#ff5a3c] px-2 py-0.5 text-[10px] font-bold uppercase text-white">🔥 Hot</span>
+                    </div>
+                    <div className={`mt-3 rounded-xl p-3 ${dark ? 'bg-black/30' : 'bg-surface-low'}`}>
+                      <div className={`text-[11px] font-semibold ${gold}`}>💡 {t('market.why')}</div>
+                      <p className={`mt-1 text-[13px] leading-snug ${dark ? 'text-[#ece8f2]' : ''}`}>{top.note || <span className={sub}>{t('market.noReason')}</span>}</p>
+                    </div>
+                    {rest.length > 0 && (
+                      <ol className={`mt-3 border-t pt-2 ${line}`}>
+                        {rest.slice(0, 2).map((r) => (
+                          <li key={r.id} className="flex items-center gap-2 py-1">
+                            <span className={`w-6 font-serif ${gold}`}>#{r.rank}</span>
+                            <span className={`min-w-0 flex-1 truncate text-[13px] ${strong}`}><span className={sub}>{r.brand}</span> · {r.model}</span>
+                            <Movement m={r.movement} dark={dark} />
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    <div className={`mt-auto pt-2 text-[10px] ${sub}`}>{t('market.source')}: {top.source}</div>
+                  </>
+                )}
+              </>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  );
+}

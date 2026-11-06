@@ -4,7 +4,7 @@ import { useI18n } from '../i18n.tsx';
 import LangPicker from '../LangPicker.tsx';
 import { isIos, isStandalone, markInstallSeen, useInstallPrompt } from '../pwa.ts';
 import { api } from '../api.ts';
-import { COUNTRIES, TrendTable, type Overview } from '../Market.tsx';
+import { COUNTRIES, HotPicks, TrendTable, type Overview } from '../Market.tsx';
 
 // Gold accents from design-reference/stitch/hengz_pwa_install, on a deep-space background (Anajak Secondhand)
 const C = { card: '#15131f', deep: '#0b0a14', text: '#ece8f2', soft: '#cfc6dc', gold: '#f2ca50', gold2: '#d4af37' };
@@ -59,14 +59,18 @@ export default function Install() {
             style={{ color: '#f6ecd0', textShadow: '0 0 24px rgba(242,202,80,0.25)' }}>ANAJAK <span style={{ color: C.gold }}>SECONDHAND</span></h1>
           <p className="mt-2 max-w-[19rem] text-[16px] leading-snug" style={{ color: C.soft }}>{t('install.sub')}</p>
           <div className="mx-auto my-5 h-px w-14" style={{ background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)` }} />
-          <ul className="w-full max-w-[20rem] space-y-2.5 text-left">
-            {([['M3 17l6-6 4 4 8-8M14 7h7v7', 'install.row1'], ['M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM8.5 12h.01M12 12h.01M15.5 12h.01', 'install.row2']] as const).map(([d, k]) => (
-              <li key={k} className="flex items-center gap-3 rounded-2xl px-4 py-3 backdrop-blur" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: 'rgba(242,202,80,0.14)', color: C.gold }}><Icon d={d} /></span>
-                <span className="text-[15px] leading-snug" style={{ color: C.text }}>{t(k)}</span>
-              </li>
-            ))}
-          </ul>
+        </div>
+
+        {/* best sellers this month in TH / ID / MY, with why they sell */}
+        <section className="w-full" aria-labelledby="hot-h">
+          <div className="mb-3 text-center">
+            <div className="text-[12px] font-semibold uppercase" style={{ color: C.gold, letterSpacing: track ? '0.3em' : undefined }}>🔥 {t('install.trending')}</div>
+            <h2 id="hot-h" className="mt-1 font-serif text-[20px]" style={{ color: '#f6ecd0' }}>{t('market.hotTitle')}</h2>
+          </div>
+          <HotPicks dark countries={market?.countries ?? null} />
+        </section>
+
+        <div className="mx-auto flex w-full max-w-md flex-col items-center text-center">
           <div className="mt-5 w-full max-w-[20rem]">
             {installed ? (
               <p className="text-center text-xs" style={{ color: C.gold }}>✓ {t('install.installed')}</p>
@@ -88,7 +92,7 @@ export default function Install() {
         {/* trending second-hand models: one table per country */}
         <section className="mt-8 w-full" aria-labelledby="trending-h">
           <div className="mb-3 text-center">
-            <div className="text-[12px] font-semibold uppercase" style={{ color: C.gold, letterSpacing: track ? '0.3em' : undefined }}>🔥 {t('install.trending')}</div>
+            <div className="text-[12px] font-semibold uppercase" style={{ color: C.gold, letterSpacing: track ? '0.3em' : undefined }}>{t('market.top5')}</div>
             <h2 id="trending-h" className="mt-1 text-[15px]" style={{ color: C.soft }}>{t('install.trendingSub')}</h2>
           </div>
           <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
