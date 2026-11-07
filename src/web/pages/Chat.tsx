@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
 import { Notice } from '../ui.tsx';
+import { MembershipNeeded, isMembershipError } from './Membership.tsx';
 
 interface Turn { role: 'user' | 'assistant'; content: string }
 interface Status { configured: boolean; limit: number; used: number }
@@ -21,6 +22,7 @@ export default function Chat() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [needMember, setNeedMember] = useState(false);
   const [st, setSt] = useState<Status | null>(null);
   const end = useRef<HTMLDivElement>(null);
 
@@ -38,7 +40,8 @@ export default function Chat() {
       setSt((s) => (s ? { ...s, used: s.used + 1 } : s));
     } catch (e) {
       const code = e instanceof ApiError ? e.body?.error : '';
-      setErr(code === 'chat_limit' ? t('chat.limit') : code === 'ai_not_configured' ? t('chat.notConfigured') : t('chat.failed'));
+      if (isMembershipError(e)) setNeedMember(true);
+      else setErr(code === 'chat_limit' ? t('chat.limit') : code === 'ai_not_configured' ? t('chat.notConfigured') : t('chat.failed'));
       setTurns(turns); setText(content); // give the question back so it can be sent again
     } finally { setBusy(false); }
   };
@@ -77,6 +80,7 @@ export default function Chat() {
         <div ref={end} />
       </div>
 
+      {needMember && <div className="mb-2"><MembershipNeeded /></div>}
       {err && <div className="mb-2"><Notice tone="bad">{err}</Notice></div>}
       <form className="sticky bottom-20 flex items-end gap-2 rounded-2xl border border-hairline bg-surface-card p-2 shadow-sm md:bottom-4"
         onSubmit={(e) => { e.preventDefault(); send(text); }}>

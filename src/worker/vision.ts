@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Env } from './env.ts';
+import { recordUsage } from './usage.ts';
 import { MAX_AI_MARKS, parseBilingualMarks, parseSuggestedMarks, refineMarks, type Rect, type SuggestedMark } from '../shared/marks.ts';
 import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
 import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
@@ -82,6 +83,7 @@ export async function callVision(env: Env, system: string, images: VisionImage[]
     }
     throw e;
   }
+  await recordUsage(env, model, msg.usage);
   if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
   return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
 }
@@ -148,7 +150,8 @@ async function callGemini(env: Env, model: string, system: string, images: Visio
     }),
   });
   if (!res.ok) throw new Error(`ai_http_${res.status}`);
-  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: Record<string, number> };
+  await recordUsage(env, model, data.usageMetadata);
   return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
 }
 
@@ -328,6 +331,7 @@ export async function identifyStyleCode(env: Env, brand: string, code: string, h
         model: aiModel(env)!, max_tokens: 16000, output_config: { effort: 'medium' }, system, messages,
         tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }],
       });
+      await recordUsage(env, msg.model, msg.usage);
     } catch (e) {
       if (e instanceof Anthropic.APIError) throw new Error(`ai_http_${e.status ?? 0}`);
       throw e;
@@ -500,7 +504,8 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
       }),
     });
     if (!res.ok) throw new Error(`ai_http_${res.status}`);
-    const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: Record<string, number> };
+    await recordUsage(env, model, data.usageMetadata);
     return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
   }
   try {
@@ -508,6 +513,7 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
       model, max_tokens: 8000, output_config: { effort: 'low' }, system,
       messages: turns.map((t) => ({ role: t.role, content: t.content })),
     });
+    await recordUsage(env, model, msg.usage);
     if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
     return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
   } catch (e) {
@@ -568,6 +574,7 @@ export async function researchPaintProduct(env: Env, x: { brand: string; name: s
         betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
         tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }],
       });
+      await recordUsage(env, r.model, r.usage);
       for (const b of r.content) {
         if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) {
           for (const res of b.content) if (res.type === 'web_search_result') found.set(res.url, res.title);
@@ -655,6 +662,7 @@ export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY';
         betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
         tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 8 }],
       });
+      await recordUsage(env, r.model, r.usage);
       for (const b of r.content) {
         if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) for (const res of b.content) if (res.type === 'web_search_result') found.set(res.url, res.title);
       }

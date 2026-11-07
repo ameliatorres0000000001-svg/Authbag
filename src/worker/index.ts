@@ -14,6 +14,7 @@ import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { removeBackground } from './cutout.ts';
 import { sniffAudio, synthesize, ttsConfigured, ttsHash } from './tts.ts';
+import { asFeature } from './usage.ts';
 import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
@@ -1506,6 +1507,7 @@ app.post('/api/verify', async (c) => {
   const used = staff || !experts ? 0 : await trialUsed(c.env, me.id);
   // paid plans are not open yet: after the free trial, non-staff users wait for the plans to be priced
   if (experts && !staff && used >= VERIFY_TRIAL) return c.json({ error: 'trial_used', limit: VERIFY_TRIAL }, 402);
+  if (!staff) { const gate = await memberGate(c); if (gate) return gate; }
   // expert review paused: the AI pre-check is the answer, so it must be available, within today's limit
   if (!experts && !aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 503);
   if (!experts && !staff && !(await takePrecheck(c.env, me.id))) return c.json({ error: 'precheck_limit' }, 429);
@@ -1522,7 +1524,7 @@ app.post('/api/verify', async (c) => {
   await audit(c.env, me.id, 'verify.submit', 'verify_request', id, { brand: brand.slug, photos: photos.length, entrupy: !!entrupy });
 
   // the AI compares the photos with our references straight away (for the customer when experts are paused)
-  c.executionCtx.waitUntil(runAiReview(c.env, id).then((x) => { if (!x.ok) console.error(`ai pre-check ${id}: ${x.error}`); }));
+  c.executionCtx.waitUntil(asFeature('precheck', () => runAiReview(c.env, id)).then((x) => { if (!x.ok) console.error(`ai pre-check ${id}: ${x.error}`); }));
   if (!experts) return c.json({ id });
 
   const origin = new URL(c.req.url).origin;
@@ -1613,8 +1615,9 @@ app.post('/api/verify/:id/precheck', async (c) => {
   if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 503);
   const last = await c.env.DB.prepare('SELECT suggested_outcome FROM verify_ai_reviews WHERE request_id = ? ORDER BY created_at DESC LIMIT 1').bind(r.id).first<{ suggested_outcome: string | null }>();
   if (last?.suggested_outcome) return c.json({ error: 'already_done' }, 409);
+  if (!STAFF.includes(me.role)) { const gate = await memberGate(c); if (gate) return gate; }
   if (!STAFF.includes(me.role) && !(await takePrecheck(c.env, me.id))) return c.json({ error: 'precheck_limit' }, 429);
-  const x = await runAiReview(c.env, r.id);
+  const x = await asFeature('precheck', () => runAiReview(c.env, r.id));
   return x.ok ? c.json({ ok: true }) : c.json({ error: 'ai_failed' }, 502);
 });
 
@@ -2129,7 +2132,7 @@ app.post('/api/admin/market/trends', need(ADMINS), async (c) => {
 app.post('/api/admin/market/research', need(ADMINS), async (c) => {
   const b = await parse(c, z.object({ country: countrySchema, period: periodSchema }));
   try {
-    const r = await researchMarket(c.env, { country: b.country, period: b.period, lang: reqLang(c) });
+    const r = await asFeature('market_research', () => researchMarket(c.env, { country: b.country, period: b.period, lang: reqLang(c) }));
     await audit(c.env, c.get('user').id, 'market.research', 'market_trends', `${b.country}:${b.period}`, { rows: r.rows.length, sources: r.sources.length, model: r.model });
     return c.json({ ok: true, draft: r });
   } catch (e) {
@@ -2413,7 +2416,7 @@ app.post('/api/admin/care/lessons/:id/ai-draft', need(ADMINS), async (c) => {
   const n = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM care_lesson_steps WHERE lesson_id = ?').bind(l.id).first<{ n: number }>())?.n ?? 0;
   if (n > 0) return c.json({ error: 'has_steps' }, 409);
   let d;
-  try { d = await draftCareLesson(c.env, { topic: l.topic, level: l.level, title: l.title_km, lang: reqLang(c) }); }
+  try { d = await asFeature('lesson_draft', () => draftCareLesson(c.env, { topic: l.topic, level: l.level, title: l.title_km, lang: reqLang(c) })); }
   catch (e) { console.error('care draft failed:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
   await c.env.DB.batch([
     c.env.DB.prepare(`UPDATE care_lessons SET summary = COALESCE(summary, ?), materials = COALESCE(materials, ?), safety = COALESCE(safety, ?), minutes = COALESCE(minutes, ?),
@@ -2581,7 +2584,7 @@ app.post('/api/admin/paint/products/:id/research', need(ADMINS), async (c) => {
   const p = await c.env.DB.prepare('SELECT brand, name, kind FROM paint_products WHERE id = ?').bind(c.req.param('id')).first<{ brand: string; name: string; kind: string }>();
   if (!p) return c.json({ error: 'not_found' }, 404);
   try {
-    const r = await researchPaintProduct(c.env, { ...p, lang: reqLang(c) });
+    const r = await asFeature('paint_research', () => researchPaintProduct(c.env, { ...p, lang: reqLang(c) }));
     await audit(c.env, c.get('user').id, 'paint.product_research', 'paint_products', c.req.param('id'), { model: r.model, sources: r.sources.length });
     return c.json({ ok: true, draft: r });
   } catch (e) {
@@ -2861,6 +2864,7 @@ app.post('/api/admin/voice/ui', need(ADMINS), async (c) => {
 app.post('/api/verify/identify', async (c) => {
   const me = c.get('user');
   if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const gate = await memberGate(c); if (gate) return gate;
   if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
   const file = (await c.req.formData()).get('file');
   if (!(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
@@ -2875,7 +2879,7 @@ app.post('/api/verify/identify', async (c) => {
   const brands = (await c.env.DB.prepare("SELECT id, name FROM brands WHERE slug <> 'other' ORDER BY name").all<{ id: string; name: string }>()).results;
   const models = (await c.env.DB.prepare('SELECT id, brand_id, name FROM models ORDER BY name').all<{ id: string; brand_id: string; name: string }>()).results;
   try {
-    const r = await identifyBag(c.env, { data: buf, mime }, brands, models, reqLang(c));
+    const r = await asFeature('identify', () => identifyBag(c.env, { data: buf, mime }, brands, models, reqLang(c)));
     // a brand we do not list goes to the "other brand" choice with its name
     const other = r.brandId || !r.brandName ? null : await c.env.DB.prepare("SELECT id FROM brands WHERE slug = 'other'").first<{ id: string }>();
     return c.json({ ...r, otherBrandId: other?.id ?? null, model: aiModel(c.env) });
@@ -2884,6 +2888,180 @@ app.post('/api/verify/identify', async (c) => {
     console.error('identify failed:', (e as Error).message);
     return c.json({ error: 'ai_failed' }, 502);
   }
+});
+
+// ───────────────────────── Anajak Secondhand: membership (7-day free trial, then monthly by QR) ─────────────────────────
+// AI features (bag check, brand recognition, AI assistant) need an active trial or a paid month. Lessons, the paint
+// mixer, date codes and market data stay free. Staff are always active.
+const DAY_MS = 86_400_000;
+const PAY_METHODS = ['khqr', 'kbank'] as const;
+type Membership = { status: 'staff' | 'trial' | 'active' | 'expired'; trialEnds: string | null; paidUntil: string | null; daysLeft: number };
+
+async function membershipOf(env: AppEnv['Bindings'], user: { id: string; role: string }): Promise<Membership> {
+  if (STAFF.includes(user.role as Role)) return { status: 'staff', trialEnds: null, paidUntil: null, daysLeft: 0 };
+  // the trial starts the first time we look (sign-in or first use), not at deployment
+  await env.DB.prepare('INSERT OR IGNORE INTO memberships (user_id) VALUES (?)').bind(user.id).run();
+  const m = await env.DB.prepare('SELECT trial_start, paid_until FROM memberships WHERE user_id = ?').bind(user.id).first<{ trial_start: string; paid_until: string | null }>();
+  const days = await getSettingNumber(env, 'membership_trial_days', 7);
+  const now = Date.now();
+  const trialEnd = new Date(new Date(m!.trial_start).getTime() + days * DAY_MS);
+  const paid = m!.paid_until ? new Date(m!.paid_until) : null;
+  const left = (d: Date) => Math.max(0, Math.ceil((d.getTime() - now) / DAY_MS));
+  if (paid && paid.getTime() > now) return { status: 'active', trialEnds: trialEnd.toISOString(), paidUntil: paid.toISOString(), daysLeft: left(paid) };
+  if (trialEnd.getTime() > now) return { status: 'trial', trialEnds: trialEnd.toISOString(), paidUntil: m!.paid_until, daysLeft: left(trialEnd) };
+  return { status: 'expired', trialEnds: trialEnd.toISOString(), paidUntil: m!.paid_until, daysLeft: 0 };
+}
+/** null when the user may use AI features; otherwise the 402 response to return. */
+async function memberGate(c: any): Promise<Response | null> {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const m = await membershipOf(c.env, me);
+  return m.status === 'expired' ? c.json({ error: 'membership_required', membership: m }, 402) : null;
+}
+
+const settingStr = async (env: AppEnv['Bindings'], key: string) => (await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first<{ value: string }>())?.value ?? null;
+const putSetting = (env: AppEnv['Bindings'], key: string, value: string, by: string) =>
+  env.DB.prepare(`INSERT INTO settings (key, value, updated_by) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`).bind(key, value, by).run();
+
+app.get('/api/membership', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const m = await membershipOf(c.env, me);
+  const pending = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM payments WHERE user_id = ? AND status = 'pending'").bind(me.id).first<{ n: number }>();
+  return c.json({
+    ...m, pending: pending?.n ?? 0,
+    prices: { usd: await getSettingNumber(c.env, 'membership_price_usd', 10), thb: await getSettingNumber(c.env, 'membership_price_thb', 400) },
+    trialDays: await getSettingNumber(c.env, 'membership_trial_days', 7),
+    methods: {
+      khqr: { qr: !!(await settingStr(c.env, 'pay.khqr_qr')), name: await settingStr(c.env, 'pay.khqr_name'), v: await settingStr(c.env, 'pay.khqr_qr') },
+      kbank: { qr: !!(await settingStr(c.env, 'pay.kbank_qr')), name: await settingStr(c.env, 'pay.kbank_name'), v: await settingStr(c.env, 'pay.kbank_qr') },
+    },
+  });
+});
+app.get('/api/membership/qr/:method', async (c) => {
+  if (!(PAY_METHODS as readonly string[]).includes(c.req.param('method'))) return c.json({ error: 'not_found' }, 404);
+  const obj = await c.env.VAULT.get(`site/pay-${c.req.param('method')}`);
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? 'image/png', 'cache-control': 'private, max-age=300' } });
+});
+
+/** Customer sends a transfer slip. The amount comes from today's price, not from the customer. */
+app.post('/api/payments', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const fd = await c.req.formData();
+  const method = String(fd.get('method') ?? '');
+  if (!(PAY_METHODS as readonly string[]).includes(method)) return c.json({ error: 'invalid_input' }, 400);
+  const months = Math.max(1, Math.min(12, Number(fd.get('months')) || 1));
+  const reference = String(fd.get('reference') ?? '').trim().slice(0, 80) || null;
+  const file = fd.get('file');
+  if (!(file instanceof File)) return c.json({ error: 'slip_required' }, 400);
+  if (file.size > 8 * 1024 * 1024) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer(); const mime = sniffImage(new Uint8Array(buf));
+  if (!mime) return c.json({ error: 'not_an_image' }, 415);
+  const open = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM payments WHERE user_id = ? AND status = 'pending'").bind(me.id).first<{ n: number }>();
+  if ((open?.n ?? 0) >= 3) return c.json({ error: 'too_many_pending' }, 429);
+  const usd = method === 'khqr';
+  const amount = (usd ? await getSettingNumber(c.env, 'membership_price_usd', 10) : await getSettingNumber(c.env, 'membership_price_thb', 400)) * months;
+  const id = uid('pay_'); const key = `payments/${me.id}/${id}.${mime.split('/')[1]}`;
+  await c.env.VAULT.put(key, buf, { httpMetadata: { contentType: mime } });
+  await c.env.DB.prepare('INSERT INTO payments (id, user_id, method, amount, currency, months, reference, slip_key, slip_mime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, me.id, method, amount, usd ? 'USD' : 'THB', months, reference, key, mime).run();
+  await audit(c.env, me.id, 'payment.submit', 'payments', id, { method, amount, months });
+  c.executionCtx.waitUntil(notifyStaff(c.env, { title: '💳 New payment to check', body: `${me.name} · ${amount} ${usd ? 'USD (KHQR)' : 'THB (K Bank)'}`, url: '/admin?tab=today', tag: id }, new URL(c.req.url).origin).catch(() => 0));
+  return c.json({ ok: true, id });
+});
+app.get('/api/payments/mine', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  return c.json({ payments: (await c.env.DB.prepare('SELECT id, method, amount, currency, months, reference, status, review_note, created_at, reviewed_at FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT 20').bind(me.id).all()).results });
+});
+app.get('/api/payments/:id/slip', async (c) => {
+  const me = c.get('user');
+  const p = await c.env.DB.prepare('SELECT user_id, slip_key, slip_mime FROM payments WHERE id = ?').bind(c.req.param('id')).first<{ user_id: string; slip_key: string; slip_mime: string }>();
+  if (!p || (p.user_id !== me.id && !STAFF.includes(me.role))) return c.json({ error: 'not_found' }, 404);
+  const obj = await c.env.VAULT.get(p.slip_key);
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': p.slip_mime, 'cache-control': 'private, max-age=60' } });
+});
+
+app.get('/api/admin/payments', need(ADMINS), async (c) => {
+  const status = ['pending', 'approved', 'rejected'].includes(c.req.query('status') ?? '') ? c.req.query('status')! : 'pending';
+  return c.json({ payments: (await c.env.DB.prepare(`SELECT p.id, p.method, p.amount, p.currency, p.months, p.reference, p.status, p.review_note, p.created_at, u.name, u.email,
+      (SELECT paid_until FROM memberships m WHERE m.user_id = p.user_id) AS paid_until
+    FROM payments p JOIN users u ON u.id = p.user_id WHERE p.status = ? ORDER BY p.created_at DESC LIMIT 100`).bind(status).all()).results });
+});
+/** Staff checked the slip against the bank: approve (adds the months) or reject (with a short reason). */
+app.post('/api/admin/payments/:id/review', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ approve: z.boolean(), note: z.string().trim().max(300).nullable().optional() }));
+  const p = await c.env.DB.prepare('SELECT id, user_id, months, status FROM payments WHERE id = ?').bind(c.req.param('id')).first<{ id: string; user_id: string; months: number; status: string }>();
+  if (!p) return c.json({ error: 'not_found' }, 404);
+  if (p.status !== 'pending') return c.json({ error: 'already_reviewed' }, 409);
+  const me = c.get('user');
+  if (!b.approve) {
+    await c.env.DB.prepare("UPDATE payments SET status = 'rejected', review_note = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ? AND status = 'pending'").bind(b.note || null, me.id, nowIso(), p.id).run();
+    await audit(c.env, me.id, 'payment.reject', 'payments', p.id);
+    return c.json({ ok: true });
+  }
+  await c.env.DB.prepare('INSERT OR IGNORE INTO memberships (user_id) VALUES (?)').bind(p.user_id).run();
+  const m = await c.env.DB.prepare('SELECT paid_until FROM memberships WHERE user_id = ?').bind(p.user_id).first<{ paid_until: string | null }>();
+  const from = Math.max(Date.now(), m?.paid_until ? new Date(m.paid_until).getTime() : 0);
+  const until = new Date(from + p.months * 30 * DAY_MS).toISOString();
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE payments SET status = 'approved', review_note = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ? AND status = 'pending'").bind(b.note || null, me.id, nowIso(), p.id),
+    c.env.DB.prepare("UPDATE memberships SET paid_until = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?").bind(until, p.user_id),
+  ]);
+  await audit(c.env, me.id, 'payment.approve', 'payments', p.id, { until });
+  c.executionCtx.waitUntil(notifyUser(c.env, p.user_id, { title: '✅ Anajak Secondhand', body: `Membership active until ${until.slice(0, 10)}`, url: '/subscribe', tag: p.id }, new URL(c.req.url).origin).catch(() => 0));
+  return c.json({ ok: true, paidUntil: until });
+});
+
+app.put('/api/admin/membership', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ priceUsd: z.number().min(0.5).max(1000), priceThb: z.number().min(10).max(50000), trialDays: z.number().int().min(0).max(60),
+    khqrName: z.string().trim().max(80), kbankName: z.string().trim().max(80) }));
+  const me = c.get('user').id;
+  await putSetting(c.env, 'membership_price_usd', String(b.priceUsd), me);
+  await putSetting(c.env, 'membership_price_thb', String(b.priceThb), me);
+  await putSetting(c.env, 'membership_trial_days', String(b.trialDays), me);
+  await putSetting(c.env, 'pay.khqr_name', b.khqrName, me);
+  await putSetting(c.env, 'pay.kbank_name', b.kbankName, me);
+  await audit(c.env, me, 'membership.settings', 'settings', null, b);
+  return c.json({ ok: true });
+});
+app.post('/api/admin/membership/qr/:method', need(ADMINS), async (c) => {
+  const method = c.req.param('method');
+  if (!(PAY_METHODS as readonly string[]).includes(method)) return c.json({ error: 'not_found' }, 404);
+  const f = (await c.req.formData()).get('file');
+  if (!(f instanceof File)) return c.json({ error: 'file_required' }, 400);
+  if (f.size > 5 * 1024 * 1024) return c.json({ error: 'file_too_large' }, 413);
+  const buf = await f.arrayBuffer(); const mime = sniffImage(new Uint8Array(buf, 0, 16));
+  if (!mime) return c.json({ error: 'not_a_supported_image' }, 415);
+  await c.env.VAULT.put(`site/pay-${method}`, buf, { httpMetadata: { contentType: mime } });
+  await putSetting(c.env, `pay.${method}_qr`, String(Date.now()), c.get('user').id);
+  await audit(c.env, c.get('user').id, 'membership.qr', 'settings', method);
+  return c.json({ ok: true });
+});
+
+// ───────────────────────── AI token use against the budget ─────────────────────────
+app.get('/api/admin/usage', need(ADMINS), async (c) => {
+  const budget = await getSettingNumber(c.env, 'token_budget', 200_000_000);
+  const days = await getSettingNumber(c.env, 'token_budget_days', 15);
+  const start = (await settingStr(c.env, 'token_budget_start')) ?? new Date().toISOString().slice(0, 10);
+  const byDay = (await c.env.DB.prepare(`SELECT day, SUM(input_tokens + output_tokens) AS tokens, SUM(calls) AS calls FROM ai_usage_daily WHERE day >= ? GROUP BY day ORDER BY day`).bind(start).all<{ day: string; tokens: number; calls: number }>()).results;
+  const byFeature = (await c.env.DB.prepare(`SELECT feature, SUM(calls) AS calls, SUM(input_tokens) AS input, SUM(output_tokens) AS output FROM ai_usage_daily WHERE day >= ? GROUP BY feature ORDER BY SUM(input_tokens + output_tokens) DESC`).bind(start).all()).results;
+  const used = byDay.reduce((s, d) => s + d.tokens, 0);
+  const elapsed = Math.max(1, Math.floor((Date.now() - new Date(`${start}T00:00:00Z`).getTime()) / DAY_MS) + 1);
+  const perDay = used / elapsed;
+  return c.json({ budget, days, start, used, perDay: Math.round(perDay), daysToEmpty: perDay > 0 ? Math.floor((budget - used) / perDay) : null, byDay, byFeature });
+});
+app.put('/api/admin/usage', need(['owner']), async (c) => {
+  const b = await parse(c, z.object({ budget: z.number().int().min(1).max(100_000_000_000), days: z.number().int().min(1).max(366), start: periodSchema.or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)) }));
+  const me = c.get('user').id;
+  await putSetting(c.env, 'token_budget', String(b.budget), me);
+  await putSetting(c.env, 'token_budget_days', String(b.days), me);
+  await putSetting(c.env, 'token_budget_start', b.start, me);
+  await audit(c.env, me, 'usage.budget', 'settings', null, b);
+  return c.json({ ok: true });
 });
 
 // ───────────────────────── Anajak Secondhand: AI assistant chat (signed-in users) ─────────────────────────
@@ -2913,6 +3091,7 @@ app.get('/api/chat/status', async (c) => {
 app.post('/api/chat', async (c) => {
   const me = c.get('user');
   if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const gate = await memberGate(c); if (gate) return gate;
   const b = await parse(c, z.object({ messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(4000) })).min(1).max(30) }));
   if (b.messages[b.messages.length - 1].role !== 'user') return c.json({ error: 'invalid_input' }, 400);
   if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
@@ -2926,7 +3105,7 @@ app.post('/api/chat', async (c) => {
   const turns = b.messages.slice(-12);
   while (turns.length && turns[0].role !== 'user') turns.shift();
   try {
-    const reply = await chatAssistant(c.env, turns, reqLang(c), await marketContext(c.env));
+    const reply = await asFeature('chat', async () => chatAssistant(c.env, turns, reqLang(c), await marketContext(c.env)));
     return c.json({ reply: reply.trim() });
   } catch (e) {
     await c.env.DB.prepare('UPDATE ai_chat_usage SET n = MAX(n - 1, 0) WHERE user_id = ? AND day = ?').bind(me.id, day).run();
@@ -2966,7 +3145,7 @@ async function aiReviewBacklog(env: AppEnv['Bindings']) {
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
-    ctx.waitUntil(translateBacklog(env));
-    ctx.waitUntil(aiReviewBacklog(env));
+    ctx.waitUntil(asFeature('translate', () => translateBacklog(env)));
+    ctx.waitUntil(asFeature('precheck', () => aiReviewBacklog(env)));
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>;
