@@ -418,7 +418,7 @@ function PrecheckCard({ id, pc, onChange }: { id: string; pc: Pc; onChange: () =
   const retry = async () => {
     setBusy(true); setErr('');
     try { await api.post(`/api/verify/${id}/precheck`); onChange(); }
-    catch (e) { const code = (e as { body?: { error?: string } })?.body?.error; setErr(code === 'precheck_limit' ? t('pc.limit') : errText(e)); }
+    catch (e) { const code = (e as { body?: { error?: string } })?.body?.error; setErr(code === 'membership_required' ? t('mb.neededBody') : code === 'precheck_limit' ? t('pc.limit') : errText(e)); }
     finally { setBusy(false); }
   };
   const res = pc.result;

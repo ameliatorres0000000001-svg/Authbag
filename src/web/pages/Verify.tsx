@@ -84,7 +84,7 @@ export default function Verify() {
     try { const r = await api.post<{ id: string }>('/api/verify', fd); nav(`/verify/r/${r.id}`); }
     catch (e) {
       const code = (e as { body?: { error?: string } })?.body?.error;
-      setErr(code === 'precheck_limit' ? t('pc.limit') : code === 'ai_not_configured' ? t('pc.aiOff') : errText(e)); setBusy(false);
+      setErr(code === 'membership_required' ? t('mb.neededBody') : code === 'precheck_limit' ? t('pc.limit') : code === 'ai_not_configured' ? t('pc.aiOff') : errText(e)); setBusy(false);
     }
   }
 

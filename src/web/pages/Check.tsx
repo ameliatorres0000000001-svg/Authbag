@@ -8,6 +8,7 @@ import BrandPicker, { type BrandChoice } from '../BrandPicker.tsx';
 import { api as apiClient, ApiError } from '../api.ts';
 import { errText } from '../ui.tsx';
 import { STEPS } from './Verify.tsx';
+import { MembershipNeeded, isMembershipError } from './Membership.tsx';
 
 interface Identity { brandId: string | null; brandName: string | null; modelId: string | null; modelName: string | null; confidence: number; clues: string; otherBrandId: string | null }
 
@@ -41,6 +42,7 @@ export default function Check() {
   const [idErr, setIdErr] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
   const [manual, setManual] = useState(false);
+  const [needMember, setNeedMember] = useState(false);
   const identify = async (f: File) => {
     setIdErr(''); setIdent(null); setManual(false); setIdBusy(true);
     setPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(f); });
@@ -52,6 +54,7 @@ export default function Check() {
       else if (!r.brandId && r.brandName && r.otherBrandId && r.confidence >= 0.5) { pick({ brandId: r.otherBrandId, brandText: r.brandName }); setModel(r.modelName ?? ''); }
       else { pick(null); setManual(true); }
     } catch (e) {
+      if (isMembershipError(e)) { setNeedMember(true); setIdBusy(false); return; }
       setIdErr(e instanceof ApiError && e.body?.error === 'ai_not_configured' ? t('ck.aiOff') : e instanceof ApiError && e.body?.error === 'too_many' ? t('ck.tooMany') : errText(e));
       setManual(true);
     } finally { setIdBusy(false); }
@@ -93,6 +96,7 @@ export default function Check() {
         </ol>
       </div>
 
+      {needMember && <MembershipNeeded />}
       {/* 1. one photo of the whole bag: AI recognises brand + model */}
       <div ref={pickRef} className={`space-y-3 rounded-2xl border p-4 transition ${hint ? 'border-counterfeit ring-2 ring-counterfeit/30' : 'border-hairline bg-surface-card'}`}>
         <div className="flex items-baseline justify-between gap-2">

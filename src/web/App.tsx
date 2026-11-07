@@ -37,6 +37,7 @@ import Trends from './pages/Trends.tsx';
 import Restore from './pages/Restore.tsx';
 import RestoreLesson from './pages/RestoreLesson.tsx';
 import Paint from './pages/Paint.tsx';
+import Membership, { MembershipLine, type MembershipInfo } from './pages/Membership.tsx';
 import Authenticity from './pages/Authenticity.tsx';
 import Chat from './pages/Chat.tsx';
 
@@ -149,6 +150,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/trends" element={<Trends />} />
             <Route path="/paint" element={<Paint />} />
+            <Route path="/subscribe" element={<Membership />} />
             <Route path="/restore" element={<Restore />} />
             <Route path="/restore/:id" element={<RestoreLesson />} />
             <Route path="/authenticity" element={<Authenticity />} />
@@ -201,6 +203,8 @@ export default function App() {
 function AccountButton({ me, onSignOut }: { me: Me | null; onSignOut: () => void }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [mb, setMb] = useState<MembershipInfo | null>(null);
+  useEffect(() => { if (me) api.get<MembershipInfo>('/api/membership').then(setMb).catch(() => setMb(null)); }, [me]);
   if (!me) return <Link to="/login" className="btn-primary !px-3 !py-1 text-xs">{t('acct.signIn')}</Link>;
   return (
     <div className="relative">
@@ -212,6 +216,8 @@ function AccountButton({ me, onSignOut }: { me: Me | null; onSignOut: () => void
           <div className="absolute right-0 z-40 mt-2 w-56 rounded-xl border border-hairline bg-surface-card p-3 text-sm shadow-lg md:left-0 md:right-auto">
             <div className="font-semibold">{me.name}</div>
             <div className="truncate text-xs text-muted">{me.email}</div>
+            {mb && mb.status !== 'staff' && <Link to="/subscribe" onClick={() => setOpen(false)} className="mt-2 block"><MembershipLine m={mb} /></Link>}
+            {mb && mb.status !== 'staff' && <Link to="/subscribe" onClick={() => setOpen(false)} className="mt-1 block rounded-lg px-2 py-1.5 hover:bg-surface-low">⭐ {t('mb.title')}</Link>}
             <Link to="/verify" onClick={() => setOpen(false)} className="mt-2 block rounded-lg px-2 py-1.5 hover:bg-surface-low">🏅 {t('nav.verify')}</Link>
             {STAFF_ROLES.includes(me.role) && <Link to="/admin" onClick={() => setOpen(false)} className="block rounded-lg px-2 py-1.5 hover:bg-surface-low">🛠 {t('acct.admin')}</Link>}
             <button type="button" onClick={() => { setOpen(false); onSignOut(); }} className="block w-full rounded-lg px-2 py-1.5 text-left text-counterfeit hover:bg-surface-low">{t('signOut')}</button>

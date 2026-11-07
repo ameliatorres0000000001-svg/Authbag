@@ -58,6 +58,43 @@ export default function Dashboard() {
         <h1 className="text-2xl leading-tight md:text-3xl">{t('home.headline')}</h1>
       </header>
 
+      {/* market data, updated every month by the team */}
+      <section aria-labelledby="market-h">
+        <div className="mb-2 flex items-baseline justify-between">
+          <h2 id="market-h" className="text-lg leading-tight">🔥 {t('install.topTitle')}</h2>
+          <Link to="/trends" className="text-xs font-semibold text-gold">{t('market.seeAll')} →</Link>
+        </div>
+        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {COUNTRIES.map((cc) => {
+            const m = market?.countries.find((x) => x.country === cc);
+            return (
+              <Link key={cc} to={`/trends?country=${cc}`} className="block w-[85%] shrink-0 snap-center md:w-auto">
+                {market ? <TrendTable country={cc} period={m?.period ?? null} rows={m?.rows ?? []} />
+                  : <div className="h-56 animate-pulse rounded-2xl bg-surface-low" />}
+              </Link>
+            );
+          })}
+        </div>
+
+        {market && market.updates.length > 0 && <h3 className="mb-2 mt-4 text-base">{t('market.updates')}</h3>}
+        <ul className="space-y-2">
+          {market?.updates.map((u) => (
+            <li key={u.id} className="rounded-xl border border-hairline bg-surface-card p-3">
+              <div className="flex items-center gap-2 text-[11px] text-muted">
+                {u.country && <span aria-hidden>{FLAG[u.country]}</span>}
+                <span>{u.country ? t(`market.country.${u.country}`) : t('madm.allCountries')}</span>
+                <span>·</span>
+                <time dateTime={u.created_at}>{new Date(u.created_at).toLocaleDateString(locale === 'km' ? 'km-KH' : locale)}</time>
+              </div>
+              <div className="mt-1 font-semibold leading-snug">{u.title}</div>
+              {u.body && <p className="mt-1 whitespace-pre-line text-sm text-charcoal/80">{u.body}</p>}
+              <div className="mt-1 text-[10px] text-muted">{t('market.source')}: {u.source}</div>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-[11px] text-muted">{t('market.info')}</p>
+      </section>
+
       {/* the app's focus: two big lessons cards */}
       <section aria-labelledby="focus-h">
         <h2 id="focus-h" className="mb-2 text-xs font-semibold text-gold">{t('home.focus')}</h2>
@@ -108,42 +145,6 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* market data, updated every month by the team */}
-      <section aria-labelledby="market-h">
-        <div className="mb-2 flex items-baseline justify-between">
-          <h2 id="market-h" className="text-lg leading-tight">{t('home.market')}</h2>
-          <Link to="/trends" className="text-xs font-semibold text-gold">{t('market.seeAll')} →</Link>
-        </div>
-        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {COUNTRIES.map((cc) => {
-            const m = market?.countries.find((x) => x.country === cc);
-            return (
-              <Link key={cc} to={`/trends?country=${cc}`} className="block w-[85%] shrink-0 snap-center md:w-auto">
-                {market ? <TrendTable country={cc} period={m?.period ?? null} rows={m?.rows ?? []} />
-                  : <div className="h-56 animate-pulse rounded-2xl bg-surface-low" />}
-              </Link>
-            );
-          })}
-        </div>
-
-        {market && market.updates.length > 0 && <h3 className="mb-2 mt-4 text-base">{t('market.updates')}</h3>}
-        <ul className="space-y-2">
-          {market?.updates.map((u) => (
-            <li key={u.id} className="rounded-xl border border-hairline bg-surface-card p-3">
-              <div className="flex items-center gap-2 text-[11px] text-muted">
-                {u.country && <span aria-hidden>{FLAG[u.country]}</span>}
-                <span>{u.country ? t(`market.country.${u.country}`) : t('madm.allCountries')}</span>
-                <span>·</span>
-                <time dateTime={u.created_at}>{new Date(u.created_at).toLocaleDateString(locale === 'km' ? 'km-KH' : locale)}</time>
-              </div>
-              <div className="mt-1 font-semibold leading-snug">{u.title}</div>
-              {u.body && <p className="mt-1 whitespace-pre-line text-sm text-charcoal/80">{u.body}</p>}
-              <div className="mt-1 text-[10px] text-muted">{t('market.source')}: {u.source}</div>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-[11px] text-muted">{t('market.info')}</p>
-      </section>
 
     </div>
   );
