@@ -617,3 +617,73 @@ export async function identifyBag(env: Env, image: VisionImage, brands: { id: st
   const confidence = brandName ? Math.max(0, Math.min(1, Number(o?.confidence) || 0)) : 0;
   return { brandId: brand?.id ?? null, brandName, modelId: model?.id ?? null, modelName: model?.name ?? str(o?.model_name, 120), confidence, clues: str(o?.clues, 300) ?? '' };
 }
+
+export interface MarketResearchRow { brand: string; model: string; reason: string; price_min: number | null; price_max: number | null; currency: string | null; sources: string[] }
+export interface MarketResearch { rows: MarketResearchRow[]; sources: { title: string; url: string }[]; model: string }
+
+const COUNTRY_NAME: Record<string, { name: string; currency: string; places: string }> = {
+  TH: { name: 'Thailand', currency: 'THB', places: 'Shopee TH, Lazada TH, Kaidee, Facebook Marketplace, TikTok Shop, Brand Off / 2nd Street / Komehyo Thailand, Thai resale news' },
+  ID: { name: 'Indonesia', currency: 'IDR', places: 'Tokopedia, Shopee ID, Carousell ID, OLX, TikTok Shop, Indonesian preloved luxury shops and news' },
+  MY: { name: 'Malaysia', currency: 'MYR', places: 'Carousell MY, Shopee MY, Lazada MY, Mudah, TikTok Shop, Malaysian preloved luxury shops and news' },
+};
+
+/**
+ * Which second-hand designer bags are in demand right now in one country, researched on the web (Claude web
+ * search). A DRAFT for staff: every row must rest on links the search really returned; prices only when a
+ * source shows them. Staff read it, edit, and save it as that month's ranking (with the sources).
+ */
+export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY'; period: string; lang: OutLang }): Promise<MarketResearch> {
+  if (aiProvider(env) !== 'anthropic') throw new Error('ai_web_not_configured');
+  const c = COUNTRY_NAME[x.country];
+  const model = aiModel(env)!;
+  const client = anthropicClient(env);
+  const system =
+    `You research the SECOND-HAND (preloved) designer handbag market in ${c.name} for resellers at a Cambodian border market. ` +
+    `Find which brands and models are selling fast or are most wanted there around ${x.period}: look at ${c.places}, resale price guides and recent articles. ` +
+    'Prefer evidence such as many sold listings, "sold out", high resale value, waiting lists, trending searches, or articles naming the model. ' +
+    'Report ONLY what the sources support. Never invent rankings, prices or statistics; if a price is not in a source, use null. Use sources from the last 12 months where possible. ' +
+    'Never comment on whether any item is authentic or counterfeit. ' +
+    `For each model write "reason": ONE short sentence in ${LANG_NAME[x.lang]} on why it sells (demand, rarity, style trend, resale value), based on the sources. ` +
+    `Finish with JSON only: {"rows":[{"brand":"...","model":"...","reason":"...","price_min":number|null,"price_max":number|null,"currency":"${c.currency}"|null,"sources":["url", ...]}]} — up to 10 rows, most in-demand first.`;
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: `Country: ${c.name}\nMonth: ${x.period}` }];
+  const found = new Map<string, string>();
+  let final: Anthropic.Beta.BetaMessage | null = null;
+  try {
+    for (let turn = 0; turn < 5 && !final; turn++) {
+      const r = await client.beta.messages.create({
+        model, max_tokens: 16000, output_config: { effort: 'medium' }, system, messages,
+        betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 8 }],
+      });
+      for (const b of r.content) {
+        if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) for (const res of b.content) if (res.type === 'web_search_result') found.set(res.url, res.title);
+      }
+      if (r.stop_reason === 'refusal') throw new Error('ai_refused');
+      if (r.stop_reason === 'pause_turn') { messages.push({ role: 'assistant', content: r.content }); continue; }
+      final = r;
+    }
+  } catch (e) {
+    if (e instanceof Anthropic.APIError) { console.error(`market research: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
+    throw e;
+  }
+  if (!final) throw new Error('ai_unfinished');
+  const text = final.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+  let o: { rows?: any[] } = {};
+  try { o = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { o = {}; }
+  const str = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v) : null);
+  const rows: MarketResearchRow[] = [];
+  for (const r of Array.isArray(o.rows) ? o.rows : []) {
+    // a row stays only if at least one of its links really came back from the search
+    const sources = (Array.isArray(r?.sources) ? r.sources : []).map((u: unknown) => String(u)).filter((u: string) => found.has(u)).slice(0, 4);
+    const brand = str(r?.brand, 80), name = str(r?.model, 120);
+    if (!brand || !name || !sources.length) continue;
+    let pmin = num(r?.price_min), pmax = num(r?.price_max);
+    if (pmin !== null && pmax !== null && pmax < pmin) [pmin, pmax] = [pmax, pmin];
+    const currency = pmin !== null || pmax !== null ? (['THB', 'IDR', 'MYR', 'USD'].includes(r?.currency) ? r.currency : c.currency) : null;
+    rows.push({ brand, model: name, reason: str(r?.reason, 300), price_min: pmin, price_max: pmax, currency, sources });
+    if (rows.length >= 10) break;
+  }
+  const used = [...new Set(rows.flatMap((r) => r.sources))];
+  return { rows, sources: used.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model };
+}

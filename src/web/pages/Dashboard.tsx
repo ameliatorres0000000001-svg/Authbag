@@ -119,7 +119,7 @@ export default function Dashboard() {
             const m = market?.countries.find((x) => x.country === cc);
             return (
               <Link key={cc} to={`/trends?country=${cc}`} className="block w-[85%] shrink-0 snap-center md:w-auto">
-                {market ? <TrendTable compact country={cc} period={m?.period ?? null} rows={m?.rows ?? []} />
+                {market ? <TrendTable country={cc} period={m?.period ?? null} rows={m?.rows ?? []} />
                   : <div className="h-56 animate-pulse rounded-2xl bg-surface-low" />}
               </Link>
             );

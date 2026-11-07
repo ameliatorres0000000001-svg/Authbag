@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, researchPaintProduct, identifyBag } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2123,6 +2123,21 @@ app.post('/api/admin/market/trends', need(ADMINS), async (c) => {
   ]);
   await audit(c.env, me.id, 'market.trends_saved', 'market_trends', `${b.country}:${b.period}`, { rows: b.rows.length });
   return c.json({ ok: true, rows: b.rows.length });
+});
+
+/** AI researches one country's second-hand bag market on the web: a draft (rows + real links) for staff to check and save. */
+app.post('/api/admin/market/research', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ country: countrySchema, period: periodSchema }));
+  try {
+    const r = await researchMarket(c.env, { country: b.country, period: b.period, lang: reqLang(c) });
+    await audit(c.env, c.get('user').id, 'market.research', 'market_trends', `${b.country}:${b.period}`, { rows: r.rows.length, sources: r.sources.length, model: r.model });
+    return c.json({ ok: true, draft: r });
+  } catch (e) {
+    const m = String((e as Error).message);
+    if (m === 'ai_web_not_configured') return c.json({ error: m }, 501);
+    console.error('market research failed:', m);
+    return c.json({ error: m === 'ai_refused' ? 'ai_refused' : 'ai_failed' }, 502);
+  }
 });
 
 app.delete('/api/admin/market/trends', need(ADMINS), async (c) => {

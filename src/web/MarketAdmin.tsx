@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { api } from './api.ts';
+import { api, ApiError } from './api.ts';
 import { useI18n } from './i18n.tsx';
 import { Field, Notice, errText } from './ui.tsx';
 import { COUNTRIES, FLAG, modelImageUrl, type Country, type MarketUpdate, type TrendRow } from './Market.tsx';
@@ -30,6 +30,8 @@ export default function MarketAdmin() {
   const [currency, setCurrency] = useState('THB');
   const [source, setSource] = useState('');
   const [lines, setLines] = useState('');
+  const [research, setResearch] = useState<{ rows: { brand: string; model: string; reason: string; sources: string[] }[]; sources: { title: string; url: string }[] } | null>(null);
+  const [researching, setResearching] = useState(false);
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
   const [upd, setUpd] = useState({ country: '' as '' | Country, title: '', body: '', source: '' });
   const [posted, setPosted] = useState<MarketUpdate[]>([]);
@@ -47,6 +49,23 @@ export default function MarketAdmin() {
       setLines(r.rows.map((x) => [x.brand, x.model, x.price_min ?? '', x.price_max ?? '', x.movement ?? '', x.note ?? ''].join(' | ').replace(/( \| )+$/, '')).join('\n'));
       if (r.rows[0]) { setSource(r.rows[0].source); if (r.rows[0].currency) setCurrency(r.rows[0].currency); }
     } catch (e) { setMsg({ tone: 'bad', text: errText(e) }); }
+  };
+
+  /** AI looks the market up on the web and fills the form; staff check the links, edit, then save. */
+  const askAi = async () => {
+    setMsg(null); setResearch(null); setResearching(true);
+    try {
+      const r = await api.post<{ draft: { rows: { brand: string; model: string; reason: string; price_min: number | null; price_max: number | null; currency: string | null; sources: string[] }[]; sources: { title: string; url: string }[] } }>('/api/admin/market/research', { country, period });
+      const d = r.draft;
+      if (!d.rows.length) { setMsg({ tone: 'bad', text: t('madm.aiNothing') }); return; }
+      setLines(d.rows.map((x) => [x.brand, x.model, x.price_min ?? '', x.price_max ?? '', '', x.reason.replace(/\|/g, '/')].join(' | ')).join('\n'));
+      const cur = d.rows.find((x) => x.currency)?.currency; if (cur) setCurrency(cur);
+      const hosts = [...new Set(d.sources.map((x) => { try { return new URL(x.url).hostname.replace(/^www\./, ''); } catch { return ''; } }).filter(Boolean))];
+      setSource(`${t('madm.aiSource')}: ${hosts.join(', ')}`.slice(0, 300));
+      setResearch(d);
+    } catch (e) {
+      setMsg({ tone: 'bad', text: e instanceof ApiError && e.body?.error === 'ai_web_not_configured' ? t('padm.aiWebOff') : errText(e) });
+    } finally { setResearching(false); }
   };
 
   const save = async () => {
@@ -101,9 +120,22 @@ export default function MarketAdmin() {
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn-primary" disabled={!lines.trim() || source.trim().length < 3 || !/^\d{4}-\d{2}$/.test(period)} onClick={save}>{t('madm.save')}</button>
         <button type="button" className="btn-ghost" onClick={load}>{t('madm.load')}</button>
+        <button type="button" className="btn-ghost" disabled={researching} onClick={askAi}>{researching ? t('padm.researching') : t('madm.askAi')}</button>
         <button type="button" className="btn-ghost text-counterfeit" onClick={del}>{t('madm.deleteMonth')}</button>
       </div>
 
+      {research && (
+        <div className="space-y-2 rounded-lg border border-review bg-review-bg p-3 text-sm">
+          <p className="font-semibold">{t('madm.aiCheck')}</p>
+          <ol className="list-decimal space-y-1 pl-5">
+            {research.rows.map((r, i) => (
+              <li key={i}><b>{r.brand}</b> {r.model} — {r.reason}{' '}
+                {r.sources.map((u, k) => <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="text-xs underline">[{k + 1}]</a>)}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       <ModelPhotos country={country} period={period} refresh={photosKey} />
 
       <hr className="border-hairline" />

@@ -43,30 +43,30 @@ export default function Install() {
   return (
     <div className="relative min-h-[100dvh] overflow-hidden" style={{ background: '#000', color: C.ink }}>
       <Galaxy />
-      <div className="relative mx-auto flex min-h-[100dvh] max-w-md flex-col px-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] pt-4">
+      {/* exactly one phone screen: header, the country card filling the middle, install at the bottom */}
+      <div className="relative mx-auto flex h-[100dvh] min-h-[600px] max-w-md flex-col px-5 pb-[max(env(safe-area-inset-bottom),0.9rem)] pt-3">
         <div className="flex justify-end"><LangPicker dark /></div>
 
         {/* 1 · header */}
-        <header className="flex flex-col items-center pt-3 text-center">
-          <img src="/icons/icon-192.png" alt="Anajak Secondhand" width={76} height={76} className="rounded-[20px]"
-            style={{ boxShadow: '0 0 0 1px rgba(242,202,80,0.35), 0 0 60px rgba(242,202,80,0.35)' }} />
-          <div className="mt-5 text-[12px] font-medium" style={{ color: C.gold }}>{t('install.welcome')}</div>
-          <h1 className="mt-1.5 flex flex-col items-center font-serif font-medium leading-none">
-            <span className="text-[38px] tracking-[0.14em]" style={{ textShadow: '0 0 24px rgba(242,202,80,0.25)' }}>ANAJAK</span>
-            <span className="mt-2 pl-[0.45em] text-[14px] tracking-[0.45em]" style={{ color: C.gold }}>SECONDHAND</span>
+        <header className="flex flex-none flex-col items-center text-center">
+          <img src="/icons/icon-192.png" alt="Anajak Secondhand" width={56} height={56} className="rounded-[16px]"
+            style={{ boxShadow: '0 0 0 1px rgba(242,202,80,0.35), 0 0 44px rgba(242,202,80,0.35)' }} />
+          <h1 className="mt-2.5 flex flex-col items-center font-serif font-medium leading-none">
+            <span className="text-[30px] tracking-[0.14em]" style={{ textShadow: '0 0 24px rgba(242,202,80,0.25)' }}>ANAJAK</span>
+            <span className="mt-1.5 pl-[0.45em] text-[11px] tracking-[0.45em]" style={{ color: C.gold }}>SECONDHAND</span>
           </h1>
-          <div className="my-4 flex items-center gap-2" aria-hidden>
+          <div className="my-2.5 flex items-center gap-2" aria-hidden>
             <span className="h-px w-10" style={{ background: C.gold }} />
             <span className="h-1.5 w-1.5 rotate-45" style={{ background: C.gold }} />
             <span className="h-px w-10" style={{ background: C.gold }} />
           </div>
-          <p className="max-w-[18rem] text-[15px] leading-relaxed" style={{ color: C.muted }}>{t('install.sub')}</p>
+          <p className="max-w-[20rem] text-[13.5px] leading-snug" style={{ color: C.muted }}>{t('install.sub')}</p>
         </header>
 
         {/* 2 · one top brand + model per country */}
-        <section className="mt-8" aria-labelledby="top-h">
-          <div className="mb-3 flex items-end justify-between gap-3 border-b pb-2" style={{ borderColor: C.line }}>
-            <h2 id="top-h" className="font-serif text-[20px] leading-tight">{t('install.topTitle')}</h2>
+        <section className="mt-4 flex min-h-0 flex-1 flex-col" aria-labelledby="top-h">
+          <div className="mb-2.5 flex flex-none items-end justify-between gap-3 border-b pb-1.5" style={{ borderColor: C.line }}>
+            <h2 id="top-h" className="font-serif text-[18px] leading-tight">{t('install.topTitle')}</h2>
             <span className={`shrink-0 text-[10px] font-semibold uppercase ${latin ? 'tracking-[0.18em]' : ''}`} style={{ color: C.gold }}>TH · ID · MY</span>
           </div>
           <Carousel label={t('install.topTitle')}>
@@ -75,16 +75,15 @@ export default function Install() {
               return <TopPick key={cc} index={i} country={cc} period={m?.period ?? null} top={m?.rows[0]} loading={!market} latin={latin} />;
             })}
           </Carousel>
-          <p className="mt-3 text-center text-[10.5px] leading-snug" style={{ color: '#8F889C' }}>{t('market.info')}</p>
+          <p className="mt-1.5 flex-none text-center text-[10px] leading-snug" style={{ color: '#8F889C' }}>{t('install.dataNote')}</p>
         </section>
 
         {/* 3 · install */}
-        <section className="mt-auto pt-8" aria-labelledby="inst-h">
-          <h2 id="inst-h" className="mb-2.5 text-center text-[12px] font-medium" style={{ color: C.muted }}>{t('install.installTitle')}</h2>
+        <section className="flex-none pt-3" aria-label={t('install.installTitle')}>
           {installed ? (
             <p className="mb-3 text-center text-sm" style={{ color: C.gold }}>✓ {t('install.installed')}</p>
           ) : (
-            <div className="mb-3 grid grid-cols-2 gap-2.5">
+            <div className="mb-2.5 grid grid-cols-2 gap-2.5">
               <StoreButton onClick={installAndroid} label="Android" sub="Chrome"
                 icon={<svg viewBox="0 0 24 24" className="h-[22px] w-[22px]" fill="#3DDC84" aria-hidden><path d={ANDROID} /></svg>} />
               <StoreButton onClick={() => setGuide('ios')} label="iOS" sub="Safari"
@@ -92,7 +91,7 @@ export default function Install() {
             </div>
           )}
           <button type="button" onClick={continueWeb}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[15px] font-semibold transition active:scale-[0.99]"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[15px] font-semibold transition active:scale-[0.99]"
             style={{ background: 'linear-gradient(135deg, #F2CA50, #D4AF37)', color: '#3C2F00', boxShadow: '0 10px 40px rgba(242,202,80,0.25)' }}>
             {t('install.go')} <span aria-hidden>→</span>
           </button>
@@ -132,7 +131,7 @@ function TopPick({ index, country, period, top, loading, latin }: { index: numbe
   const { t, locale } = useI18n();
   const label = `text-[10px] font-semibold uppercase ${latin ? 'tracking-[0.14em]' : ''}`;
   return (
-    <article className="hz-rise-in flex h-full flex-col rounded-2xl border px-4 pb-3.5 pt-3 backdrop-blur-md" style={{ animationDelay: `${index * 120}ms`, background: 'linear-gradient(165deg, rgba(242,202,80,0.10), rgba(255,255,255,0.04) 45%, rgba(255,255,255,0.03))', borderColor: C.line, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
+    <article className="hz-rise-in flex w-full flex-col rounded-2xl border px-4 pb-3 pt-3 backdrop-blur-md" style={{ animationDelay: `${index * 120}ms`, background: 'linear-gradient(165deg, rgba(242,202,80,0.10), rgba(255,255,255,0.04) 45%, rgba(255,255,255,0.03))', borderColor: C.line, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
       <header className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2">
           <span className="text-[20px] leading-none" aria-hidden>{FLAG[country]}</span>
@@ -155,7 +154,12 @@ function TopPick({ index, country, period, top, loading, latin }: { index: numbe
       </div>
 
       {!loading && (top ? (
-        top.note && <p className="mt-1 line-clamp-2 border-l-2 pl-2.5 text-[13px] leading-snug" style={{ borderColor: C.gold, color: '#ECE8F2' }}>{top.note}</p>
+        top.note && (
+          <div className="mt-1.5 rounded-xl px-3 py-2" style={{ background: 'rgba(0,0,0,0.28)' }}>
+            <div className="text-[11px] font-semibold" style={{ color: C.gold }}>💡 {t('market.why')}</div>
+            <p className="mt-0.5 line-clamp-3 text-[13.5px] leading-snug" style={{ color: '#ECE8F2' }}>{top.note}</p>
+          </div>
+        )
       ) : (
         <p className="mt-1 text-[12.5px]" style={{ color: C.muted }}>{t('noData')}</p>
       ))}
@@ -172,7 +176,7 @@ function ModelPhoto({ top, loading }: { top: TrendRow | undefined; loading: bool
   const [broken, setBroken] = useState(false);
   useEffect(() => setBroken(false), [src]);
   return (
-    <div className="relative mt-auto flex h-[168px] items-end justify-center overflow-hidden rounded-xl pt-3"
+    <div className="relative mt-auto flex min-h-[84px] flex-1 items-end justify-center overflow-hidden rounded-xl pt-2"
       style={{ background: 'radial-gradient(70% 60% at 50% 70%, rgba(242,202,80,0.20), transparent 70%)' }}>
       {/* pedestal shadow */}
       <div aria-hidden className="absolute bottom-3 left-1/2 h-3 w-1/2 -translate-x-1/2 rounded-[50%]" style={{ background: 'radial-gradient(closest-side, rgba(0,0,0,0.55), transparent)' }} />
@@ -180,15 +184,15 @@ function ModelPhoto({ top, loading }: { top: TrendRow | undefined; loading: bool
         : src && !broken ? (
           top?.image_cutout ? (
             <img src={src} alt={`${top.brand} ${top.model}`} loading="lazy" onError={() => setBroken(true)}
-              className="hz-anim relative mb-4 max-h-[140px] max-w-[85%] object-contain"
+              className="hz-anim relative mb-3 h-[85%] max-h-[220px] max-w-[85%] object-contain"
               style={{ filter: 'drop-shadow(0 14px 18px rgba(0,0,0,0.45))', animation: 'hz-float 5s ease-in-out infinite' }} />
           ) : (
             <img src={src} alt={`${top!.brand} ${top!.model}`} loading="lazy" onError={() => setBroken(true)}
-              className="relative mb-2 h-[140px] w-[80%] rounded-xl object-cover" style={{ boxShadow: '0 10px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(242,202,80,0.25)' }} />
+              className="relative mb-2 h-[85%] max-h-[220px] w-[80%] rounded-xl object-cover" style={{ boxShadow: '0 10px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(242,202,80,0.25)' }} />
           )
         ) : (
-          <div className="mb-6 flex flex-col items-center gap-1.5" style={{ color: 'rgba(242,202,80,0.45)' }}>
-            <svg viewBox="0 0 24 24" className="h-12 w-12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <div className="mb-4 flex flex-col items-center gap-1" style={{ color: 'rgba(242,202,80,0.45)' }}>
+            <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M8 8V7a4 4 0 0 1 8 0v1M5 8h14l1.2 11.2a1.6 1.6 0 0 1-1.6 1.8H5.4a1.6 1.6 0 0 1-1.6-1.8z" />
             </svg>
             <span className="text-[10.5px]">{t('install.noPhoto')}</span>
@@ -239,14 +243,14 @@ function Carousel({ label, children }: { label: string; children: React.ReactNod
   }, [n, go]);
 
   return (
-    <div role="region" aria-roledescription="carousel" aria-label={label}>
+    <div role="region" aria-roledescription="carousel" aria-label={label} className="flex min-h-0 flex-1 flex-col">
       <div ref={ref} onPointerDown={pause} onTouchStart={pause} onWheel={pause}
-        className="relative -mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-[7%] pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        className="relative -mx-5 flex min-h-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto px-[7%] pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {children.map((c, i) => (
-          <div key={i} className="w-[86%] shrink-0 snap-center" aria-roledescription="slide" aria-label={`${i + 1} / ${n}`}>{c}</div>
+          <div key={i} className="flex w-[86%] shrink-0 snap-center" aria-roledescription="slide" aria-label={`${i + 1} / ${n}`}>{c}</div>
         ))}
       </div>
-      <div className="mt-3 flex justify-center gap-2">
+      <div className="mt-2 flex flex-none justify-center gap-2">
         {children.map((_, i) => (
           <button key={i} type="button" onClick={() => { pause(); setActive(i); go(i); }} aria-label={`${t('install.slide')} ${i + 1}`} aria-current={i === active}
             className="h-1.5 rounded-full transition-all" style={{ width: i === active ? 22 : 6, background: i === active ? C.gold : 'rgba(242,202,80,0.35)' }} />
@@ -258,7 +262,7 @@ function Carousel({ label, children }: { label: string; children: React.ReactNod
 
 function StoreButton({ onClick, label, sub, icon }: { onClick: () => void; label: string; sub: string; icon: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="flex items-center justify-center gap-2.5 rounded-xl border py-2.5 transition active:scale-[0.98]"
+    <button type="button" onClick={onClick} className="flex items-center justify-center gap-2.5 rounded-xl border py-2 transition active:scale-[0.98]"
       style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(242,202,80,0.35)', color: C.ink }}>
       {icon}
       <span className="text-left leading-tight">
