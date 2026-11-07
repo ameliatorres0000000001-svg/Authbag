@@ -41,3 +41,34 @@ export function trackRecord(rows: { suggested: string; expert: string }[]) {
   for (const r of rows) { by[r.suggested] ??= { n: 0, agree: 0 }; by[r.suggested].n++; if (r.suggested === r.expert) by[r.suggested].agree++; }
   return { n, agree, rate: n ? agree / n : null, bySuggestion: by };
 }
+
+// ── AI pre-check: what the CUSTOMER sees when expert review is paused ──────────────────────────────────────────
+// The AI's comparison point by point (matches / differs / unclear) and a capped summary. It is never a
+// verification: the AI can ask for photos, point out concerns or say it cannot tell, and at most that it saw
+// no differences IN THESE PHOTOS — never "authentic", never a certificate.
+export type PrecheckLevel = 'more_photos' | 'concerns' | 'unclear' | 'no_differences_seen';
+export const precheckLevel = (o: string | null | undefined): PrecheckLevel =>
+  o === 'insufficient_evidence' ? 'more_photos' : o === 'concerns_found' ? 'concerns' : o === 'consistent_with_references' ? 'no_differences_seen' : 'unclear';
+
+/** Replace Khmer verdict words (counterfeit / genuine) in text shown to customers. "ស្បែកពិត" (real leather) is kept. */
+export function noVerdictKm(s: string): string {
+  return s
+    .replace(/ក្លែង(?:ក្លាយ)?/g, 'មិនស្របនឹងរូបគំរូ')
+    .replace(/កាបូប(?:ពិត|ដើម|សុទ្ធ)(?:ប្រាកដ)?/g, 'កាបូប')
+    .replace(/ពិតប្រាកដ/g, 'ស្របនឹងរូបគំរូ');
+}
+
+export interface PrecheckFinding { step: string; feature_en: string; feature_km: string; status: FindingStatus; note_en: string; note_km: string }
+export interface Precheck { level: PrecheckLevel; summary_en: string; summary_km: string; findings: PrecheckFinding[] }
+
+/** Build the customer view from a stored AI review (verify_ai_reviews row). Null when the review failed. */
+export function customerPrecheck(row: { suggested_outcome: string | null; findings_json: string | null; summary_en: string | null; summary_km: string | null }): Precheck | null {
+  if (!row.suggested_outcome) return null;
+  let fs: Finding[] = [];
+  try { fs = JSON.parse(row.findings_json || '[]'); } catch { fs = []; }
+  return {
+    level: precheckLevel(row.suggested_outcome),
+    summary_en: noVerdict(row.summary_en ?? ''), summary_km: noVerdictKm(row.summary_km ?? ''),
+    findings: fs.map((f) => ({ step: f.step, feature_en: noVerdict(f.feature_en), feature_km: noVerdictKm(f.feature_km), status: f.status, note_en: noVerdict(f.note_en), note_km: noVerdictKm(f.note_km) })),
+  };
+}

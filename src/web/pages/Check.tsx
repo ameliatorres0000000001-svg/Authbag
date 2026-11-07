@@ -29,7 +29,8 @@ export default function Check() {
   const { t } = useI18n();
   const me = useContext(MeContext)!;
   const [tax, setTax] = useState<{ brands: { id: string; name: string; slug: string }[]; models: { id: string; brand_id: string; name: string }[] } | null>(null);
-  const [meta, setMeta] = useState<{ trial: { used: number; limit: number; unlimited: boolean }; telegram: boolean } | null>(null);
+  const [meta, setMeta] = useState<{ trial: { used: number; limit: number; unlimited: boolean }; telegram: boolean; expertReview?: boolean; precheck?: { used: number; limit: number } | null } | null>(null);
+  const ai = meta?.expertReview === false;
   const [choice, setChoice] = useState<BrandChoice | null>(() => { try { const v = sessionStorage.getItem('hz_brand2'); return v ? JSON.parse(v) : null; } catch { return null; } });
   const brandId = choice?.brandId ?? '';
   const [model, setModel] = useState('');
@@ -72,15 +73,15 @@ export default function Check() {
     <div className="mx-auto max-w-3xl space-y-5 px-4 pb-10 pt-5 md:px-8">
       <header>
         <h1 className="text-[28px] leading-tight">{t('check.title')}</h1>
-        <p className="mt-1 text-sm text-muted">{t('check.subtitle')}</p>
+        <p className="mt-1 text-sm text-muted">{t(ai ? 'check.subtitleAi' : 'check.subtitle')}</p>
       </header>
-      {meta && !meta.telegram && STAFF_ROLES.includes(me.role) && <p className="text-xs text-counterfeit">⚠ {t('vr.noTelegram')}</p>}
+      {meta && !ai && !meta.telegram && STAFF_ROLES.includes(me.role) && <p className="text-xs text-counterfeit">⚠ {t('vr.noTelegram')}</p>}
 
       {/* how it works: one dark card, four steps joined by a gold line */}
       <div className="rounded-2xl bg-charcoal px-2 pb-4 pt-5 text-white shadow-sm">
         <ol className="relative grid grid-cols-4">
           <span className="absolute left-[12.5%] right-[12.5%] top-[15px] h-px bg-gradient-to-r from-gold/30 via-gold to-gold/30" aria-hidden />
-          {(['check.s1', 'check.s2', 'check.s3', 'check.s4'] as const).map((k, i) => (
+          {(ai ? ['check.s1', 'check.s2', 'check.s3ai', 'check.s4ai'] : ['check.s1', 'check.s2', 'check.s3', 'check.s4']).map((k, i) => (
             <li key={k} className="relative flex flex-col items-center px-1 text-center">
               <span className={`flex h-[30px] w-[30px] items-center justify-center rounded-full border font-mono text-[12px] font-bold ${i === 3 ? 'border-gold bg-gold text-charcoal' : 'border-gold bg-charcoal text-gold'}`}>
                 {i === 3 ? '✦' : i + 1}
@@ -97,6 +98,7 @@ export default function Check() {
         <div className="flex items-baseline justify-between gap-2">
           <div className="font-serif text-lg">1. {t('ck.whole')}</div>
           {trialLeft !== null && !meta!.trial.unlimited && <span className="text-[11px] text-muted">🎁 {t('vr.trial')} {trialLeft}/{meta!.trial.limit}</span>}
+          {ai && meta?.precheck && <span className="text-[11px] text-muted">🤖 {t('pc.left')} {Math.max(0, meta.precheck.limit - meta.precheck.used)}/{meta.precheck.limit}</span>}
         </div>
         <div className="grid grid-cols-2 gap-2">
           {(['camera', 'file'] as const).map((k) => (
@@ -156,10 +158,10 @@ export default function Check() {
 
       {/* 3. scan or upload → straight into the photo steps */}
       <div className="grid grid-cols-2 gap-3">
-        <Tile id="photo" title={t('check.photo')} help={t('check.photoHelp')} to={go('scan')} onClick={needBrand} primary dim={!brandId} />
-        <Tile id="upload" title={t('check.upload')} help={t('check.uploadHelp')} to={go('upload')} onClick={needBrand} dim={!brandId} />
+        <Tile id="photo" title={t('check.photo')} help={t(ai ? 'check.photoHelpAi' : 'check.photoHelp')} to={go('scan')} onClick={needBrand} primary dim={!brandId} />
+        <Tile id="upload" title={t('check.upload')} help={t(ai ? 'check.uploadHelpAi' : 'check.uploadHelp')} to={go('upload')} onClick={needBrand} dim={!brandId} />
       </div>
-      <p className="rounded-2xl bg-surface-low p-3 text-xs text-muted">{t('ck.noVerdict')} <Link to="/authenticity" className="text-gold underline">{t('ck.learn')}</Link></p>
+      <p className="rounded-2xl bg-surface-low p-3 text-xs text-muted">{t(ai ? 'pc.disclaimer' : 'ck.noVerdict')} <Link to="/authenticity" className="text-gold underline">{t('ck.learn')}</Link></p>
     </div>
   );
 }

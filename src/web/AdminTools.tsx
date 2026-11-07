@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from './api.ts';
 import { useI18n } from './i18n.tsx';
-import { OutcomeBadge } from './ui.tsx';
+import { OutcomeBadge, errText } from './ui.tsx';
 
 // Sections moved out of the customer tab bar: they live here for staff.
 const GROUPS: { title: string; links: [string, string][] }[] = [
@@ -252,6 +252,36 @@ export function AiTrackCard() {
           </ul>
         </>
       )}
+    </div>
+  );
+}
+
+/** Pause or resume expert review; while paused, customers get the AI pre-check only (never a certificate). */
+export function ExpertReviewCard({ owner }: { owner: boolean }) {
+  const { t } = useI18n();
+  const [st, setSt] = useState<{ enabled: boolean; limit: number } | null>(null);
+  const [limit, setLimit] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const load = () => api.get<{ enabled: boolean; limit: number }>('/api/admin/expert-review').then((r) => { setSt(r); setLimit(String(r.limit)); }).catch((e) => setErr(errText(e)));
+  useEffect(() => { load(); }, []);
+  const run = async (fn: () => Promise<unknown>) => { setBusy(true); setErr(''); try { await fn(); await load(); } catch (e) { setErr(errText(e)); } finally { setBusy(false); } };
+  if (!st) return null;
+  return (
+    <div className="card space-y-3">
+      <div className="font-semibold">🧑‍⚖️ {t('xr.title')}</div>
+      <p className={`rounded-lg px-3 py-2 text-sm ${st.enabled ? 'bg-verified-bg text-verified' : 'bg-review-bg text-review'}`}>{st.enabled ? t('xr.on') : t('xr.off')}</p>
+      <button type="button" className="btn-ghost" disabled={busy} onClick={() => run(() => api.put('/api/admin/expert-review', { enabled: !st.enabled }))}>
+        {st.enabled ? t('xr.turnOff') : t('xr.turnOn')}
+      </button>
+      {owner && (
+        <label className="flex items-center gap-2 text-sm">
+          <span className="flex-1">{t('xr.limit')}</span>
+          <input className="input !w-20" type="number" min={1} max={1000} value={limit} onChange={(e) => setLimit(e.target.value)} />
+          <button type="button" className="btn-ghost !px-2 text-xs" disabled={busy || !(Number(limit) >= 1)} onClick={() => run(() => api.put('/api/settings/ai_precheck_daily_limit', { value: Number(limit) }))}>{t('save')}</button>
+        </label>
+      )}
+      {err && <p className="text-xs text-counterfeit">{err}</p>}
     </div>
   );
 }
