@@ -20,6 +20,7 @@ const ICON = {
   shield: 'M9 12l2 2 4-4M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z',
   trend: 'M3 17l6-6 4 4 8-8M14 7h7v7',
   chat: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM8.5 12h.01M12 12h.01M15.5 12h.01',
+  scan: 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8',
 };
 const Svg = ({ d, className = 'h-5 w-5' }: { d: string; className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
@@ -41,11 +42,12 @@ export default function Dashboard() {
     return () => { on = false; };
   }, []);
   const focus: [string, string, string, string, number | undefined][] = [
+    ['/check', 'check.title', 'home.checkSub', ICON.scan, undefined],
     ['/paint', 'paint.title', 'home.paintSub', ICON.brush, stats?.paintRecipes],
-    ['/authenticity', 'home.authentic', 'home.authenticSub2', ICON.shield, stats?.authLessons],
   ];
   const more: [string, string, string, string][] = [
-    ['/chat', 'home.chat', 'home.chatSub', ICON.chat],
+    ['/authenticity', 'home.authentic', 'home.authenticSub2', ICON.shield],
+    ['/chat', 'tab.chat', 'home.chatSub', ICON.chat],
     ['/trends', 'home.trends', 'home.trendsSub', ICON.trend],
   ];
 
@@ -65,11 +67,11 @@ export default function Dashboard() {
               <div aria-hidden className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full" style={{ background: 'radial-gradient(circle, rgba(197,160,89,0.35), transparent 70%)' }} />
               <div className="relative flex items-start justify-between">
                 <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${i === 0 ? 'bg-gold text-charcoal' : 'bg-gold-light text-charcoal'}`}><Svg d={icon} className="h-6 w-6" /></span>
-                {n !== undefined && <span className={`font-serif text-3xl ${i === 0 ? 'text-gold' : 'text-charcoal'}`}>{n}</span>}
+                {n ? <span className={`font-serif text-3xl ${i === 0 ? 'text-gold' : 'text-charcoal'}`}>{n}</span> : null}
               </div>
               <div className="relative">
                 <div className="mt-4 text-lg font-semibold leading-snug">{t(title)}</div>
-                <div className={`mt-0.5 text-sm ${i === 0 ? 'text-white/70' : 'text-muted'}`}>{t(sub)} →</div>
+                <div className={`mt-0.5 text-sm ${i === 0 ? 'text-white/70' : 'text-muted'}`}>{t(sub)}</div>
               </div>
             </Link>
           ))}
@@ -78,7 +80,7 @@ export default function Dashboard() {
 
       <section aria-labelledby="more-h">
         <h2 id="more-h" className="mb-2 text-xs font-semibold text-muted">{t('home.more')}</h2>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-2 sm:grid-cols-3">
           {more.map(([to, title, sub, icon]) => (
             <Link key={to} to={to} className="flex items-center gap-3 rounded-2xl border border-hairline bg-surface-card p-3 transition hover:shadow-md">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold-light"><Svg d={icon} /></span>
@@ -92,11 +94,11 @@ export default function Dashboard() {
       </section>
 
       {/* real counts, read from the database */}
-      {stats && (
+      {stats && Object.values(stats).some((v) => v > 0) && (
         <section aria-labelledby="stats-h" className="rounded-2xl border border-hairline bg-surface-card p-4">
           <h2 id="stats-h" className="mb-3 text-base">{t('stats.title')}</h2>
           <dl className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {([['paintRecipes', 'stats.recipes'], ['careLessons', 'stats.careLessons'], ['authLessons', 'stats.authLessons'], ['referencePhotos', 'stats.photos'], ['brands', 'stats.brands'], ['marketMonths', 'stats.market']] as const).map(([k, label]) => (
+            {([['paintRecipes', 'stats.recipes'], ['careLessons', 'stats.careLessons'], ['authLessons', 'stats.authLessons'], ['referencePhotos', 'stats.photos'], ['brands', 'stats.brands'], ['marketMonths', 'stats.market']] as const).filter(([k]) => stats[k] > 0).map(([k, label]) => (
               <div key={k} className="rounded-xl bg-surface-low px-3 py-2">
                 <dd className="font-serif text-2xl leading-none">{stats[k].toLocaleString(locale === 'km' ? 'km-KH' : locale)}</dd>
                 <dt className="mt-1 text-[11px] text-muted">{t(label)}</dt>
@@ -124,8 +126,7 @@ export default function Dashboard() {
           })}
         </div>
 
-        <h3 className="mb-2 mt-4 text-base">{t('market.updates')}</h3>
-        {market && market.updates.length === 0 && <p className="text-sm text-muted">{t('noData')}</p>}
+        {market && market.updates.length > 0 && <h3 className="mb-2 mt-4 text-base">{t('market.updates')}</h3>}
         <ul className="space-y-2">
           {market?.updates.map((u) => (
             <li key={u.id} className="rounded-xl border border-hairline bg-surface-card p-3">
@@ -144,7 +145,6 @@ export default function Dashboard() {
         <p className="mt-3 text-[11px] text-muted">{t('market.info')}</p>
       </section>
 
-      <Posts />
     </div>
   );
 }

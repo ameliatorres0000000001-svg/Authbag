@@ -11,7 +11,6 @@ const ITEMS: [string, string, string, string, boolean][] = [
   ['/datecode', 'auth.datecode', 'auth.datecodeSub', 'M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12', false],
   ['/check', 'auth.scan', 'auth.scanSub', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8', true],
   ['/check/nfc', 'auth.nfc', 'auth.nfcSub', 'M6 18a8 8 0 0 1 0-12M9.5 15a4 4 0 0 1 0-6M18 6a8 8 0 0 1 0 12M14.5 9a4 4 0 0 1 0 6', true],
-  ['/verify', 'auth.cert', 'auth.certSub', 'M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8.5 14 7 22l5-3 5 3-1.5-8', true],
 ];
 
 /** "Learn & verify originals": the existing lessons, date codes, expert scan, NFC and certificates in one place. */

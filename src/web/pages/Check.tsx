@@ -156,11 +156,11 @@ export default function Check() {
         </div>
       )}
 
-      {/* 3. scan or upload → straight into the photo steps */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* 3. once the bag is known: scan or upload → straight into the photo steps */}
+      {brandId && <div className="grid grid-cols-2 gap-3">
         <Tile id="photo" title={t('check.photo')} help={t(ai ? 'check.photoHelpAi' : 'check.photoHelp')} to={go('scan')} onClick={needBrand} primary dim={!brandId} />
         <Tile id="upload" title={t('check.upload')} help={t(ai ? 'check.uploadHelpAi' : 'check.uploadHelp')} to={go('upload')} onClick={needBrand} dim={!brandId} />
-      </div>
+      </div>}
       <p className="rounded-2xl bg-surface-low p-3 text-xs text-muted">{t(ai ? 'pc.disclaimer' : 'ck.noVerdict')} <Link to="/authenticity" className="text-gold underline">{t('ck.learn')}</Link></p>
     </div>
   );

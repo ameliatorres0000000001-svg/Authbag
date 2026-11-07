@@ -96,7 +96,7 @@ export default function ColorScanner({ onChange, onSay }: { onChange: (m: Measur
 
   return (
     <div className="space-y-3">
-      <label className={`btn-primary inline-flex cursor-pointer items-center gap-2 ${loading ? 'pointer-events-none opacity-60' : ''}`}>
+      <label className={`btn-primary flex w-full cursor-pointer items-center justify-center gap-2 !py-4 text-base ${loading ? 'pointer-events-none opacity-60' : ''}`}>
         {file ? t('paint.retake') : t('paint.take')}
         <input type="file" accept="image/*" capture="environment" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) load(f); }} />
