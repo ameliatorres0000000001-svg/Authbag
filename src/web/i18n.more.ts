@@ -12,7 +12,6 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   noData: { vi: 'Chưa có dữ liệu', th: 'ยังไม่มีข้อมูล', id: 'Belum ada data' },
   'home.all': { vi: 'Tất cả', th: 'ทั้งหมด', id: 'Semua' },
   'feed.title': { vi: 'Bài đăng mới', th: 'โพสต์ล่าสุด', id: 'Postingan terbaru' },
-  'feed.none': { vi: 'Chưa có bài đăng.', th: 'ยังไม่มีโพสต์', id: 'Belum ada postingan.' },
   'feed.more': { vi: 'Xem thêm', th: 'ดูเพิ่มเติม', id: 'Muat lagi' },
   'feed.justNow': { vi: 'vừa xong', th: 'เมื่อสักครู่', id: 'baru saja' },
   'feed.thisPhoto': { vi: 'Ảnh này', th: 'ภาพนี้', id: 'Foto ini' },
@@ -125,7 +124,6 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'bp.add': { vi: 'Dùng thương hiệu', th: 'ใช้แบรนด์', id: 'Pakai merek' },
   'acct.signIn': { vi: 'Đăng nhập', th: 'เข้าสู่ระบบ', id: 'Masuk' },
   'acct.create': { vi: 'Tạo tài khoản', th: 'สร้างบัญชี', id: 'Buat akun' },
-  'acct.gateTitle': { vi: 'Đăng nhập để kiểm tra túi', th: 'เข้าสู่ระบบเพื่อตรวจกระเป๋า', id: 'Masuk untuk cek tas' },
   'acct.line': { vi: 'Tiếp tục với LINE', th: 'เข้าสู่ระบบด้วย LINE', id: 'Lanjut dengan LINE' },
   'acct.or': { vi: 'hoặc', th: 'หรือ', id: 'atau' },
   // Anajak Secondhand

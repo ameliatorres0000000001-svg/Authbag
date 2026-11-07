@@ -13,7 +13,8 @@ const REQUIRED: Step[] = ['model', 'logo', 'serial'];
 const MAX_EXTRA = 4;
 
 export interface Plan { id: string; name_en: string; name_km: string; price_cents: number | null; entrupy_price_cents: number | null; currency: string }
-interface Meta { trial: { used: number; limit: number; unlimited: boolean }; telegram: boolean; examples: Partial<Record<Step, string | null>>; plan: Plan | null }
+interface Meta { trial: { used: number; limit: number; unlimited: boolean }; telegram: boolean; examples: Partial<Record<Step, string | null>>; plan: Plan | null;
+  expertReview?: boolean; aiConfigured?: boolean; precheck?: { used: number; limit: number } | null }
 
 export const money = (cents: number | null | undefined, cur: string, later: string) =>
   cents == null ? later : new Intl.NumberFormat('en-US', { style: 'currency', currency: cur || 'USD' }).format(cents / 100);
@@ -81,7 +82,10 @@ export default function Verify() {
     fd.append('brandId', brandId); if (brandText) fd.append('brandText', brandText); fd.append('model', model); fd.append('mode', mode); fd.append('entrupy', entrupy ? '1' : '0');
     for (const s of STEPS) (shots[s] ?? []).forEach((f) => fd.append(s, f, `${s}.jpg`));
     try { const r = await api.post<{ id: string }>('/api/verify', fd); nav(`/verify/r/${r.id}`); }
-    catch (e) { setErr(errText(e)); setBusy(false); }
+    catch (e) {
+      const code = (e as { body?: { error?: string } })?.body?.error;
+      setErr(code === 'precheck_limit' ? t('pc.limit') : code === 'ai_not_configured' ? t('pc.aiOff') : errText(e)); setBusy(false);
+    }
   }
 
   // ── step 0: brand, model and how to take the photos
@@ -118,10 +122,10 @@ export default function Verify() {
         </span>
       </label>
 
-      <div className="rounded-2xl bg-surface-low p-3 text-xs text-muted">⏱ {t('vr.sla')}<br />{t('vr.disclaimer')}</div>
+      <div className="rounded-2xl bg-surface-low p-3 text-xs text-muted">{meta?.expertReview === false ? <>🤖 {t('pc.sla')}<br />{t('pc.disclaimer')}</> : <>⏱ {t('vr.sla')}<br />{t('vr.disclaimer')}</>}</div>
       {err && <Notice tone="bad">{err}</Notice>}
       <button type="button" className="btn-primary w-full !py-3" disabled={busy || REQUIRED.some((s) => !shots[s]?.length)} onClick={submit}>
-        {busy ? '…' : `${t('vr.send')} →`}
+        {busy ? '…' : `${t(meta?.expertReview === false ? 'pc.send' : 'vr.send')} →`}
       </button>
     </div>
   );
@@ -244,7 +248,9 @@ function MyChecks() {
                       )}
                     </div>
                   </div>
-                  {r.expert_outcome && r.status === 'answered' ? <OutcomeBadge outcome={r.expert_outcome} /> : <span className={`rounded-full px-2 py-0.5 text-[11px] ${STATUS_TONE[r.status]}`}>{t(`vr.status.${r.status}`)}</span>}
+                  {r.expert_outcome && r.status === 'answered' ? <OutcomeBadge outcome={r.expert_outcome} />
+                    : r.precheck_level ? <PrecheckBadge level={r.precheck_level} />
+                      : <span className={`rounded-full px-2 py-0.5 text-[11px] ${STATUS_TONE[r.status]}`}>{t(`vr.status.${r.status}`)}</span>}
                 </Link>
               </li>
             ))}
@@ -254,4 +260,14 @@ function MyChecks() {
       <ContactInfo />
     </div>
   );
+}
+
+export const PRECHECK_TONE: Record<string, string> = {
+  no_differences_seen: 'bg-verified-bg text-verified', concerns: 'bg-counterfeit-bg text-counterfeit',
+  more_photos: 'bg-review-bg text-review', unclear: 'bg-surface-high text-muted',
+};
+/** The AI pre-check level as a small label (never a verdict). */
+export function PrecheckBadge({ level }: { level: string }) {
+  const { t } = useI18n();
+  return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${PRECHECK_TONE[level] ?? PRECHECK_TONE.unclear}`}>🤖 {t(`pc.lvl.${level}`)}</span>;
 }

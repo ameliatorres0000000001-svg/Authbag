@@ -15,7 +15,7 @@ import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { removeBackground } from './cutout.ts';
 import { sniffAudio, synthesize, ttsConfigured, ttsHash } from './tts.ts';
 import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
-import { parseAiReview, trackRecord } from '../shared/aiReview.ts';
+import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -1389,7 +1389,7 @@ app.get('/api/audit', need(ADMINS), async (c) =>
   c.json((await c.env.DB.prepare('SELECT id, ts, user_id, action, resource_type, resource_id, detail_json, hash FROM audit_log ORDER BY id DESC LIMIT 300').all()).results));
 app.get('/api/audit/verify', need(ADMINS), async (c) => c.json(await verifyAuditChain(c.env)));
 
-const SETTING_KEYS = ['approvals_required', 'min_authentic_supports', 'retrieval_min_authentic_per_model_era', 'finetune_min_authentic_per_model_era', 'finetune_min_counterfeit_per_model_era'];
+const SETTING_KEYS = ['ai_precheck_daily_limit', 'approvals_required', 'min_authentic_supports', 'retrieval_min_authentic_per_model_era', 'finetune_min_authentic_per_model_era', 'finetune_min_counterfeit_per_model_era'];
 app.get('/api/settings', async (c) => c.json((await c.env.DB.prepare('SELECT key, value FROM settings').all()).results));
 app.put('/api/settings/:key', need(['owner']), async (c) => {
   const key = c.req.param('key');
@@ -1406,6 +1406,20 @@ app.put('/api/settings/:key', need(['owner']), async (c) => {
 const VERIFY_STEPS = ['model', 'logo', 'serial', 'material', 'hardware', 'zipper', 'extra'] as const;
 const VERIFY_REQUIRED = ['model', 'logo', 'serial'] as const;
 const VERIFY_TRIAL = 3;
+/** Experts answer requests (1) or expert review is paused and customers get the AI pre-check only (0). */
+const expertReviewOn = async (env: AppEnv['Bindings']) => (await getSettingNumber(env, 'expert_review_enabled', 1)) === 1;
+const precheckDay = () => `precheck:${new Date().toISOString().slice(0, 10)}`;
+async function precheckUsage(env: AppEnv['Bindings'], userId: string) {
+  const limit = await getSettingNumber(env, 'ai_precheck_daily_limit', 5);
+  const used = (await env.DB.prepare('SELECT n FROM ai_chat_usage WHERE user_id = ? AND day = ?').bind(userId, precheckDay()).first<{ n: number }>())?.n ?? 0;
+  return { used, limit };
+}
+/** Count one AI pre-check for today; false when the daily limit is reached. */
+const takePrecheck = async (env: AppEnv['Bindings'], userId: string) => {
+  const { limit } = await precheckUsage(env, userId);
+  const r = await env.DB.prepare(`INSERT INTO ai_chat_usage (user_id, day, n) VALUES (?, ?, 1) ON CONFLICT (user_id, day) DO UPDATE SET n = n + 1 WHERE n < ?`).bind(userId, precheckDay(), limit).run();
+  return !!r.meta.changes;
+};
 const MAX_VERIFY_PHOTOS = 10;
 // where to find an example photo for each step among the brand's reference photos
 const STEP_COMPONENT: Record<string, string> = { model: 'canvas', logo: 'heat_stamp', serial: 'date_code', material: 'canvas', hardware: 'hardware', zipper: 'zipper' };
@@ -1445,7 +1459,9 @@ app.get('/api/verify/meta', async (c) => {
   const me = c.get('user'); const brandId = c.req.query('brandId') ?? '';
   const staff = STAFF.includes(me.role);
   const used = staff ? 0 : await trialUsed(c.env, me.id);
-  const out: Record<string, any> = { trial: { used, limit: VERIFY_TRIAL, unlimited: staff }, telegram: telegramConfigured(c.env), examples: {}, plan: null };
+  const experts = await expertReviewOn(c.env);
+  const out: Record<string, any> = { trial: { used, limit: VERIFY_TRIAL, unlimited: staff || !experts }, telegram: telegramConfigured(c.env), examples: {}, plan: null,
+    expertReview: experts, aiConfigured: aiConfigured(c.env), precheck: me.id ? await precheckUsage(c.env, me.id) : null };
   if (brandId) {
     const b = await c.env.DB.prepare('SELECT slug FROM brands WHERE id = ?').bind(brandId).first<{ slug: string }>();
     if (b) out.plan = await planForBrand(c.env, b.slug);
@@ -1459,7 +1475,8 @@ app.post('/api/verify', async (c) => {
   const me = c.get('user');
   const form = await c.req.formData();
   const brandId = String(form.get('brandId') ?? ''); const mode = String(form.get('mode') ?? '');
-  const modelText = String(form.get('model') ?? '').trim().slice(0, 120) || null;
+  // "model" carries both the typed model name (text) and the whole-bag photo (file): take the text value
+  const modelText = String(form.getAll('model').find((v) => typeof v === 'string') ?? '').trim().slice(0, 120) || null;
   const entrupy = form.get('entrupy') === '1' ? 1 : 0;
   if (!['scan', 'upload'].includes(mode)) return c.json({ error: 'invalid_mode' }, 400);
   const brand = await c.env.DB.prepare('SELECT id, slug, name FROM brands WHERE id = ?').bind(brandId).first<{ id: string; slug: string; name: string }>();
@@ -1485,20 +1502,28 @@ app.post('/api/verify', async (c) => {
   if (photos.length > MAX_VERIFY_PHOTOS) return c.json({ error: 'too_many_photos', max: MAX_VERIFY_PHOTOS }, 400);
 
   const staff = STAFF.includes(me.role);
-  const used = staff ? 0 : await trialUsed(c.env, me.id);
+  const experts = await expertReviewOn(c.env);
+  const used = staff || !experts ? 0 : await trialUsed(c.env, me.id);
   // paid plans are not open yet: after the free trial, non-staff users wait for the plans to be priced
-  if (!staff && used >= VERIFY_TRIAL) return c.json({ error: 'trial_used', limit: VERIFY_TRIAL }, 402);
+  if (experts && !staff && used >= VERIFY_TRIAL) return c.json({ error: 'trial_used', limit: VERIFY_TRIAL }, 402);
+  // expert review paused: the AI pre-check is the answer, so it must be available, within today's limit
+  if (!experts && !aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 503);
+  if (!experts && !staff && !(await takePrecheck(c.env, me.id))) return c.json({ error: 'precheck_limit' }, 429);
   const plan = await planForBrand(c.env, brand.slug);
 
   const id = uid('vr_');
   await c.env.DB.prepare('INSERT INTO verify_requests (id, user_id, brand_id, brand_text, model_text, mode, plan_id, free_trial, entrupy_requested) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, me.id, brand.id, brandText, modelText, mode, plan?.id ?? null, staff ? 0 : 1, entrupy).run();
+    .bind(id, me.id, brand.id, brandText, modelText, mode, plan?.id ?? null, staff || !experts ? 0 : 1, entrupy).run();
   for (const p of photos) {
     const pid = uid('vp_'); const key = `verify/${id}/${p.step}/${pid}`;
     await c.env.VAULT.put(key, p.data, { httpMetadata: { contentType: p.mime } });
     await c.env.DB.prepare('INSERT INTO verify_photos (id, request_id, step, r2_key, mime) VALUES (?, ?, ?, ?, ?)').bind(pid, id, p.step, key, p.mime).run();
   }
   await audit(c.env, me.id, 'verify.submit', 'verify_request', id, { brand: brand.slug, photos: photos.length, entrupy: !!entrupy });
+
+  // the AI compares the photos with our references straight away (for the customer when experts are paused)
+  c.executionCtx.waitUntil(runAiReview(c.env, id).then((x) => { if (!x.ok) console.error(`ai pre-check ${id}: ${x.error}`); }));
+  if (!experts) return c.json({ id });
 
   const origin = new URL(c.req.url).origin;
   c.executionCtx.waitUntil(notifyStaff(c.env, { title: '🔎 New verification request', body: `${brandName}${modelText ? ` · ${modelText}` : ''} — ${me.name} · ${photos.length} photos`, url: `/verify/r/${id}`, tag: id }, origin).catch(() => 0));
@@ -1537,9 +1562,14 @@ app.get('/api/verify', async (c) => {
       (SELECT status FROM buyback_offers o WHERE o.request_id = r.id ORDER BY o.created_at DESC LIMIT 1) AS offer_status,
       (SELECT from_side FROM buyback_offers o WHERE o.request_id = r.id ORDER BY o.created_at DESC LIMIT 1) AS offer_from,
       (SELECT amount_cents FROM buyback_offers o WHERE o.request_id = r.id ORDER BY o.created_at DESC LIMIT 1) AS offer_cents,
-      (SELECT currency FROM buyback_offers o WHERE o.request_id = r.id ORDER BY o.created_at DESC LIMIT 1) AS offer_currency
+      (SELECT currency FROM buyback_offers o WHERE o.request_id = r.id ORDER BY o.created_at DESC LIMIT 1) AS offer_currency,
+      (SELECT CASE a.suggested_outcome WHEN 'insufficient_evidence' THEN 'more_photos' WHEN 'concerns_found' THEN 'concerns'
+         WHEN 'consistent_with_references' THEN 'no_differences_seen' WHEN 'requires_expert_review' THEN 'unclear' END
+         FROM verify_ai_reviews a WHERE a.request_id = r.id AND a.suggested_outcome IS NOT NULL ORDER BY a.created_at DESC LIMIT 1) AS precheck_level
     FROM verify_requests r JOIN brands b ON b.id = r.brand_id ${all ? '' : 'WHERE r.user_id = ?'} ORDER BY r.created_at DESC LIMIT 100`)
-    .bind(...(all ? [] : [me.id])).all();
+    .bind(...(all ? [] : [me.id])).all<Record<string, unknown>>();
+  // customers see the AI level only while expert review is paused (otherwise it is for the experts)
+  if (!STAFF.includes(me.role) && (await expertReviewOn(c.env))) for (const x of rows.results) x.precheck_level = null;
   return c.json({ requests: rows.results });
 });
 
@@ -1564,8 +1594,39 @@ app.get('/api/verify/:id', async (c) => {
       .bind(r.id).first<Record<string, any>>().catch(() => null);
     if (row) ai = { ...row, findings: JSON.parse(row.findings_json || '[]'), track: await aiTrack(c.env) };
   }
-  return c.json({ request: r, photos, plan, refs, certificate, offers, ai });
+  // AI pre-check for the customer while expert review is paused (staff see it too)
+  let precheck = null as Record<string, unknown> | null;
+  const experts = await expertReviewOn(c.env);
+  if (!experts) {
+    const row = await c.env.DB.prepare('SELECT suggested_outcome, findings_json, summary_en, summary_km, error, created_at FROM verify_ai_reviews WHERE request_id = ? ORDER BY created_at DESC LIMIT 1')
+      .bind(r.id).first<{ suggested_outcome: string | null; findings_json: string | null; summary_en: string | null; summary_km: string | null; error: string | null; created_at: string }>().catch(() => null);
+    precheck = { pending: !row, failed: !!row && !row.suggested_outcome, result: row ? customerPrecheck(row) : null, refs: Object.keys(found).length, at: row?.created_at ?? null };
+  }
+  return c.json({ request: r, photos, plan, refs, certificate, offers, ai, precheck, expertReview: experts });
 });
+
+/** The customer asks the AI to try again after a failed pre-check (counts toward today's limit). */
+app.post('/api/verify/:id/precheck', async (c) => {
+  const me = c.get('user');
+  const r = await c.env.DB.prepare('SELECT id, user_id FROM verify_requests WHERE id = ?').bind(c.req.param('id')).first<{ id: string; user_id: string }>();
+  if (!r || !canSeeRequest(me, r.user_id)) return c.json({ error: 'not_found' }, 404);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 503);
+  const last = await c.env.DB.prepare('SELECT suggested_outcome FROM verify_ai_reviews WHERE request_id = ? ORDER BY created_at DESC LIMIT 1').bind(r.id).first<{ suggested_outcome: string | null }>();
+  if (last?.suggested_outcome) return c.json({ error: 'already_done' }, 409);
+  if (!STAFF.includes(me.role) && !(await takePrecheck(c.env, me.id))) return c.json({ error: 'precheck_limit' }, 429);
+  const x = await runAiReview(c.env, r.id);
+  return x.ok ? c.json({ ok: true }) : c.json({ error: 'ai_failed' }, 502);
+});
+
+/** Admins pause or resume expert review. */
+app.put('/api/admin/expert-review', need(ADMINS), async (c) => {
+  const { enabled } = await parse(c, z.object({ enabled: z.boolean() }));
+  await c.env.DB.prepare("INSERT INTO settings (key, value, updated_by, updated_at) VALUES ('expert_review_enabled', ?, ?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at")
+    .bind(enabled ? '1' : '0', c.get('user').id, nowIso()).run();
+  await audit(c.env, c.get('user').id, 'settings.expert_review', 'settings', 'expert_review_enabled', { enabled });
+  return c.json({ ok: true });
+});
+app.get('/api/admin/expert-review', need(STAFF), async (c) => c.json({ enabled: await expertReviewOn(c.env), limit: await getSettingNumber(c.env, 'ai_precheck_daily_limit', 5) }));
 
 app.get('/api/verify/photos/:pid/image', async (c) => {
   const me = c.get('user');

@@ -14,7 +14,7 @@ import VerifyAdmin from '../VerifyAdmin.tsx';
 import MarketAdmin from '../MarketAdmin.tsx';
 import CareAdmin from '../CareAdmin.tsx';
 import PaintAdmin from '../PaintAdmin.tsx';
-import AdminTools, { AiCheck, AiTrackCard, ContactAdmin, ExpertsCard, NotifyCard, VerifyQueue } from '../AdminTools.tsx';
+import AdminTools, { AiCheck, AiTrackCard, ContactAdmin, ExpertReviewCard, ExpertsCard, NotifyCard, VerifyQueue } from '../AdminTools.tsx';
 
 interface Tax { brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] }
 interface Comp { code: string; name_en: string; name_km: string }
@@ -75,7 +75,7 @@ export default function AdminPanel() {
           )}
           {tab === 'paint' && <><PaintAdmin /><CareAdmin /></>}
           {tab === 'market' && <MarketAdmin />}
-          {tab === 'settings' && <>{admin && <><ExpertsCard /><ContactAdmin /><AiCheck /><VerifyAdmin /></>}<AdminTools /></>}
+          {tab === 'settings' && <>{admin && <><ExpertReviewCard owner={me.role === 'owner'} /><ExpertsCard /><ContactAdmin /><AiCheck /><VerifyAdmin /></>}<AdminTools /></>}
         </div>
         {tab === 'library' && (
         <div className="min-w-0 space-y-4 lg:col-span-3">

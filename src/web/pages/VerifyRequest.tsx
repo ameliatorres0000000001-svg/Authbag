@@ -5,7 +5,7 @@ import { useI18n } from '../i18n.tsx';
 import { MeContext } from '../App.tsx';
 import { Notice, OutcomeBadge, errText } from '../ui.tsx';
 import { STAFF_ROLES } from '../studio.ts';
-import { STATUS_TONE, money, shrink, type Plan } from './Verify.tsx';
+import { PRECHECK_TONE, STATUS_TONE, money, shrink, type Plan } from './Verify.tsx';
 import AnnotatedPhoto, { PointCards, type Point } from '../AnnotatedPhoto.tsx';
 import { assetImg } from '../studio.ts';
 import ContactInfo from '../ContactInfo.tsx';
@@ -20,7 +20,7 @@ export default function VerifyRequest() {
   const { id } = useParams();
   const { t } = useI18n();
   const me = useContext(MeContext)!;
-  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null; refs?: Record<string, Ref>; certificate?: any; offers?: Offer[]; ai?: any } | null>(null);
+  const [data, setData] = useState<{ request: any; photos: { id: string; step: string }[]; plan: Plan | null; refs?: Record<string, Ref>; certificate?: any; offers?: Offer[]; ai?: any; precheck?: Pc | null; expertReview?: boolean } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
@@ -29,7 +29,9 @@ export default function VerifyRequest() {
   useEffect(() => { load(); }, [load]);
   // keep checking while the experts work on it
   useEffect(() => {
-    if (!data || !['submitted', 'in_review'].includes(data.request.status)) return;
+    if (!data) return;
+    if (data.precheck?.pending) { const p = window.setInterval(load, 4000); return () => window.clearInterval(p); }
+    if (!['submitted', 'in_review'].includes(data.request.status) || data.expertReview === false) return;
     const h = window.setInterval(load, 20000);
     return () => window.clearInterval(h);
   }, [data, load]);
@@ -37,7 +39,8 @@ export default function VerifyRequest() {
   if (err) return <div className="mx-auto max-w-2xl p-5"><Notice tone="bad">{err}</Notice></div>;
   if (!data) return <div className="p-8 text-muted">…</div>;
   const r = data.request;
-  const waiting = r.status === 'submitted' || r.status === 'in_review';
+  const paused = data.expertReview === false;
+  const waiting = !paused && (r.status === 'submitted' || r.status === 'in_review');
   const staff = STAFF_ROLES.includes(me.role);
 
   async function addPhotos(files: File[]) {
@@ -55,13 +58,15 @@ export default function VerifyRequest() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 px-4 pb-10 pt-5">
-      <Link to="/verify" className="text-sm text-muted">← {t('vr.title')}</Link>
+      <Link to="/verify" className="text-sm text-muted">← {t('nav.verify')}</Link>
       <header>
         <h1 className="text-[26px] leading-tight">{r.brand}{r.model_text ? ` · ${r.model_text}` : ''}</h1>
         <p className="font-mono text-[11px] text-muted">{r.id} · {new Date(r.created_at).toLocaleString()}</p>
       </header>
 
-      <div className="rounded-2xl border border-hairline bg-surface-card p-4">
+      {data.precheck && <PrecheckCard id={r.id} pc={data.precheck} onChange={load} />}
+
+      <div className={`rounded-2xl border border-hairline bg-surface-card p-4 ${paused && r.status !== 'answered' ? 'hidden' : ''}`}>
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_TONE[r.status]}`}>{t(`vr.status.${r.status}`)}</span>
           {r.status === 'answered' && <OutcomeBadge outcome={r.expert_outcome} />}
@@ -393,6 +398,67 @@ function AiReviewCard({ requestId, ai, onChange }: { requestId: string; ai: any 
         </p>
       )}
       {err && <p className="text-xs text-counterfeit">{err}</p>}
+    </section>
+  );
+}
+
+interface PcFinding { step: string; feature_en: string; feature_km: string; status: 'matches' | 'differs' | 'unclear'; note_en: string; note_km: string }
+interface Pc { pending: boolean; failed: boolean; refs: number; at: string | null; result: { level: string; summary_en: string; summary_km: string; findings: PcFinding[] } | null }
+const STATUS_ICON: Record<string, [string, string]> = { matches: ['✓', 'bg-verified-bg text-verified'], differs: ['!', 'bg-counterfeit-bg text-counterfeit'], unclear: ['?', 'bg-surface-high text-muted'] };
+
+/**
+ * AI pre-check, shown to the customer while expert review is paused: the AI's comparison with our reference
+ * photos, point by point, and a capped summary. Never a verdict, never a certificate.
+ */
+function PrecheckCard({ id, pc, onChange }: { id: string; pc: Pc; onChange: () => void }) {
+  const { t, locale } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const km = locale === 'km';
+  const retry = async () => {
+    setBusy(true); setErr('');
+    try { await api.post(`/api/verify/${id}/precheck`); onChange(); }
+    catch (e) { const code = (e as { body?: { error?: string } })?.body?.error; setErr(code === 'precheck_limit' ? t('pc.limit') : errText(e)); }
+    finally { setBusy(false); }
+  };
+  const res = pc.result;
+  return (
+    <section className="space-y-3 rounded-2xl border border-hairline bg-surface-card p-4" aria-live="polite">
+      <div className="flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-charcoal text-lg" aria-hidden>🤖</span>
+        <h2 className="flex-1 text-lg leading-tight">{t('pc.title')}</h2>
+        {res && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${PRECHECK_TONE[res.level] ?? ''}`}>{t(`pc.lvl.${res.level}`)}</span>}
+      </div>
+      {pc.pending && <div className="flex items-center gap-3 rounded-xl bg-surface-low p-3 text-sm"><span className="h-3 w-3 animate-pulse rounded-full bg-gold" />{t('pc.working')}</div>}
+      {pc.failed && (
+        <div className="space-y-2">
+          <Notice tone="warn">{t('pc.failed')}</Notice>
+          <button type="button" className="btn-primary" disabled={busy} onClick={retry}>{busy ? '…' : t('pc.retry')}</button>
+        </div>
+      )}
+      {res && (
+        <>
+          <p className="text-sm">{t(`pc.what.${res.level}`)}</p>
+          {(km ? res.summary_km : res.summary_en) && <p className="rounded-xl bg-surface-low p-3 text-sm leading-relaxed">{km ? res.summary_km || res.summary_en : res.summary_en}</p>}
+          {pc.refs === 0 && <Notice tone="warn">{t('pc.noRefs')}</Notice>}
+          <ul className="space-y-2">
+            {res.findings.map((f, i) => {
+              const [icon, tone] = STATUS_ICON[f.status] ?? STATUS_ICON.unclear;
+              return (
+                <li key={i} className="flex gap-3 rounded-xl border border-hairline p-3 text-sm">
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-bold ${tone}`} aria-label={t(`pc.st.${f.status}`)}>{icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{(km && f.feature_km) || f.feature_en} <span className="text-xs font-normal text-muted">· {t(`vr.step.${f.step}`)} · {t(`pc.st.${f.status}`)}</span></div>
+                    {((km && f.note_km) || f.note_en) && <p className="mt-0.5 text-muted">{(km && f.note_km) || f.note_en}</p>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+      {err && <Notice tone="bad">{err}</Notice>}
+      <p className="text-[11px] text-muted">{t('pc.disclaimer')}</p>
     </section>
   );
 }
