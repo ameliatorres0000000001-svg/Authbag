@@ -205,6 +205,7 @@ function AccountButton({ me, onSignOut }: { me: Me | null; onSignOut: () => void
             <div className="font-semibold">{me.name}</div>
             <div className="truncate text-xs text-muted">{me.email}</div>
             <Link to="/verify" onClick={() => setOpen(false)} className="mt-2 block rounded-lg px-2 py-1.5 hover:bg-surface-low">🏅 {t('nav.verify')}</Link>
+            {STAFF_ROLES.includes(me.role) && <Link to="/admin" onClick={() => setOpen(false)} className="block rounded-lg px-2 py-1.5 hover:bg-surface-low">🛠 {t('acct.admin')}</Link>}
             <button type="button" onClick={() => { setOpen(false); onSignOut(); }} className="block w-full rounded-lg px-2 py-1.5 text-left text-counterfeit hover:bg-surface-low">{t('signOut')}</button>
           </div>
         </>
