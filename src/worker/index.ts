@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { removeBackground } from './cutout.ts';
@@ -175,6 +175,10 @@ const PUBLIC_GET = [
   /^\/api\/contact(\/qr)?$/,
   /^\/api\/market\/(trends|overview|updates)$/,
   /^\/api\/market\/images\/[^/]+$/,
+  /^\/api\/care\/lessons(\/[^/]+(\/photo\/(before|after))?)?$/,
+  /^\/api\/care\/steps\/[^/]+\/photo$/,
+  /^\/api\/lessons(\/[^/]+)?$/,
+  /^\/api\/stats\/public$/,
 ];
 
 // everything below requires a session (or is a public read above)
@@ -2136,6 +2140,216 @@ app.delete('/api/admin/market/images/:id', need(ADMINS), async (c) => {
   await c.env.VAULT.delete([...new Set([r.original_key, r.display_key])]);
   await audit(c.env, c.get('user').id, 'market.model_photo_deleted', 'market_model_images', c.req.param('id'));
   return c.json({ ok: true });
+});
+
+// ───────────────────────── Anajak Secondhand: bag painting / repair / care lessons ─────────────────────────
+const CARE_TOPICS = ['cleaning', 'edge_paint', 'recolor', 'corners', 'hardware', 'odor', 'lining', 'other'] as const;
+const CARE_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
+const MAX_CARE_PHOTO = 8 * 1024 * 1024;
+const careEditor = (c: any) => ADMINS.includes(c.get('user').role);
+type CareLesson = Record<string, any> & { id: string; status: string; before_key: string | null; after_key: string | null };
+
+const careLesson = (env: AppEnv['Bindings'], id: string) => env.DB.prepare('SELECT * FROM care_lessons WHERE id = ?').bind(id).first<CareLesson>();
+/** What the public sees of a lesson: never the storage keys, only whether a photo exists. */
+const careOut = (l: CareLesson) => {
+  const { before_key, after_key, created_by, ...rest } = l;
+  return { ...rest, has_before: !!before_key, has_after: !!after_key };
+};
+
+/** Published lessons for everyone; editors also see drafts. */
+app.get('/api/care/lessons', async (c) => {
+  const all = careEditor(c) && c.req.query('all') === '1';
+  const rows = (await c.env.DB.prepare(`SELECT l.*, (SELECT COUNT(*) FROM care_lesson_steps s WHERE s.lesson_id = l.id) AS steps
+    FROM care_lessons l ${all ? '' : "WHERE l.status = 'published'"} ORDER BY l.status = 'published' DESC, COALESCE(l.published_at, l.updated_at) DESC`).all<CareLesson>()).results;
+  return c.json({ lessons: rows.map(careOut) });
+});
+
+app.get('/api/care/lessons/:id', async (c) => {
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l || (l.status !== 'published' && !careEditor(c))) return c.json({ error: 'not_found' }, 404);
+  const steps = (await c.env.DB.prepare('SELECT id, sort, body, tip, photo_key FROM care_lesson_steps WHERE lesson_id = ? ORDER BY sort').bind(l.id).all<Record<string, any>>()).results
+    .map(({ photo_key, ...s }) => ({ ...s, has_photo: !!photo_key }));
+  return c.json({ lesson: careOut(l), steps });
+});
+
+const servePhoto = async (c: any, key: string | null | undefined) => {
+  const obj = key ? await c.env.VAULT.get(key) : null;
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? 'image/jpeg', 'cache-control': 'public, max-age=3600' } });
+};
+app.get('/api/care/lessons/:id/photo/:which', async (c) => {
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l || (l.status !== 'published' && !careEditor(c))) return c.json({ error: 'not_found' }, 404);
+  return servePhoto(c, c.req.param('which') === 'before' ? l.before_key : c.req.param('which') === 'after' ? l.after_key : null);
+});
+app.get('/api/care/steps/:id/photo', async (c) => {
+  const s = await c.env.DB.prepare('SELECT s.photo_key, l.status FROM care_lesson_steps s JOIN care_lessons l ON l.id = s.lesson_id WHERE s.id = ?').bind(c.req.param('id')).first<{ photo_key: string | null; status: string }>();
+  if (!s || (s.status !== 'published' && !careEditor(c))) return c.json({ error: 'not_found' }, 404);
+  return servePhoto(c, s.photo_key);
+});
+
+const careFields = z.object({
+  topic: z.enum(CARE_TOPICS), level: z.enum(CARE_LEVELS),
+  title_km: z.string().trim().min(3).max(160), title_en: z.string().trim().max(160).nullable().optional(),
+  summary: z.string().trim().max(800).nullable().optional(), materials: z.string().trim().max(1500).nullable().optional(),
+  safety: z.string().trim().max(1000).nullable().optional(), minutes: z.number().int().min(1).max(1440).nullable().optional(),
+});
+
+app.post('/api/admin/care/lessons', need(ADMINS), async (c) => {
+  const b = await parse(c, careFields);
+  const id = uid('cl_');
+  await c.env.DB.prepare(`INSERT INTO care_lessons (id, topic, level, title_km, title_en, summary, materials, safety, minutes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, b.topic, b.level, b.title_km, b.title_en || null, b.summary || null, b.materials || null, b.safety || null, b.minutes ?? null, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'care.lesson_created', 'care_lessons', id);
+  return c.json({ ok: true, id });
+});
+
+app.put('/api/admin/care/lessons/:id', need(ADMINS), async (c) => {
+  const b = await parse(c, careFields);
+  const r = await c.env.DB.prepare(`UPDATE care_lessons SET topic = ?, level = ?, title_km = ?, title_en = ?, summary = ?, materials = ?, safety = ?, minutes = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.topic, b.level, b.title_km, b.title_en || null, b.summary || null, b.materials || null, b.safety || null, b.minutes ?? null, c.req.param('id')).run();
+  if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
+  return c.json({ ok: true });
+});
+
+app.post('/api/admin/care/lessons/:id/status', need(ADMINS), async (c) => {
+  const { status } = await parse(c, z.object({ status: z.enum(['draft', 'published']) }));
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  if (status === 'published') {
+    const n = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM care_lesson_steps WHERE lesson_id = ?').bind(l.id).first<{ n: number }>())?.n ?? 0;
+    if (n === 0) return c.json({ error: 'no_steps' }, 400);
+  }
+  await c.env.DB.prepare(`UPDATE care_lessons SET status = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, strftime('%Y-%m-%dT%H:%M:%fZ','now')) ELSE published_at END,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`).bind(status, status, l.id).run();
+  await audit(c.env, c.get('user').id, `care.lesson_${status}`, 'care_lessons', l.id);
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/care/lessons/:id', need(ADMINS), async (c) => {
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  const keys = (await c.env.DB.prepare('SELECT photo_key FROM care_lesson_steps WHERE lesson_id = ? AND photo_key IS NOT NULL').bind(l.id).all<{ photo_key: string }>()).results.map((r) => r.photo_key);
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM care_lesson_steps WHERE lesson_id = ?').bind(l.id),
+    c.env.DB.prepare('DELETE FROM care_lessons WHERE id = ?').bind(l.id),
+  ]);
+  const all = [...keys, l.before_key, l.after_key].filter((k): k is string => !!k);
+  if (all.length) await c.env.VAULT.delete(all);
+  await audit(c.env, c.get('user').id, 'care.lesson_deleted', 'care_lessons', l.id);
+  return c.json({ ok: true });
+});
+
+/** Read an uploaded photo from a multipart form (field "file"): checked to be a real image and not too large. */
+async function carePhotoFrom(c: any): Promise<{ buf: ArrayBuffer; mime: string } | Response> {
+  const file = (await c.req.formData()).get('file');
+  if (!(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_CARE_PHOTO) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffImage(new Uint8Array(buf));
+  return mime ? { buf, mime } : c.json({ error: 'not_an_image' }, 415);
+}
+
+app.post('/api/admin/care/lessons/:id/photo/:which', need(ADMINS), async (c) => {
+  const which = c.req.param('which');
+  if (which !== 'before' && which !== 'after') return c.json({ error: 'invalid_input' }, 400);
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  const p = await carePhotoFrom(c);
+  if (p instanceof Response) return p;
+  const key = `care/${l.id}/${which}-${uid()}.${p.mime.split('/')[1]}`;
+  await c.env.VAULT.put(key, p.buf, { httpMetadata: { contentType: p.mime } });
+  await c.env.DB.prepare(`UPDATE care_lessons SET ${which === 'before' ? 'before_key' : 'after_key'} = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`).bind(key, l.id).run();
+  const old = which === 'before' ? l.before_key : l.after_key;
+  if (old) await c.env.VAULT.delete(old);
+  return c.json({ ok: true });
+});
+
+const stepFields = z.object({ body: z.string().trim().min(3).max(2000), tip: z.string().trim().max(600).nullable().optional() });
+
+app.post('/api/admin/care/lessons/:id/steps', need(ADMINS), async (c) => {
+  const b = await parse(c, stepFields);
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  const next = ((await c.env.DB.prepare('SELECT MAX(sort) AS m FROM care_lesson_steps WHERE lesson_id = ?').bind(l.id).first<{ m: number | null }>())?.m ?? 0) + 1;
+  const id = uid('cs_');
+  await c.env.DB.prepare('INSERT INTO care_lesson_steps (id, lesson_id, sort, body, tip) VALUES (?, ?, ?, ?, ?)').bind(id, l.id, next, b.body, b.tip || null).run();
+  await c.env.DB.prepare("UPDATE care_lessons SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(l.id).run();
+  return c.json({ ok: true, id });
+});
+
+app.put('/api/admin/care/steps/:id', need(ADMINS), async (c) => {
+  const b = await parse(c, stepFields);
+  const r = await c.env.DB.prepare('UPDATE care_lesson_steps SET body = ?, tip = ? WHERE id = ?').bind(b.body, b.tip || null, c.req.param('id')).run();
+  return r.meta.changes ? c.json({ ok: true }) : c.json({ error: 'not_found' }, 404);
+});
+
+/** Move a step one place up or down (swaps its position with the neighbour). */
+app.post('/api/admin/care/steps/:id/move', need(ADMINS), async (c) => {
+  const { dir } = await parse(c, z.object({ dir: z.enum(['up', 'down']) }));
+  const s = await c.env.DB.prepare('SELECT id, lesson_id, sort FROM care_lesson_steps WHERE id = ?').bind(c.req.param('id')).first<{ id: string; lesson_id: string; sort: number }>();
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const n = await c.env.DB.prepare(`SELECT id, sort FROM care_lesson_steps WHERE lesson_id = ? AND sort ${dir === 'up' ? '<' : '>'} ? ORDER BY sort ${dir === 'up' ? 'DESC' : 'ASC'} LIMIT 1`)
+    .bind(s.lesson_id, s.sort).first<{ id: string; sort: number }>();
+  if (!n) return c.json({ ok: true });
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE care_lesson_steps SET sort = ? WHERE id = ?').bind(n.sort, s.id),
+    c.env.DB.prepare('UPDATE care_lesson_steps SET sort = ? WHERE id = ?').bind(s.sort, n.id),
+  ]);
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/care/steps/:id', need(ADMINS), async (c) => {
+  const s = await c.env.DB.prepare('SELECT photo_key FROM care_lesson_steps WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>();
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('DELETE FROM care_lesson_steps WHERE id = ?').bind(c.req.param('id')).run();
+  if (s.photo_key) await c.env.VAULT.delete(s.photo_key);
+  return c.json({ ok: true });
+});
+
+app.post('/api/admin/care/steps/:id/photo', need(ADMINS), async (c) => {
+  const s = await c.env.DB.prepare('SELECT id, lesson_id, photo_key FROM care_lesson_steps WHERE id = ?').bind(c.req.param('id')).first<{ id: string; lesson_id: string; photo_key: string | null }>();
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const p = await carePhotoFrom(c);
+  if (p instanceof Response) return p;
+  const key = `care/${s.lesson_id}/step-${uid()}.${p.mime.split('/')[1]}`;
+  await c.env.VAULT.put(key, p.buf, { httpMetadata: { contentType: p.mime } });
+  await c.env.DB.prepare('UPDATE care_lesson_steps SET photo_key = ? WHERE id = ?').bind(key, s.id).run();
+  await c.env.DB.prepare("UPDATE care_lessons SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(s.lesson_id).run();
+  if (s.photo_key) await c.env.VAULT.delete(s.photo_key);
+  return c.json({ ok: true });
+});
+
+/** AI drafts the steps (and empty fields) of a lesson that has none yet; it stays a draft for staff to check. */
+app.post('/api/admin/care/lessons/:id/ai-draft', need(ADMINS), async (c) => {
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const n = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM care_lesson_steps WHERE lesson_id = ?').bind(l.id).first<{ n: number }>())?.n ?? 0;
+  if (n > 0) return c.json({ error: 'has_steps' }, 409);
+  let d;
+  try { d = await draftCareLesson(c.env, { topic: l.topic, level: l.level, title: l.title_km, lang: reqLang(c) }); }
+  catch (e) { console.error('care draft failed:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE care_lessons SET summary = COALESCE(summary, ?), materials = COALESCE(materials, ?), safety = COALESCE(safety, ?), minutes = COALESCE(minutes, ?),
+      ai_drafted = 1, status = 'draft', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`).bind(d.summary || null, d.materials || null, d.safety || null, d.minutes, l.id),
+    ...d.steps.map((s, i) => c.env.DB.prepare('INSERT INTO care_lesson_steps (id, lesson_id, sort, body, tip) VALUES (?, ?, ?, ?, ?)').bind(uid('cs_'), l.id, i + 1, s.body, s.tip)),
+  ]);
+  await audit(c.env, c.get('user').id, 'care.lesson_ai_draft', 'care_lessons', l.id, { steps: d.steps.length, model: aiModel(c.env) });
+  return c.json({ ok: true, steps: d.steps.length });
+});
+
+/** Real counts of what the app teaches and tracks, shown to everyone on the home screen. */
+app.get('/api/stats/public', async (c) => {
+  const one = async (sql: string) => (await c.env.DB.prepare(sql).first<{ n: number }>())?.n ?? 0;
+  return c.json({
+    careLessons: await one("SELECT COUNT(*) AS n FROM care_lessons WHERE status = 'published'"),
+    authLessons: await one("SELECT COUNT(DISTINCT model_id) AS n FROM lesson_steps WHERE status <> 'retired'"),
+    referencePhotos: await one("SELECT COUNT(*) AS n FROM reference_assets WHERE status = 'approved'"),
+    brands: await one("SELECT COUNT(DISTINCT brand_id) AS n FROM reference_assets WHERE status = 'approved'"),
+    marketMonths: await one('SELECT COUNT(DISTINCT country || period) AS n FROM market_trends'),
+  });
 });
 
 // ───────────────────────── Anajak Secondhand: AI assistant chat (signed-in users) ─────────────────────────

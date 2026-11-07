@@ -515,3 +515,25 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     throw e;
   }
 }
+
+export interface CareDraft { summary: string; materials: string; safety: string; minutes: number | null; steps: { body: string; tip: string | null }[] }
+
+/**
+ * Draft of a bag painting / repair / care lesson for STAFF to check and edit before publishing (stored with
+ * ai_drafted = 1, status 'draft'). Practical workshop steps only; it never comments on whether a bag is genuine.
+ */
+export async function draftCareLesson(env: Env, x: { topic: string; level: string; title: string; lang: OutLang }): Promise<CareDraft> {
+  const text = await callVision(env,
+    'You write practical workshop lessons for people who clean, repaint and repair second-hand leather and canvas bags for resale in Southeast Asia. ' +
+    'Give realistic steps a beginner can follow with materials sold in Thai and Cambodian markets. Always include safety (ventilation, gloves, test on a hidden spot first) and say when a professional should do the work. ' +
+    'Never say or imply whether a bag is authentic or counterfeit, and never explain how to add, copy or alter brand logos, serial numbers or date codes. ' +
+    'Reply with JSON only: {"summary":"2 sentences","materials":"one item per line","safety":"short paragraph","minutes":number,"steps":[{"body":"one clear action","tip":"optional short tip or empty"}]} with 5 to 10 steps.' +
+    ` Write all text in ${LANG_NAME[x.lang]}; keep product and brand names as written.`,
+    [], `Lesson title: ${x.title}\nTopic: ${x.topic}\nLevel: ${x.level}`, 3000, 'medium');
+  const o = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)) as Partial<CareDraft>;
+  const s = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n);
+  const steps = (Array.isArray(o.steps) ? o.steps : []).map((st) => ({ body: s(st?.body, 2000), tip: s(st?.tip, 600) || null })).filter((st) => st.body.length >= 3).slice(0, 15);
+  if (!steps.length) throw new Error('ai_empty');
+  const m = Number(o.minutes);
+  return { summary: s(o.summary, 800), materials: s(o.materials, 1500), safety: s(o.safety, 1000), minutes: Number.isFinite(m) && m >= 1 && m <= 1440 ? Math.round(m) : null, steps };
+}

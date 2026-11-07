@@ -169,4 +169,12 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'market.topBrand': { vi: 'Thương hiệu hàng đầu', th: 'แบรนด์อันดับหนึ่ง', id: 'Merek teratas' },
   'market.modelStyle': { vi: 'Mẫu / kiểu', th: 'รุ่น / สไตล์', id: 'Model / gaya' },
   'install.noPhoto': { vi: 'Chưa có ảnh', th: 'ยังไม่มีรูป', id: 'Belum ada foto' },
+  'home.focus': { vi: 'Trọng tâm', th: 'สิ่งที่เราเน้น', id: 'Fokus kami' },
+  'home.more': { vi: 'Thêm', th: 'เพิ่มเติม', id: 'Lainnya' },
+  'care.before': { vi: 'Trước', th: 'ก่อน', id: 'Sebelum' },
+  'care.after': { vi: 'Sau', th: 'หลัง', id: 'Sesudah' },
+  'care.materials': { vi: 'Vật liệu cần có', th: 'อุปกรณ์ที่ต้องใช้', id: 'Bahan yang dibutuhkan' },
+  'care.safety': { vi: 'An toàn', th: 'ความปลอดภัย', id: 'Keamanan' },
+  'care.step': { vi: 'Bước', th: 'ขั้นตอนที่', id: 'Langkah' },
+  'tab.restore': { vi: 'Sửa túi', th: 'ซ่อม', id: 'Perbaiki' },
 };

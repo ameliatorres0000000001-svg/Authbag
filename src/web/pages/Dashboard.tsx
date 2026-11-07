@@ -15,26 +15,39 @@ export interface Studio { setSize: number; models: StudioModel[]; recentStudy: a
 
 interface Folders { folders: Folder[]; loose: number; looseCover: string | null; looseLatest: string | null; brands: { id: string; name: string }[] }
 
-// [route, title key, subtitle key, 24×24 icon path, "coming soon"]
-const HUB: [string, string, string, string, boolean][] = [
-  ['/trends', 'home.trends', 'home.trendsSub', 'M3 17l6-6 4 4 8-8M14 7h7v7', false],
-  ['/restore', 'home.restore', 'home.restoreSub', 'M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9 15.6l.8-3zM7 13c-2 0-3 1.5-3 3 0 1.3-.7 2.4-2 3 3.5 1.5 8 .5 8-3a3 3 0 0 0-3-3z', true],
-  ['/authenticity', 'home.authentic', 'home.authenticSub', 'M9 12l2 2 4-4M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z', false],
-  ['/chat', 'home.chat', 'home.chatSub', 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM8.5 12h.01M12 12h.01M15.5 12h.01', false],
-];
+const ICON = {
+  brush: 'M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9 15.6l.8-3zM7 13c-2 0-3 1.5-3 3 0 1.3-.7 2.4-2 3 3.5 1.5 8 .5 8-3a3 3 0 0 0-3-3z',
+  shield: 'M9 12l2 2 4-4M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z',
+  trend: 'M3 17l6-6 4 4 8-8M14 7h7v7',
+  chat: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM8.5 12h.01M12 12h.01M15.5 12h.01',
+};
+const Svg = ({ d, className = 'h-5 w-5' }: { d: string; className?: string }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
+);
+interface Stats { careLessons: number; authLessons: number; referencePhotos: number; brands: number; marketMonths: number }
 
 /**
- * Home (Anajak Secondhand): four big buttons — trending models, bag painting lessons, learn & verify originals,
- * AI assistant chat — then the latest market data (TH / ID / MY) and market updates, then the latest posts.
+ * Home (Anajak Secondhand). The app's focus first — ① bag painting & repair lessons, ② learning to check
+ * bags — then the AI chat and market trends, real counts of what the app teaches, market data, latest posts.
  */
 export default function Dashboard() {
   const { t, locale } = useI18n();
   const [market, setMarket] = useState<Overview | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   useEffect(() => {
     let on = true;
     api.get<Overview>('/api/market/overview?top=5').then((r) => on && setMarket(r)).catch(() => on && setMarket({ countries: [], updates: [] }));
+    api.get<Stats>('/api/stats/public').then((r) => on && setStats(r)).catch(() => {});
     return () => { on = false; };
   }, []);
+  const focus: [string, string, string, string, number | undefined][] = [
+    ['/restore', 'home.restore', 'home.restoreSub2', ICON.brush, stats?.careLessons],
+    ['/authenticity', 'home.authentic', 'home.authenticSub2', ICON.shield, stats?.authLessons],
+  ];
+  const more: [string, string, string, string][] = [
+    ['/chat', 'home.chat', 'home.chatSub', ICON.chat],
+    ['/trends', 'home.trends', 'home.trendsSub', ICON.trend],
+  ];
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 pb-8 pt-4 md:px-8">
@@ -43,23 +56,55 @@ export default function Dashboard() {
         <h1 className="text-2xl leading-tight md:text-3xl">{t('home.headline')}</h1>
       </header>
 
-      <nav className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label={t('dashboard')}>
-        {HUB.map(([to, title, sub, icon, soon], i) => (
-          <Link key={to} to={to} className={`group relative flex min-h-[132px] flex-col justify-between rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${i === 3 ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>
-            <div className="flex items-start justify-between">
-              <span className={`flex h-10 w-10 items-center justify-center rounded-full ${i === 3 ? 'bg-gold text-charcoal' : 'bg-gold-light text-charcoal'}`}>
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={icon} /></svg>
+      {/* the app's focus: two big lessons cards */}
+      <section aria-labelledby="focus-h">
+        <h2 id="focus-h" className="mb-2 text-xs font-semibold text-gold">{t('home.focus')}</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          {focus.map(([to, title, sub, icon, n], i) => (
+            <Link key={to} to={to} className={`group relative flex min-h-[150px] flex-col justify-between overflow-hidden rounded-3xl p-5 transition hover:-translate-y-0.5 hover:shadow-lg ${i === 0 ? 'bg-charcoal text-white' : 'border border-hairline bg-surface-card'}`}>
+              <div aria-hidden className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full" style={{ background: 'radial-gradient(circle, rgba(197,160,89,0.35), transparent 70%)' }} />
+              <div className="relative flex items-start justify-between">
+                <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${i === 0 ? 'bg-gold text-charcoal' : 'bg-gold-light text-charcoal'}`}><Svg d={icon} className="h-6 w-6" /></span>
+                {n !== undefined && <span className={`font-serif text-3xl ${i === 0 ? 'text-gold' : 'text-charcoal'}`}>{n}</span>}
+              </div>
+              <div className="relative">
+                <div className="mt-4 text-lg font-semibold leading-snug">{t(title)}</div>
+                <div className={`mt-0.5 text-sm ${i === 0 ? 'text-white/70' : 'text-muted'}`}>{t(sub)} →</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="more-h">
+        <h2 id="more-h" className="mb-2 text-xs font-semibold text-muted">{t('home.more')}</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {more.map(([to, title, sub, icon]) => (
+            <Link key={to} to={to} className="flex items-center gap-3 rounded-2xl border border-hairline bg-surface-card p-3 transition hover:shadow-md">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold-light"><Svg d={icon} /></span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold">{t(title)}</span>
+                <span className="block truncate text-xs text-muted">{t(sub)}</span>
               </span>
-              {soon ? <span className="rounded-full bg-review-bg px-2 py-0.5 text-[10px] font-semibold text-review">{t('home.soon')}</span>
-                : <span className={`font-mono text-xs ${i === 3 ? 'text-gold' : 'text-muted'}`}>0{i + 1}</span>}
-            </div>
-            <div>
-              <div className="mt-3 font-semibold leading-snug">{t(title)}</div>
-              <div className={`mt-0.5 text-xs ${i === 3 ? 'text-white/70' : 'text-muted'}`}>{t(sub)}</div>
-            </div>
-          </Link>
-        ))}
-      </nav>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* real counts, read from the database */}
+      {stats && (
+        <section aria-labelledby="stats-h" className="rounded-2xl border border-hairline bg-surface-card p-4">
+          <h2 id="stats-h" className="mb-3 text-base">{t('stats.title')}</h2>
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {([['careLessons', 'stats.careLessons'], ['authLessons', 'stats.authLessons'], ['referencePhotos', 'stats.photos'], ['brands', 'stats.brands'], ['marketMonths', 'stats.market']] as const).map(([k, label]) => (
+              <div key={k} className="rounded-xl bg-surface-low px-3 py-2">
+                <dd className="font-serif text-2xl leading-none">{stats[k].toLocaleString(locale === 'km' ? 'km-KH' : locale)}</dd>
+                <dt className="mt-1 text-[11px] text-muted">{t(label)}</dt>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
 
       {/* market data, updated every month by the team */}
       <section aria-labelledby="market-h">
