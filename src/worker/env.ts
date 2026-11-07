@@ -2,6 +2,8 @@ export interface Env {
   DB: D1Database;
   VAULT: R2Bucket;
   ASSETS: Fetcher;
+  /** Workers AI (background removal for market model photos); optional so the app runs without it */
+  AI?: Ai;
   /** Optional secrets / vars — never required for the app to run */
   ENTRUPY_API_KEY?: string;
   /** Optional override of Entrupy's API base (e.g. a sandbox host Entrupy gives you). Defaults to https://api.entrupy.com */

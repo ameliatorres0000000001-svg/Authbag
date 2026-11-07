@@ -10,7 +10,13 @@ export interface TrendRow {
   id: string; country: Country; period: string; rank: number; brand: string; model: string;
   movement: 'up' | 'down' | 'same' | 'new' | null; price_min: number | null; price_max: number | null;
   currency: string | null; note: string | null; source: string; created_at: string;
+  /** photo of this brand + model (staff upload), cut out of its background by AI when image_cutout = 1 */
+  image_id?: string | null; image_cutout?: number | null; image_at?: string | null;
 }
+
+/** URL of a model photo; the upload time busts the browser cache when a photo is replaced. */
+export const modelImageUrl = (r: Pick<TrendRow, 'image_id' | 'image_at'>) =>
+  r.image_id ? `/api/market/images/${r.image_id}?v=${encodeURIComponent(r.image_at ?? '')}` : null;
 export interface MarketUpdate { id: string; country: Country | null; title: string; body: string | null; source: string; created_at: string }
 export interface Overview { countries: { country: Country; period: string | null; rows: TrendRow[] }[]; updates: MarketUpdate[] }
 

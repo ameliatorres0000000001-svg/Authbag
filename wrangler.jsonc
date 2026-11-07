@@ -17,6 +17,8 @@
   "r2_buckets": [
     { "binding": "VAULT", "bucket_name": "hengz-vault-private" }
   ],
+  // Workers AI: background removal for the trending-model photos (bria/remove-background)
+  "ai": { "binding": "AI" },
   "observability": { "enabled": true },
   // background jobs: translate teaching points still missing Khmer + English
   "triggers": { "crons": ["*/10 * * * *"] },

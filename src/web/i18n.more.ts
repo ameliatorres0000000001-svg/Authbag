@@ -168,4 +168,5 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'install.go': { vi: 'Vào ANAJAK SECONDHAND', th: 'เข้าสู่ ANAJAK SECONDHAND', id: 'Masuk ke ANAJAK SECONDHAND' },
   'market.topBrand': { vi: 'Thương hiệu hàng đầu', th: 'แบรนด์อันดับหนึ่ง', id: 'Merek teratas' },
   'market.modelStyle': { vi: 'Mẫu / kiểu', th: 'รุ่น / สไตล์', id: 'Model / gaya' },
+  'install.noPhoto': { vi: 'Chưa có ảnh', th: 'ยังไม่มีรูป', id: 'Belum ada foto' },
 };

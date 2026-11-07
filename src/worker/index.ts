@@ -11,6 +11,7 @@ import { secretPresent, testProvider, type ProviderConfig } from './providers.ts
 import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant } from './vision.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
+import { removeBackground } from './cutout.ts';
 import { parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
@@ -173,6 +174,7 @@ const PUBLIC_GET = [
   /^\/api\/studio\/assets\/[^/]+$/,
   /^\/api\/contact(\/qr)?$/,
   /^\/api\/market\/(trends|overview|updates)$/,
+  /^\/api\/market\/images\/[^/]+$/,
 ];
 
 // everything below requires a session (or is a public read above)
@@ -1978,14 +1980,16 @@ app.post('/api/telegram/webhook', async (c) => {
 const COUNTRIES = ['TH', 'ID', 'MY'] as const;
 const countrySchema = z.enum(COUNTRIES);
 const periodSchema = z.string().regex(/^20\d\d-(0[1-9]|1[0-2])$/);
-type TrendRow = { id: string; country: string; period: string; rank: number; brand: string; model: string; movement: string | null;
+type TrendRow = { id: string; country: string; period: string; rank: number; brand: string; model: string; movement: string | null; image_id?: string | null;
   price_min: number | null; price_max: number | null; currency: string | null; note: string | null; source: string; created_at: string };
 
 const latestPeriod = async (env: AppEnv['Bindings'], country: string) =>
   (await env.DB.prepare('SELECT MAX(period) AS p FROM market_trends WHERE country = ?').bind(country).first<{ p: string | null }>())?.p ?? null;
 const monthRows = async (env: AppEnv['Bindings'], country: string, period: string, limit = 50) =>
-  (await env.DB.prepare(`SELECT id, country, period, rank, brand, model, movement, price_min, price_max, currency, note, source, created_at
-    FROM market_trends WHERE country = ? AND period = ? ORDER BY rank LIMIT ?`).bind(country, period, limit).all<TrendRow>()).results;
+  (await env.DB.prepare(`SELECT t.id, t.country, t.period, t.rank, t.brand, t.model, t.movement, t.price_min, t.price_max, t.currency, t.note, t.source, t.created_at,
+      i.id AS image_id, i.cutout AS image_cutout, i.created_at AS image_at
+    FROM market_trends t LEFT JOIN market_model_images i ON i.brand_key = lower(trim(t.brand)) AND i.model_key = lower(trim(t.model))
+    WHERE t.country = ? AND t.period = ? ORDER BY t.rank LIMIT ?`).bind(country, period, limit).all<TrendRow>()).results;
 
 /** One country: the chosen (or latest) month's ranking, the months on file, and the year so far built from those months. */
 app.get('/api/market/trends', async (c) => {
@@ -2067,6 +2071,70 @@ app.post('/api/admin/market/updates', need(ADMINS), async (c) => {
 app.delete('/api/admin/market/updates/:id', need(ADMINS), async (c) => {
   await c.env.DB.prepare('DELETE FROM market_updates WHERE id = ?').bind(c.req.param('id')).run();
   await audit(c.env, c.get('user').id, 'market.update_deleted', 'market_updates', c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+// ───────────────────────── Anajak Secondhand: trending-model photos (AI background removal) ─────────────────────────
+const MAX_MODEL_PHOTO = 8 * 1024 * 1024;
+const modelKey = (s: string) => s.trim().toLowerCase();
+
+/** Public: the display photo (transparent cutout, or the original when AI could not cut it). */
+app.get('/api/market/images/:id', async (c) => {
+  const r = await c.env.DB.prepare('SELECT display_key, display_mime FROM market_model_images WHERE id = ?').bind(c.req.param('id')).first<{ display_key: string; display_mime: string }>();
+  const obj = r ? await c.env.VAULT.get(r.display_key) : null;
+  if (!r || !obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': r.display_mime, 'cache-control': 'public, max-age=86400' } });
+});
+
+/** Upload (or replace) the photo of one brand + model; AI removes the background, the original is kept too. */
+app.post('/api/admin/market/images', need(ADMINS), async (c) => {
+  const form = await c.req.formData();
+  const brand = String(form.get('brand') ?? '').trim(); const model = String(form.get('model') ?? '').trim();
+  const file = form.get('file');
+  if (!brand || !model || brand.length > 80 || model.length > 120 || !(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_MODEL_PHOTO) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffImage(new Uint8Array(buf));
+  if (!mime) return c.json({ error: 'not_an_image' }, 415);
+  const id = uid('mi_');
+  const originalKey = `market/models/${id}/original.${mime.split('/')[1]}`;
+  await c.env.VAULT.put(originalKey, buf, { httpMetadata: { contentType: mime } });
+  const cut = await removeBackground(c.env, buf, mime);
+  const displayKey = cut ? `market/models/${id}/cutout.png` : originalKey;
+  if (cut) await c.env.VAULT.put(displayKey, cut, { httpMetadata: { contentType: 'image/png' } });
+  // replace the previous photo of this model (and its files)
+  const old = await c.env.DB.prepare('SELECT id, original_key, display_key FROM market_model_images WHERE brand_key = ? AND model_key = ?')
+    .bind(modelKey(brand), modelKey(model)).first<{ id: string; original_key: string; display_key: string }>();
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM market_model_images WHERE brand_key = ? AND model_key = ?').bind(modelKey(brand), modelKey(model)),
+    c.env.DB.prepare(`INSERT INTO market_model_images (id, brand_key, model_key, brand, model, original_key, display_key, display_mime, cutout, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, modelKey(brand), modelKey(model), brand, model, originalKey, displayKey, cut ? 'image/png' : mime, cut ? 1 : 0, c.get('user').id),
+  ]);
+  if (old) await c.env.VAULT.delete([...new Set([old.original_key, old.display_key])]);
+  await audit(c.env, c.get('user').id, 'market.model_photo', 'market_model_images', id, { brand, model, cutout: !!cut });
+  return c.json({ ok: true, id, cutout: !!cut });
+});
+
+/** Ask the AI again to remove the background of a photo whose cutout failed. */
+app.post('/api/admin/market/images/:id/cutout', need(ADMINS), async (c) => {
+  const r = await c.env.DB.prepare('SELECT id, original_key, display_key FROM market_model_images WHERE id = ?').bind(c.req.param('id')).first<{ id: string; original_key: string; display_key: string }>();
+  const obj = r ? await c.env.VAULT.get(r.original_key) : null;
+  if (!r || !obj) return c.json({ error: 'not_found' }, 404);
+  const buf = await obj.arrayBuffer();
+  const cut = await removeBackground(c.env, buf, sniffImage(new Uint8Array(buf)) ?? '');
+  if (!cut) return c.json({ error: 'cutout_failed' }, 502);
+  const displayKey = `market/models/${r.id}/cutout.png`;
+  await c.env.VAULT.put(displayKey, cut, { httpMetadata: { contentType: 'image/png' } });
+  await c.env.DB.prepare("UPDATE market_model_images SET display_key = ?, display_mime = 'image/png', cutout = 1, created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(displayKey, r.id).run();
+  return c.json({ ok: true, cutout: true });
+});
+
+app.delete('/api/admin/market/images/:id', need(ADMINS), async (c) => {
+  const r = await c.env.DB.prepare('SELECT original_key, display_key FROM market_model_images WHERE id = ?').bind(c.req.param('id')).first<{ original_key: string; display_key: string }>();
+  if (!r) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('DELETE FROM market_model_images WHERE id = ?').bind(c.req.param('id')).run();
+  await c.env.VAULT.delete([...new Set([r.original_key, r.display_key])]);
+  await audit(c.env, c.get('user').id, 'market.model_photo_deleted', 'market_model_images', c.req.param('id'));
   return c.json({ ok: true });
 });
 

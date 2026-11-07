@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../i18n.tsx';
 import LangPicker from '../LangPicker.tsx';
 import { isIos, isStandalone, markInstallSeen, useInstallPrompt } from '../pwa.ts';
 import { api } from '../api.ts';
-import { COUNTRIES, FLAG, monthLabel, type Country, type Overview, type TrendRow } from '../Market.tsx';
+import { COUNTRIES, FLAG, modelImageUrl, monthLabel, type Country, type Overview, type TrendRow } from '../Market.tsx';
 
 // Night palette on the live galaxy: cream type, champagne gold, dark glass cards
 const C = { ivory: '#0B0A12', paper: 'rgba(255,255,255,0.055)', ink: '#F6ECD0', muted: '#A9A2B6', line: 'rgba(242,202,80,0.22)', gold: '#F2CA50', goldSoft: 'rgba(242,202,80,0.16)' };
@@ -69,12 +69,12 @@ export default function Install() {
             <h2 id="top-h" className="font-serif text-[20px] leading-tight">{t('install.topTitle')}</h2>
             <span className={`shrink-0 text-[10px] font-semibold uppercase ${latin ? 'tracking-[0.18em]' : ''}`} style={{ color: C.gold }}>TH · ID · MY</span>
           </div>
-          <div className="space-y-3">
+          <Carousel label={t('install.topTitle')}>
             {COUNTRIES.map((cc, i) => {
               const m = market?.countries.find((x) => x.country === cc);
               return <TopPick key={cc} index={i} country={cc} period={m?.period ?? null} top={m?.rows[0]} loading={!market} latin={latin} />;
             })}
-          </div>
+          </Carousel>
           <p className="mt-3 text-center text-[10.5px] leading-snug" style={{ color: '#8F889C' }}>{t('market.info')}</p>
         </section>
 
@@ -132,7 +132,7 @@ function TopPick({ index, country, period, top, loading, latin }: { index: numbe
   const { t, locale } = useI18n();
   const label = `text-[10px] font-semibold uppercase ${latin ? 'tracking-[0.14em]' : ''}`;
   return (
-    <article className="hz-rise-in rounded-2xl border px-4 pb-3.5 pt-3 backdrop-blur-md" style={{ animationDelay: `${index * 120}ms`, background: 'linear-gradient(165deg, rgba(242,202,80,0.10), rgba(255,255,255,0.04) 45%, rgba(255,255,255,0.03))', borderColor: C.line, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
+    <article className="hz-rise-in flex h-full flex-col rounded-2xl border px-4 pb-3.5 pt-3 backdrop-blur-md" style={{ animationDelay: `${index * 120}ms`, background: 'linear-gradient(165deg, rgba(242,202,80,0.10), rgba(255,255,255,0.04) 45%, rgba(255,255,255,0.03))', borderColor: C.line, boxShadow: '0 10px 30px rgba(0,0,0,0.35)' }}>
       <header className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2">
           <span className="text-[20px] leading-none" aria-hidden>{FLAG[country]}</span>
@@ -159,7 +159,100 @@ function TopPick({ index, country, period, top, loading, latin }: { index: numbe
       ) : (
         <p className="mt-1 text-[12.5px]" style={{ color: C.muted }}>{t('noData')}</p>
       ))}
+
+      {/* the model's photo, cut out of its background by AI, standing on a soft gold light */}
+      <ModelPhoto top={top} loading={loading} />
     </article>
+  );
+}
+
+function ModelPhoto({ top, loading }: { top: TrendRow | undefined; loading: boolean }) {
+  const { t } = useI18n();
+  const src = top ? modelImageUrl(top) : null;
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [src]);
+  return (
+    <div className="relative mt-auto flex h-[168px] items-end justify-center overflow-hidden rounded-xl pt-3"
+      style={{ background: 'radial-gradient(70% 60% at 50% 70%, rgba(242,202,80,0.20), transparent 70%)' }}>
+      {/* pedestal shadow */}
+      <div aria-hidden className="absolute bottom-3 left-1/2 h-3 w-1/2 -translate-x-1/2 rounded-[50%]" style={{ background: 'radial-gradient(closest-side, rgba(0,0,0,0.55), transparent)' }} />
+      {loading ? <div className="mb-4 h-28 w-28 animate-pulse rounded-2xl bg-white/10" />
+        : src && !broken ? (
+          top?.image_cutout ? (
+            <img src={src} alt={`${top.brand} ${top.model}`} loading="lazy" onError={() => setBroken(true)}
+              className="hz-anim relative mb-4 max-h-[140px] max-w-[85%] object-contain"
+              style={{ filter: 'drop-shadow(0 14px 18px rgba(0,0,0,0.45))', animation: 'hz-float 5s ease-in-out infinite' }} />
+          ) : (
+            <img src={src} alt={`${top!.brand} ${top!.model}`} loading="lazy" onError={() => setBroken(true)}
+              className="relative mb-2 h-[140px] w-[80%] rounded-xl object-cover" style={{ boxShadow: '0 10px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(242,202,80,0.25)' }} />
+          )
+        ) : (
+          <div className="mb-6 flex flex-col items-center gap-1.5" style={{ color: 'rgba(242,202,80,0.45)' }}>
+            <svg viewBox="0 0 24 24" className="h-12 w-12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M8 8V7a4 4 0 0 1 8 0v1M5 8h14l1.2 11.2a1.6 1.6 0 0 1-1.6 1.8H5.4a1.6 1.6 0 0 1-1.6-1.8z" />
+            </svg>
+            <span className="text-[10.5px]">{t('install.noPhoto')}</span>
+          </div>
+        )}
+    </div>
+  );
+}
+
+/**
+ * Left / right carousel of the country cards that plays by itself (one card every 4.5 s, looping).
+ * Touching, swiping or a hidden tab pauses it; it never moves for users who prefer reduced motion.
+ */
+function Carousel({ label, children }: { label: string; children: React.ReactNode[] }) {
+  const { t } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+  const pausedUntil = useRef(0);
+  const n = children.length;
+
+  const go = useCallback((i: number) => {
+    const el = ref.current; const card = el?.children[i] as HTMLElement | undefined;
+    if (el && card) el.scrollTo({ left: card.offsetLeft - (el.clientWidth - card.clientWidth) / 2, behavior: 'smooth' });
+  }, []);
+  const pause = () => { pausedUntil.current = Date.now() + 8000; };
+
+  // which card is in the middle
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const onScroll = () => {
+      const mid = el.scrollLeft + el.clientWidth / 2;
+      let best = 0, dist = Infinity;
+      Array.from(el.children).forEach((c, i) => { const h = c as HTMLElement; const d = Math.abs(h.offsetLeft + h.clientWidth / 2 - mid); if (d < dist) { dist = d; best = i; } });
+      setActive(best);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // auto play
+  useEffect(() => {
+    if (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const id = setInterval(() => {
+      if (document.hidden || Date.now() < pausedUntil.current) return;
+      setActive((a) => { const next = (a + 1) % n; go(next); return next; });
+    }, 4500);
+    return () => clearInterval(id);
+  }, [n, go]);
+
+  return (
+    <div role="region" aria-roledescription="carousel" aria-label={label}>
+      <div ref={ref} onPointerDown={pause} onTouchStart={pause} onWheel={pause}
+        className="relative -mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-[7%] pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {children.map((c, i) => (
+          <div key={i} className="w-[86%] shrink-0 snap-center" aria-roledescription="slide" aria-label={`${i + 1} / ${n}`}>{c}</div>
+        ))}
+      </div>
+      <div className="mt-3 flex justify-center gap-2">
+        {children.map((_, i) => (
+          <button key={i} type="button" onClick={() => { pause(); setActive(i); go(i); }} aria-label={`${t('install.slide')} ${i + 1}`} aria-current={i === active}
+            className="h-1.5 rounded-full transition-all" style={{ width: i === active ? 22 : 6, background: i === active ? C.gold : 'rgba(242,202,80,0.35)' }} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -217,6 +310,7 @@ function Galaxy() {
         @keyframes hz-meteor { 0% { transform: translate(0,0) rotate(-35deg); opacity: 0 } 2% { opacity: 1 } 9% { transform: translate(-60vmin,42vmin) rotate(-35deg); opacity: 0 } 100% { opacity: 0 } }
         @keyframes hz-rise { 0% { transform: translateY(0) rotate(0deg); opacity: 0 } 10% { opacity: .55 } 90% { opacity: .55 } 100% { transform: translateY(-110vh) rotate(180deg); opacity: 0 } }
         @keyframes hz-spin { to { transform: rotate(360deg) } }
+        @keyframes hz-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
         @keyframes hz-pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.07) } }
         @keyframes hz-in { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
         .hz-rise-in { animation: hz-in .7s cubic-bezier(.2,.7,.2,1) both }

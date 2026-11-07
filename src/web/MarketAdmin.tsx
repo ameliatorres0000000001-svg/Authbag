@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api } from './api.ts';
 import { useI18n } from './i18n.tsx';
 import { Field, Notice, errText } from './ui.tsx';
-import { COUNTRIES, FLAG, type Country, type MarketUpdate, type TrendRow } from './Market.tsx';
+import { COUNTRIES, FLAG, modelImageUrl, type Country, type MarketUpdate, type TrendRow } from './Market.tsx';
 
 const MOVES = ['up', 'down', 'same', 'new'] as const;
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -33,6 +33,7 @@ export default function MarketAdmin() {
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
   const [upd, setUpd] = useState({ country: '' as '' | Country, title: '', body: '', source: '' });
   const [posted, setPosted] = useState<MarketUpdate[]>([]);
+  const [photosKey, setPhotosKey] = useState(0);
   const loadUpdates = useCallback(() => api.get<{ updates: MarketUpdate[] }>('/api/market/updates?limit=10').then((r) => setPosted(r.updates)).catch(() => setPosted([])), []);
   useEffect(() => { loadUpdates(); }, [loadUpdates]);
 
@@ -56,6 +57,7 @@ export default function MarketAdmin() {
     try {
       await api.post('/api/admin/market/trends', { country, period, source, rows });
       setMsg({ tone: 'ok', text: `${t('madm.saved')} · ${FLAG[country]} ${period} · ${rows.length}` });
+      setPhotosKey((k) => k + 1);
     } catch (e) { setMsg({ tone: 'bad', text: errText(e) }); }
   };
 
@@ -102,6 +104,8 @@ export default function MarketAdmin() {
         <button type="button" className="btn-ghost text-counterfeit" onClick={del}>{t('madm.deleteMonth')}</button>
       </div>
 
+      <ModelPhotos country={country} period={period} refresh={photosKey} />
+
       <hr className="border-hairline" />
       <h3 className="text-base">{t('market.updates')}</h3>
       <select className="input" value={upd.country} onChange={(e) => setUpd({ ...upd, country: e.target.value as '' | Country })} aria-label={t('madm.country')}>
@@ -124,6 +128,88 @@ export default function MarketAdmin() {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** Shrink a photo before upload (max 1600 px); PNG stays PNG so an existing transparent background survives. */
+async function shrink(file: File): Promise<Blob> {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  cv.getContext('2d')!.drawImage(bmp, 0, 0, cv.width, cv.height);
+  const png = file.type === 'image/png';
+  return new Promise((res, rej) => cv.toBlob((b) => (b ? res(b) : rej(new Error('encode_failed'))), png ? 'image/png' : 'image/jpeg', 0.9));
+}
+
+/** Photos of the models in the chosen country + month: upload / replace (AI removes the background), retry the cut, delete. */
+function ModelPhotos({ country, period, refresh }: { country: Country; period: string; refresh: number }) {
+  const { t } = useI18n();
+  const [rows, setRows] = useState<TrendRow[] | null>(null);
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  const load = useCallback(() => {
+    if (!/^\d{4}-\d{2}$/.test(period)) { setRows([]); return; }
+    api.get<{ period: string | null; rows: TrendRow[] }>(`/api/market/trends?country=${country}&period=${period}`)
+      .then((r) => setRows(r.period === period ? r.rows : [])).catch(() => setRows([]));
+  }, [country, period]);
+  useEffect(() => { load(); }, [load, refresh]);
+
+  const upload = async (r: TrendRow, file: File) => {
+    setBusy(r.id); setErr('');
+    try {
+      const fd = new FormData();
+      fd.append('brand', r.brand); fd.append('model', r.model);
+      fd.append('file', new File([await shrink(file)], 'photo', { type: file.type === 'image/png' ? 'image/png' : 'image/jpeg' }));
+      await api.post('/api/admin/market/images', fd);
+      load();
+    } catch (e) { setErr(errText(e)); } finally { setBusy(''); }
+  };
+  const act = async (r: TrendRow, fn: () => Promise<unknown>) => {
+    setBusy(r.id); setErr('');
+    try { await fn(); load(); } catch (e) { setErr(errText(e)); } finally { setBusy(''); }
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-hairline p-3">
+      <h3 className="text-base">{t('madm.photos')}</h3>
+      <p className="text-xs text-muted">{t('madm.photosHelp')}</p>
+      {rows && rows.length === 0 && <p className="text-xs text-muted">{t('madm.photosNone')}</p>}
+      <ul className="divide-y divide-hairline">
+        {rows?.map((r) => {
+          const src = modelImageUrl(r);
+          return (
+            <li key={r.id} className="flex items-center gap-3 py-2">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-hairline"
+                style={{ background: 'repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 12px 12px' }}>
+                {src ? <img src={src} alt="" className="max-h-full max-w-full object-contain" /> : <span className="text-[10px] text-muted">—</span>}
+              </div>
+              <div className="min-w-0 flex-1 text-sm">
+                <div className="truncate"><span className="font-mono text-xs text-muted">#{r.rank}</span> <b>{r.brand}</b> · {r.model}</div>
+                {busy === r.id ? <div className="text-xs text-review">{t('madm.uploading')}</div>
+                  : r.image_id && <div className={`text-xs ${r.image_cutout ? 'text-verified' : 'text-review'}`}>{r.image_cutout ? `✓ ${t('madm.cutOk')}` : t('madm.cutNo')}</div>}
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <label className={`btn-ghost cursor-pointer !px-2 !py-0.5 text-xs ${busy ? 'pointer-events-none opacity-50' : ''}`}>
+                  {r.image_id ? t('madm.replace') : t('madm.upload')}
+                  <input type="file" accept="image/jpeg,image/png" className="hidden" disabled={!!busy}
+                    onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(r, f); }} />
+                </label>
+                {r.image_id && !r.image_cutout && (
+                  <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" disabled={!!busy}
+                    onClick={() => act(r, () => api.post(`/api/admin/market/images/${r.image_id}/cutout`))}>{t('madm.retry')}</button>
+                )}
+                {r.image_id && (
+                  <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs text-counterfeit" disabled={!!busy}
+                    onClick={() => { if (confirm(`${t('madm.delete')}?`)) act(r, () => api.del(`/api/admin/market/images/${r.image_id}`)); }}>{t('madm.delete')}</button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {err && <Notice tone="bad">{err}</Notice>}
     </div>
   );
 }
