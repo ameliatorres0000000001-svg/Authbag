@@ -8,7 +8,8 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, researchPaintProduct } from './vision.ts';
+import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { removeBackground } from './cutout.ts';
@@ -179,6 +180,7 @@ const PUBLIC_GET = [
   /^\/api\/care\/steps\/[^/]+\/photo$/,
   /^\/api\/lessons(\/[^/]+)?$/,
   /^\/api\/stats\/public$/,
+  /^\/api\/paint\/(recipes|products)(\/[^/]+\/photo)?$/,
 ];
 
 // everything below requires a session (or is a public read above)
@@ -188,7 +190,8 @@ app.use('/api/*', async (c, next) => {
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
   if (!user) {
     // guests can browse the public teaching pages (read only); everything else needs an account
-    if (c.req.method === 'GET' && PUBLIC_GET.some((r) => r.test(p))) {
+    // the paint colour match is a calculation on numbers the phone measured: open to guests too
+    if ((c.req.method === 'GET' && PUBLIC_GET.some((r) => r.test(p))) || (c.req.method === 'POST' && p === '/api/paint/match')) {
       c.set('user', { id: '', email: '', name: 'Guest', role: 'readonly', locale: 'km' });
       return next();
     }
@@ -2344,12 +2347,225 @@ app.post('/api/admin/care/lessons/:id/ai-draft', need(ADMINS), async (c) => {
 app.get('/api/stats/public', async (c) => {
   const one = async (sql: string) => (await c.env.DB.prepare(sql).first<{ n: number }>())?.n ?? 0;
   return c.json({
+    paintRecipes: await one("SELECT COUNT(*) AS n FROM paint_recipes WHERE status = 'published'"),
     careLessons: await one("SELECT COUNT(*) AS n FROM care_lessons WHERE status = 'published'"),
     authLessons: await one("SELECT COUNT(DISTINCT model_id) AS n FROM lesson_steps WHERE status <> 'retired'"),
     referencePhotos: await one("SELECT COUNT(*) AS n FROM reference_assets WHERE status = 'approved'"),
     brands: await one("SELECT COUNT(DISTINCT brand_id) AS n FROM reference_assets WHERE status = 'approved'"),
     marketMonths: await one('SELECT COUNT(DISTINCT country || period) AS n FROM market_trends'),
   });
+});
+
+// ───────────────────────── Anajak Secondhand: paint mixer (colour recipes measured with a white reference) ─────────────────────────
+const PAINT_KINDS = ['leather_paint', 'edge_paint', 'dye', 'finisher', 'preparer', 'cleaner', 'other'] as const;
+const SURFACES = ['smooth_leather', 'grained_leather', 'vachetta', 'coated_canvas', 'suede', 'edge', 'other'] as const;
+const FINISHES = ['matte', 'satin', 'gloss'] as const;
+const patchSchema = z.object({ mean: z.tuple([z.number(), z.number(), z.number()]), sd: z.number(), clipped: z.number(), n: z.number().int() });
+const measurementSchema = z.object({ sample: patchSchema, white: patchSchema, blur: z.number(), minSide: z.number(), distance: z.number(), r: z.number() });
+
+type PaintProduct = { id: string; brand: string; name: string; kind: string; color_hex: string | null; info: string | null; sources_json: string; photo_key: string | null; active: number; updated_at: string };
+const productOut = ({ photo_key, sources_json, ...p }: PaintProduct & Record<string, unknown>) => ({ ...p, has_photo: !!photo_key, sources: JSON.parse(sources_json || '[]') });
+
+/** Recipes with their parts (paint, brand, ratio). Public: published only. */
+async function paintRecipes(env: AppEnv['Bindings'], all: boolean) {
+  const recipes = (await env.DB.prepare(`SELECT id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, method, status, photo_key, updated_at FROM paint_recipes
+    ${all ? '' : "WHERE status = 'published'"} ORDER BY lab_l DESC`).all<Record<string, any>>()).results;
+  const parts = (await env.DB.prepare(`SELECT pp.recipe_id, pp.parts, pp.sort, p.id, p.brand, p.name, p.kind, p.color_hex, p.photo_key, p.updated_at
+    FROM paint_recipe_parts pp JOIN paint_products p ON p.id = pp.product_id ORDER BY pp.sort`).all<Record<string, any>>()).results;
+  return recipes.map(({ photo_key, ...r }): Record<string, any> => ({
+    ...r, has_photo: !!photo_key,
+    parts: parts.filter((p) => p.recipe_id === r.id).map(({ recipe_id, photo_key: pk, ...p }) => ({ ...p, has_photo: !!pk })),
+  }));
+}
+
+app.get('/api/paint/recipes', async (c) => c.json({ recipes: await paintRecipes(c.env, careEditor(c) && c.req.query('all') === '1') }));
+app.get('/api/paint/products', async (c) => {
+  const all = careEditor(c) && c.req.query('all') === '1';
+  const rows = (await c.env.DB.prepare(`SELECT * FROM paint_products ${all ? '' : 'WHERE active = 1'} ORDER BY brand, name`).all<PaintProduct>()).results;
+  return c.json({ products: rows.map(productOut) });
+});
+app.get('/api/paint/products/:id/photo', async (c) =>
+  servePhoto(c, (await c.env.DB.prepare('SELECT photo_key FROM paint_products WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>())?.photo_key));
+app.get('/api/paint/recipes/:id/photo', async (c) => {
+  const r = await c.env.DB.prepare('SELECT photo_key, status FROM paint_recipes WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null; status: string }>();
+  if (!r || (r.status !== 'published' && !careEditor(c))) return c.json({ error: 'not_found' }, 404);
+  return servePhoto(c, r.photo_key);
+});
+
+/**
+ * Match a measured bag colour against the published recipes. The measurement is checked again here with the
+ * same rules as the phone; a bad photo gets the reasons and no colour at all. Beyond ΔE2000 6: no recipe.
+ */
+app.post('/api/paint/match', async (c) => {
+  const { measurement } = await parse(c, z.object({ measurement: measurementSchema }));
+  const issues = checkMeasurement(measurement);
+  if (issues.length) return c.json({ ok: false, issues }, 422);
+  const lab = measuredLab(measurement);
+  const ranked = (await paintRecipes(c.env, false))
+    .map((r) => ({ recipe: r, dE: Math.round(deltaE2000(lab, [r.lab_l, r.lab_a, r.lab_b]) * 10) / 10 }))
+    .sort((a, b) => a.dE - b.dE);
+  const usable = ranked.filter((x) => matchLevel(x.dE) !== 'none').slice(0, 3);
+  return c.json({ ok: true, lab, hex: labToHex(lab), matches: usable.map((x) => ({ ...x, level: matchLevel(x.dE) })), nearest: ranked[0]?.dE ?? null });
+});
+
+/** Ask for a recipe for a colour that has none (signed-in users; the colour only, no photo). */
+app.post('/api/paint/requests', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const b = await parse(c, z.object({ measurement: measurementSchema, note: z.string().trim().max(300).nullable().optional() }));
+  const issues = checkMeasurement(b.measurement);
+  if (issues.length) return c.json({ ok: false, issues }, 422);
+  const recent = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM paint_color_requests WHERE user_id = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 day')").bind(me.id).first<{ n: number }>())?.n ?? 0;
+  if (recent >= 10) return c.json({ error: 'too_many' }, 429);
+  const lab = measuredLab(b.measurement);
+  await c.env.DB.prepare('INSERT INTO paint_color_requests (id, user_id, lab_l, lab_a, lab_b, hex, note) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(uid('pq_'), me.id, lab[0], lab[1], lab[2], labToHex(lab), b.note || null).run();
+  return c.json({ ok: true });
+});
+
+app.get('/api/admin/paint/requests', need(ADMINS), async (c) =>
+  c.json({ requests: (await c.env.DB.prepare(`SELECT r.id, r.lab_l, r.lab_a, r.lab_b, r.hex, r.note, r.created_at, u.name AS by_name
+    FROM paint_color_requests r JOIN users u ON u.id = r.user_id ORDER BY r.created_at DESC LIMIT 100`).all()).results }));
+app.delete('/api/admin/paint/requests/:id', need(ADMINS), async (c) => {
+  await c.env.DB.prepare('DELETE FROM paint_color_requests WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+/** Read a multipart form: its text fields and an optional checked image ("file"). */
+async function formWithPhoto(c: any): Promise<{ fields: Record<string, string>; photo: { buf: ArrayBuffer; mime: string } | null } | Response> {
+  const fd = await c.req.formData();
+  const fields: Record<string, string> = {};
+  for (const [k, v] of fd.entries()) if (typeof v === 'string') fields[k] = v;
+  const file = fd.get('file');
+  if (!(file instanceof File) || file.size === 0) return { fields, photo: null };
+  if (file.size > MAX_CARE_PHOTO) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffImage(new Uint8Array(buf));
+  return mime ? { fields, photo: { buf, mime } } : c.json({ error: 'not_an_image' }, 415);
+}
+const putPhoto = async (env: AppEnv['Bindings'], prefix: string, p: { buf: ArrayBuffer; mime: string }) => {
+  const key = `${prefix}-${uid()}.${p.mime.split('/')[1]}`;
+  await env.VAULT.put(key, p.buf, { httpMetadata: { contentType: p.mime } });
+  return key;
+};
+
+const productFields = z.object({
+  brand: z.string().trim().min(1).max(80), name: z.string().trim().min(1).max(120), kind: z.enum(PAINT_KINDS),
+  color_hex: z.string().regex(/^#[0-9a-f]{6}$/).nullable().optional(), info: z.string().trim().max(3000).nullable().optional(),
+  sources: z.array(z.object({ title: z.string().max(200), url: z.string().url().max(500) })).max(10).optional(), active: z.boolean().optional(),
+});
+const productFromForm = (f: Record<string, string>) => productFields.parse({
+  brand: f.brand, name: f.name, kind: f.kind, color_hex: f.color_hex || null, info: f.info || null,
+  sources: f.sources ? JSON.parse(f.sources) : [], active: f.active === undefined ? undefined : f.active === '1',
+});
+
+app.post('/api/admin/paint/products', need(ADMINS), async (c) => {
+  const r = await formWithPhoto(c); if (r instanceof Response) return r;
+  const b = productFromForm(r.fields);
+  const id = uid('pp_');
+  const key = r.photo ? await putPhoto(c.env, `paint/products/${id}`, r.photo) : null;
+  await c.env.DB.prepare(`INSERT INTO paint_products (id, brand, name, kind, color_hex, info, sources_json, photo_key, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, b.brand, b.name, b.kind, b.color_hex ?? null, b.info ?? null, JSON.stringify(b.sources ?? []), key, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'paint.product_created', 'paint_products', id);
+  return c.json({ ok: true, id });
+});
+
+app.put('/api/admin/paint/products/:id', need(ADMINS), async (c) => {
+  const old = await c.env.DB.prepare('SELECT photo_key FROM paint_products WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>();
+  if (!old) return c.json({ error: 'not_found' }, 404);
+  const r = await formWithPhoto(c); if (r instanceof Response) return r;
+  const b = productFromForm(r.fields);
+  const key = r.photo ? await putPhoto(c.env, `paint/products/${c.req.param('id')}`, r.photo) : old.photo_key;
+  await c.env.DB.prepare(`UPDATE paint_products SET brand = ?, name = ?, kind = ?, color_hex = ?, info = ?, sources_json = ?, photo_key = ?, active = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.brand, b.name, b.kind, b.color_hex ?? null, b.info ?? null, JSON.stringify(b.sources ?? []), key, b.active === false ? 0 : 1, c.req.param('id')).run();
+  if (r.photo && old.photo_key) await c.env.VAULT.delete(old.photo_key);
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/paint/products/:id', need(ADMINS), async (c) => {
+  const used = await c.env.DB.prepare('SELECT 1 FROM paint_recipe_parts WHERE product_id = ? LIMIT 1').bind(c.req.param('id')).first();
+  if (used) return c.json({ error: 'in_use' }, 409);
+  const p = await c.env.DB.prepare('SELECT photo_key FROM paint_products WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>();
+  if (!p) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('DELETE FROM paint_products WHERE id = ?').bind(c.req.param('id')).run();
+  if (p.photo_key) await c.env.VAULT.delete(p.photo_key);
+  return c.json({ ok: true });
+});
+
+/** AI looks the product up on the web: a draft (text + real links) for staff to read before using any of it. */
+app.post('/api/admin/paint/products/:id/research', need(ADMINS), async (c) => {
+  const p = await c.env.DB.prepare('SELECT brand, name, kind FROM paint_products WHERE id = ?').bind(c.req.param('id')).first<{ brand: string; name: string; kind: string }>();
+  if (!p) return c.json({ error: 'not_found' }, 404);
+  try {
+    const r = await researchPaintProduct(c.env, { ...p, lang: reqLang(c) });
+    await audit(c.env, c.get('user').id, 'paint.product_research', 'paint_products', c.req.param('id'), { model: r.model, sources: r.sources.length });
+    return c.json({ ok: true, draft: r });
+  } catch (e) {
+    const m = String((e as Error).message);
+    if (m === 'ai_web_not_configured') return c.json({ error: m }, 501);
+    console.error('paint research failed:', m);
+    return c.json({ error: m === 'ai_refused' ? 'ai_refused' : 'ai_failed' }, 502);
+  }
+});
+
+const recipeFields = z.object({
+  name_km: z.string().trim().min(2).max(120), name_en: z.string().trim().max(120).nullable().optional(),
+  surface: z.enum(SURFACES), finish: z.enum(FINISHES), method: z.string().trim().max(3000).nullable().optional(),
+});
+
+/** New recipe: a photo of the bag colour with a white reference, measured with the same rules as for users. */
+app.post('/api/admin/paint/recipes', need(ADMINS), async (c) => {
+  const r = await formWithPhoto(c); if (r instanceof Response) return r;
+  const b = recipeFields.parse({ name_km: r.fields.name_km, name_en: r.fields.name_en || null, surface: r.fields.surface, finish: r.fields.finish, method: r.fields.method || null });
+  const m = measurementSchema.parse(JSON.parse(r.fields.measurement ?? 'null'));
+  const issues = checkMeasurement(m);
+  if (issues.length) return c.json({ ok: false, issues }, 422);
+  const lab = measuredLab(m);
+  const id = uid('pr_');
+  const key = r.photo ? await putPhoto(c.env, `paint/recipes/${id}`, r.photo) : null;
+  await c.env.DB.prepare(`INSERT INTO paint_recipes (id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, measure_json, photo_key, method, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, b.name_km, b.name_en ?? null, b.surface, b.finish, lab[0], lab[1], lab[2], labToHex(lab), JSON.stringify(m), key, b.method ?? null, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'paint.recipe_created', 'paint_recipes', id, { lab });
+  return c.json({ ok: true, id, lab, hex: labToHex(lab) });
+});
+
+app.put('/api/admin/paint/recipes/:id', need(ADMINS), async (c) => {
+  const b = await parse(c, recipeFields.extend({ parts: z.array(z.object({ product_id: z.string(), parts: z.number().positive().max(100) })).max(8) }));
+  const ids = new Set(b.parts.map((p) => p.product_id));
+  if (ids.size !== b.parts.length) return c.json({ error: 'duplicate_product' }, 400);
+  const r = await c.env.DB.prepare(`UPDATE paint_recipes SET name_km = ?, name_en = ?, surface = ?, finish = ?, method = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.name_km, b.name_en ?? null, b.surface, b.finish, b.method ?? null, c.req.param('id')).run();
+  if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM paint_recipe_parts WHERE recipe_id = ?').bind(c.req.param('id')),
+    ...b.parts.map((p, i) => c.env.DB.prepare('INSERT INTO paint_recipe_parts (recipe_id, product_id, parts, sort) VALUES (?, ?, ?, ?)').bind(c.req.param('id'), p.product_id, p.parts, i)),
+  ]);
+  return c.json({ ok: true });
+});
+
+app.post('/api/admin/paint/recipes/:id/status', need(ADMINS), async (c) => {
+  const { status } = await parse(c, z.object({ status: z.enum(['draft', 'published']) }));
+  if (status === 'published') {
+    const n = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM paint_recipe_parts WHERE recipe_id = ?').bind(c.req.param('id')).first<{ n: number }>())?.n ?? 0;
+    if (!n) return c.json({ error: 'no_parts' }, 400);
+  }
+  const r = await c.env.DB.prepare("UPDATE paint_recipes SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(status, c.req.param('id')).run();
+  if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await audit(c.env, c.get('user').id, `paint.recipe_${status}`, 'paint_recipes', c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/paint/recipes/:id', need(ADMINS), async (c) => {
+  const r = await c.env.DB.prepare('SELECT photo_key FROM paint_recipes WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>();
+  if (!r) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM paint_recipe_parts WHERE recipe_id = ?').bind(c.req.param('id')),
+    c.env.DB.prepare('DELETE FROM paint_recipes WHERE id = ?').bind(c.req.param('id')),
+  ]);
+  if (r.photo_key) await c.env.VAULT.delete(r.photo_key);
+  await audit(c.env, c.get('user').id, 'paint.recipe_deleted', 'paint_recipes', c.req.param('id'));
+  return c.json({ ok: true });
 });
 
 // ───────────────────────── Anajak Secondhand: AI assistant chat (signed-in users) ─────────────────────────

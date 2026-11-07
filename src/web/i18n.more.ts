@@ -177,4 +177,9 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'care.safety': { vi: 'An toàn', th: 'ความปลอดภัย', id: 'Keamanan' },
   'care.step': { vi: 'Bước', th: 'ขั้นตอนที่', id: 'Langkah' },
   'tab.restore': { vi: 'Sửa túi', th: 'ซ่อม', id: 'Perbaiki' },
+  'paint.title': { vi: 'Pha màu sơn túi', th: 'ผสมสีทากระเป๋า', id: 'Pencampur warna cat tas' },
+  'paint.take': { vi: '📷 Chụp hoặc chọn ảnh', th: '📷 ถ่ายหรือเลือกรูป', id: '📷 Ambil atau pilih foto' },
+  'paint.tapWhite': { vi: '① Chạm vào giấy trắng', th: '① แตะที่กระดาษขาว', id: '① Ketuk kertas putih' },
+  'paint.tapColor': { vi: '② Chạm vào màu túi', th: '② แตะที่สีกระเป๋า', id: '② Ketuk warna tas' },
+  'paint.recipes': { vi: 'Màu có công thức', th: 'สีที่มีสูตร', id: 'Warna dengan resep' },
 };

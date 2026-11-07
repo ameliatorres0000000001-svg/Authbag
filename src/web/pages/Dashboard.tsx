@@ -24,7 +24,7 @@ const ICON = {
 const Svg = ({ d, className = 'h-5 w-5' }: { d: string; className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
 );
-interface Stats { careLessons: number; authLessons: number; referencePhotos: number; brands: number; marketMonths: number }
+interface Stats { paintRecipes: number; careLessons: number; authLessons: number; referencePhotos: number; brands: number; marketMonths: number }
 
 /**
  * Home (Anajak Secondhand). The app's focus first — ① bag painting & repair lessons, ② learning to check
@@ -41,7 +41,7 @@ export default function Dashboard() {
     return () => { on = false; };
   }, []);
   const focus: [string, string, string, string, number | undefined][] = [
-    ['/restore', 'home.restore', 'home.restoreSub2', ICON.brush, stats?.careLessons],
+    ['/paint', 'paint.title', 'home.paintSub', ICON.brush, stats?.paintRecipes],
     ['/authenticity', 'home.authentic', 'home.authenticSub2', ICON.shield, stats?.authLessons],
   ];
   const more: [string, string, string, string][] = [
@@ -95,8 +95,8 @@ export default function Dashboard() {
       {stats && (
         <section aria-labelledby="stats-h" className="rounded-2xl border border-hairline bg-surface-card p-4">
           <h2 id="stats-h" className="mb-3 text-base">{t('stats.title')}</h2>
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {([['careLessons', 'stats.careLessons'], ['authLessons', 'stats.authLessons'], ['referencePhotos', 'stats.photos'], ['brands', 'stats.brands'], ['marketMonths', 'stats.market']] as const).map(([k, label]) => (
+          <dl className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {([['paintRecipes', 'stats.recipes'], ['careLessons', 'stats.careLessons'], ['authLessons', 'stats.authLessons'], ['referencePhotos', 'stats.photos'], ['brands', 'stats.brands'], ['marketMonths', 'stats.market']] as const).map(([k, label]) => (
               <div key={k} className="rounded-xl bg-surface-low px-3 py-2">
                 <dd className="font-serif text-2xl leading-none">{stats[k].toLocaleString(locale === 'km' ? 'km-KH' : locale)}</dd>
                 <dt className="mt-1 text-[11px] text-muted">{t(label)}</dt>

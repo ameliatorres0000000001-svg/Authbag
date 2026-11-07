@@ -537,3 +537,58 @@ export async function draftCareLesson(env: Env, x: { topic: string; level: strin
   const m = Number(o.minutes);
   return { summary: s(o.summary, 800), materials: s(o.materials, 1500), safety: s(o.safety, 1000), minutes: Number.isFinite(m) && m >= 1 && m <= 1440 ? Math.round(m) : null, steps };
 }
+
+export interface PaintResearch { info: string; sources: { title: string; url: string }[]; model: string }
+
+/**
+ * Look a paint / dye / finisher up on the web (Claude web search) and summarise how it is used on bags.
+ * A DRAFT for staff: they read it and copy what is right into the product. Only links that really came back
+ * from the search are kept as sources. Needs ANTHROPIC_API_KEY (the web search tool is Claude-only);
+ * each call allows at most 5 searches.
+ */
+export async function researchPaintProduct(env: Env, x: { brand: string; name: string; kind: string; lang: OutLang }): Promise<PaintResearch> {
+  if (aiProvider(env) !== 'anthropic') throw new Error('ai_web_not_configured');
+  const model = aiModel(env)!;
+  const client = anthropicClient(env);
+  const system =
+    'You research leather paints, dyes, edge paints and finishers for people who restore second-hand bags in Cambodia and Thailand. ' +
+    'Use web search to find the manufacturer\'s own pages and reliable guides about THIS exact product. ' +
+    'Report only what the sources say: what it is, which surfaces it suits, how to prepare and apply it, how it can be mixed or thinned, drying and finishing, and safety. ' +
+    'If the sources do not cover something, say it is not stated. Never invent mixing ratios or colour formulas. ' +
+    'Never say whether any bag is authentic or counterfeit. ' +
+    `Write the text in ${LANG_NAME[x.lang]}; keep product names as written. ` +
+    'Finish with JSON only: {"info":"the summary as short paragraphs and lists, max 2500 characters","sources":[{"title":"...","url":"..."}]}';
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: `Product: ${x.brand} ${x.name}\nType: ${x.kind}` }];
+  const found = new Map<string, string>();
+  let final: Anthropic.Beta.BetaMessage | null = null;
+  try {
+    for (let turn = 0; turn < 4 && !final; turn++) {
+      const r = await client.beta.messages.create({
+        model, max_tokens: 16000, output_config: { effort: 'medium' }, system, messages,
+        betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }],
+      });
+      for (const b of r.content) {
+        if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) {
+          for (const res of b.content) if (res.type === 'web_search_result') found.set(res.url, res.title);
+        }
+      }
+      if (r.stop_reason === 'refusal') throw new Error('ai_refused');
+      if (r.stop_reason === 'pause_turn') { messages.push({ role: 'assistant', content: r.content }); continue; }
+      final = r;
+    }
+  } catch (e) {
+    if (e instanceof Anthropic.APIError) { console.error(`paint research: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
+    throw e;
+  }
+  if (!final) throw new Error('ai_unfinished');
+  const text = final.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+  let o: { info?: unknown; sources?: { title?: unknown; url?: unknown }[] } = {};
+  try { o = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { o = { info: text }; }
+  // keep only sources the search really returned (no made-up links); fall back to the search results themselves
+  const cited = (Array.isArray(o.sources) ? o.sources : []).map((s) => String(s?.url ?? '')).filter((u) => found.has(u));
+  const urls = [...new Set(cited.length ? cited : [...found.keys()])].slice(0, 8);
+  const info = String(o.info ?? '').trim().slice(0, 3000);
+  if (!info) throw new Error('ai_empty');
+  return { info, sources: urls.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model };
+}

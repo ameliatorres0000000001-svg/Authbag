@@ -13,6 +13,7 @@ import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, annotateAfterUpload, assetIm
 import VerifyAdmin from '../VerifyAdmin.tsx';
 import MarketAdmin from '../MarketAdmin.tsx';
 import CareAdmin from '../CareAdmin.tsx';
+import PaintAdmin from '../PaintAdmin.tsx';
 import AdminTools, { AiCheck, AiTrackCard, ContactAdmin, ExpertsCard, NotifyCard, VerifyQueue } from '../AdminTools.tsx';
 
 interface Tax { brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] }
@@ -52,6 +53,7 @@ export default function AdminPanel() {
           <NotifyCard />
           <VerifyQueue />
           <AiTrackCard />
+          {ADMIN_ROLES.includes(me.role) && <PaintAdmin />}
           {ADMIN_ROLES.includes(me.role) && <CareAdmin />}
           {ADMIN_ROLES.includes(me.role) && <MarketAdmin />}
           {ADMIN_ROLES.includes(me.role) && <ExpertsCard />}
