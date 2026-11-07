@@ -515,3 +515,105 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     throw e;
   }
 }
+
+export interface CareDraft { summary: string; materials: string; safety: string; minutes: number | null; steps: { body: string; tip: string | null }[] }
+
+/**
+ * Draft of a bag painting / repair / care lesson for STAFF to check and edit before publishing (stored with
+ * ai_drafted = 1, status 'draft'). Practical workshop steps only; it never comments on whether a bag is genuine.
+ */
+export async function draftCareLesson(env: Env, x: { topic: string; level: string; title: string; lang: OutLang }): Promise<CareDraft> {
+  const text = await callVision(env,
+    'You write practical workshop lessons for people who clean, repaint and repair second-hand leather and canvas bags for resale in Southeast Asia. ' +
+    'Give realistic steps a beginner can follow with materials sold in Thai and Cambodian markets. Always include safety (ventilation, gloves, test on a hidden spot first) and say when a professional should do the work. ' +
+    'Never say or imply whether a bag is authentic or counterfeit, and never explain how to add, copy or alter brand logos, serial numbers or date codes. ' +
+    'Reply with JSON only: {"summary":"2 sentences","materials":"one item per line","safety":"short paragraph","minutes":number,"steps":[{"body":"one clear action","tip":"optional short tip or empty"}]} with 5 to 10 steps.' +
+    ` Write all text in ${LANG_NAME[x.lang]}; keep product and brand names as written.`,
+    [], `Lesson title: ${x.title}\nTopic: ${x.topic}\nLevel: ${x.level}`, 3000, 'medium');
+  const o = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)) as Partial<CareDraft>;
+  const s = (v: unknown, n: number) => String(v ?? '').trim().slice(0, n);
+  const steps = (Array.isArray(o.steps) ? o.steps : []).map((st) => ({ body: s(st?.body, 2000), tip: s(st?.tip, 600) || null })).filter((st) => st.body.length >= 3).slice(0, 15);
+  if (!steps.length) throw new Error('ai_empty');
+  const m = Number(o.minutes);
+  return { summary: s(o.summary, 800), materials: s(o.materials, 1500), safety: s(o.safety, 1000), minutes: Number.isFinite(m) && m >= 1 && m <= 1440 ? Math.round(m) : null, steps };
+}
+
+export interface PaintResearch { info: string; sources: { title: string; url: string }[]; model: string }
+
+/**
+ * Look a paint / dye / finisher up on the web (Claude web search) and summarise how it is used on bags.
+ * A DRAFT for staff: they read it and copy what is right into the product. Only links that really came back
+ * from the search are kept as sources. Needs ANTHROPIC_API_KEY (the web search tool is Claude-only);
+ * each call allows at most 5 searches.
+ */
+export async function researchPaintProduct(env: Env, x: { brand: string; name: string; kind: string; lang: OutLang }): Promise<PaintResearch> {
+  if (aiProvider(env) !== 'anthropic') throw new Error('ai_web_not_configured');
+  const model = aiModel(env)!;
+  const client = anthropicClient(env);
+  const system =
+    'You research leather paints, dyes, edge paints and finishers for people who restore second-hand bags in Cambodia and Thailand. ' +
+    'Use web search to find the manufacturer\'s own pages and reliable guides about THIS exact product. ' +
+    'Report only what the sources say: what it is, which surfaces it suits, how to prepare and apply it, how it can be mixed or thinned, drying and finishing, and safety. ' +
+    'If the sources do not cover something, say it is not stated. Never invent mixing ratios or colour formulas. ' +
+    'Never say whether any bag is authentic or counterfeit. ' +
+    `Write the text in ${LANG_NAME[x.lang]}; keep product names as written. ` +
+    'Finish with JSON only: {"info":"the summary as short paragraphs and lists, max 2500 characters","sources":[{"title":"...","url":"..."}]}';
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: `Product: ${x.brand} ${x.name}\nType: ${x.kind}` }];
+  const found = new Map<string, string>();
+  let final: Anthropic.Beta.BetaMessage | null = null;
+  try {
+    for (let turn = 0; turn < 4 && !final; turn++) {
+      const r = await client.beta.messages.create({
+        model, max_tokens: 16000, output_config: { effort: 'medium' }, system, messages,
+        betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }],
+      });
+      for (const b of r.content) {
+        if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) {
+          for (const res of b.content) if (res.type === 'web_search_result') found.set(res.url, res.title);
+        }
+      }
+      if (r.stop_reason === 'refusal') throw new Error('ai_refused');
+      if (r.stop_reason === 'pause_turn') { messages.push({ role: 'assistant', content: r.content }); continue; }
+      final = r;
+    }
+  } catch (e) {
+    if (e instanceof Anthropic.APIError) { console.error(`paint research: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
+    throw e;
+  }
+  if (!final) throw new Error('ai_unfinished');
+  const text = final.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+  let o: { info?: unknown; sources?: { title?: unknown; url?: unknown }[] } = {};
+  try { o = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { o = { info: text }; }
+  // keep only sources the search really returned (no made-up links); fall back to the search results themselves
+  const cited = (Array.isArray(o.sources) ? o.sources : []).map((s) => String(s?.url ?? '')).filter((u) => found.has(u));
+  const urls = [...new Set(cited.length ? cited : [...found.keys()])].slice(0, 8);
+  const info = String(o.info ?? '').trim().slice(0, 3000);
+  if (!info) throw new Error('ai_empty');
+  return { info, sources: urls.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model };
+}
+
+export interface BagIdentity { brandId: string | null; brandName: string | null; modelId: string | null; modelName: string | null; confidence: number; clues: string }
+
+/**
+ * Recognise the brand and model of a bag from one photo of the whole bag, so the customer does not have to
+ * pick them and knows which details to photograph next. Identification only — what the bag is MEANT to be;
+ * it never says whether it is genuine. Brand/model ids must come from the lists; otherwise names only.
+ */
+export async function identifyBag(env: Env, image: VisionImage, brands: { id: string; name: string }[], models: { id: string; brand_id: string; name: string }[], lang: OutLang): Promise<BagIdentity> {
+  const text = await callVision(env,
+    `You recognise which designer brand and model a handbag is styled as, from one photo of the whole bag, for a second-hand shop. ${NO_VERDICT} ` +
+    'Identify only what the bag is presented as (its design), never whether it is genuine. Use visible design features: shape, logo or monogram pattern, hardware, closure, handles. ' +
+    'Pick brand_id and model_id from the lists when one fits; if the brand is not in the list give brand_name only; if the model is not in the list give model_name only. ' +
+    'If the photo is not a bag, is too unclear, or you cannot tell, use nulls and confidence 0. ' +
+    `Reply with JSON only: {"brand_id": id|null, "brand_name": string|null, "model_id": id|null, "model_name": string|null, "confidence": 0..1, "clues": "one short sentence in ${LANG_NAME[lang]} on the visible features used"}`,
+    [image], `Brands: ${JSON.stringify(brands.map((b) => ({ id: b.id, name: b.name })))}\nModels: ${JSON.stringify(models.map((m) => ({ id: m.id, brand_id: m.brand_id, name: m.name })))}`, 800, 'medium');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  let o: any = null; try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { o = null; }
+  const brand = brands.find((x) => x.id === o?.brand_id) ?? null;
+  const model = brand ? models.find((m) => m.id === o?.model_id && m.brand_id === brand.id) ?? null : null;
+  const str = (v: unknown, n: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
+  const brandName = brand?.name ?? str(o?.brand_name, 80);
+  const confidence = brandName ? Math.max(0, Math.min(1, Number(o?.confidence) || 0)) : 0;
+  return { brandId: brand?.id ?? null, brandName, modelId: model?.id ?? null, modelName: model?.name ?? str(o?.model_name, 120), confidence, clues: str(o?.clues, 300) ?? '' };
+}

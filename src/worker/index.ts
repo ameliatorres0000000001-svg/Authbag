@@ -8,9 +8,13 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, researchPaintProduct, identifyBag } from './vision.ts';
+import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
+import { removeBackground } from './cutout.ts';
+import { sniffAudio, synthesize, ttsConfigured, ttsHash } from './tts.ts';
+import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
@@ -173,6 +177,15 @@ const PUBLIC_GET = [
   /^\/api\/studio\/assets\/[^/]+$/,
   /^\/api\/contact(\/qr)?$/,
   /^\/api\/market\/(trends|overview|updates)$/,
+  /^\/api\/market\/images\/[^/]+$/,
+  /^\/api\/care\/lessons(\/[^/]+(\/photo\/(before|after))?)?$/,
+  /^\/api\/care\/steps\/[^/]+\/photo$/,
+  /^\/api\/lessons(\/[^/]+)?$/,
+  /^\/api\/stats\/public$/,
+  /^\/api\/paint\/(recipes|products)(\/[^/]+\/photo)?$/,
+  /^\/api\/paint\/steps\/[^/]+\/(photo|audio)$/,
+  /^\/api\/paint\/recipes\/[^/]+\/mix-audio$/,
+  /^\/api\/voice\/ui(\/[a-z]{2}\/[\w.]+)?$/,
 ];
 
 // everything below requires a session (or is a public read above)
@@ -182,7 +195,8 @@ app.use('/api/*', async (c, next) => {
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
   if (!user) {
     // guests can browse the public teaching pages (read only); everything else needs an account
-    if (c.req.method === 'GET' && PUBLIC_GET.some((r) => r.test(p))) {
+    // the paint colour match is a calculation on numbers the phone measured: open to guests too
+    if ((c.req.method === 'GET' && PUBLIC_GET.some((r) => r.test(p))) || (c.req.method === 'POST' && p === '/api/paint/match')) {
       c.set('user', { id: '', email: '', name: 'Guest', role: 'readonly', locale: 'km' });
       return next();
     }
@@ -1978,14 +1992,16 @@ app.post('/api/telegram/webhook', async (c) => {
 const COUNTRIES = ['TH', 'ID', 'MY'] as const;
 const countrySchema = z.enum(COUNTRIES);
 const periodSchema = z.string().regex(/^20\d\d-(0[1-9]|1[0-2])$/);
-type TrendRow = { id: string; country: string; period: string; rank: number; brand: string; model: string; movement: string | null;
+type TrendRow = { id: string; country: string; period: string; rank: number; brand: string; model: string; movement: string | null; image_id?: string | null;
   price_min: number | null; price_max: number | null; currency: string | null; note: string | null; source: string; created_at: string };
 
 const latestPeriod = async (env: AppEnv['Bindings'], country: string) =>
   (await env.DB.prepare('SELECT MAX(period) AS p FROM market_trends WHERE country = ?').bind(country).first<{ p: string | null }>())?.p ?? null;
 const monthRows = async (env: AppEnv['Bindings'], country: string, period: string, limit = 50) =>
-  (await env.DB.prepare(`SELECT id, country, period, rank, brand, model, movement, price_min, price_max, currency, note, source, created_at
-    FROM market_trends WHERE country = ? AND period = ? ORDER BY rank LIMIT ?`).bind(country, period, limit).all<TrendRow>()).results;
+  (await env.DB.prepare(`SELECT t.id, t.country, t.period, t.rank, t.brand, t.model, t.movement, t.price_min, t.price_max, t.currency, t.note, t.source, t.created_at,
+      i.id AS image_id, i.cutout AS image_cutout, i.created_at AS image_at
+    FROM market_trends t LEFT JOIN market_model_images i ON i.brand_key = lower(trim(t.brand)) AND i.model_key = lower(trim(t.model))
+    WHERE t.country = ? AND t.period = ? ORDER BY t.rank LIMIT ?`).bind(country, period, limit).all<TrendRow>()).results;
 
 /** One country: the chosen (or latest) month's ranking, the months on file, and the year so far built from those months. */
 app.get('/api/market/trends', async (c) => {
@@ -2068,6 +2084,730 @@ app.delete('/api/admin/market/updates/:id', need(ADMINS), async (c) => {
   await c.env.DB.prepare('DELETE FROM market_updates WHERE id = ?').bind(c.req.param('id')).run();
   await audit(c.env, c.get('user').id, 'market.update_deleted', 'market_updates', c.req.param('id'));
   return c.json({ ok: true });
+});
+
+// ───────────────────────── Anajak Secondhand: trending-model photos (AI background removal) ─────────────────────────
+const MAX_MODEL_PHOTO = 8 * 1024 * 1024;
+const modelKey = (s: string) => s.trim().toLowerCase();
+
+/** Public: the display photo (transparent cutout, or the original when AI could not cut it). */
+app.get('/api/market/images/:id', async (c) => {
+  const r = await c.env.DB.prepare('SELECT display_key, display_mime FROM market_model_images WHERE id = ?').bind(c.req.param('id')).first<{ display_key: string; display_mime: string }>();
+  const obj = r ? await c.env.VAULT.get(r.display_key) : null;
+  if (!r || !obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': r.display_mime, 'cache-control': 'public, max-age=86400' } });
+});
+
+/** Upload (or replace) the photo of one brand + model; AI removes the background, the original is kept too. */
+app.post('/api/admin/market/images', need(ADMINS), async (c) => {
+  const form = await c.req.formData();
+  const brand = String(form.get('brand') ?? '').trim(); const model = String(form.get('model') ?? '').trim();
+  const file = form.get('file');
+  if (!brand || !model || brand.length > 80 || model.length > 120 || !(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_MODEL_PHOTO) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffImage(new Uint8Array(buf));
+  if (!mime) return c.json({ error: 'not_an_image' }, 415);
+  const id = uid('mi_');
+  const originalKey = `market/models/${id}/original.${mime.split('/')[1]}`;
+  await c.env.VAULT.put(originalKey, buf, { httpMetadata: { contentType: mime } });
+  const cut = await removeBackground(c.env, buf, mime);
+  const displayKey = cut ? `market/models/${id}/cutout.png` : originalKey;
+  if (cut) await c.env.VAULT.put(displayKey, cut, { httpMetadata: { contentType: 'image/png' } });
+  // replace the previous photo of this model (and its files)
+  const old = await c.env.DB.prepare('SELECT id, original_key, display_key FROM market_model_images WHERE brand_key = ? AND model_key = ?')
+    .bind(modelKey(brand), modelKey(model)).first<{ id: string; original_key: string; display_key: string }>();
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM market_model_images WHERE brand_key = ? AND model_key = ?').bind(modelKey(brand), modelKey(model)),
+    c.env.DB.prepare(`INSERT INTO market_model_images (id, brand_key, model_key, brand, model, original_key, display_key, display_mime, cutout, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, modelKey(brand), modelKey(model), brand, model, originalKey, displayKey, cut ? 'image/png' : mime, cut ? 1 : 0, c.get('user').id),
+  ]);
+  if (old) await c.env.VAULT.delete([...new Set([old.original_key, old.display_key])]);
+  await audit(c.env, c.get('user').id, 'market.model_photo', 'market_model_images', id, { brand, model, cutout: !!cut });
+  return c.json({ ok: true, id, cutout: !!cut });
+});
+
+/** Ask the AI again to remove the background of a photo whose cutout failed. */
+app.post('/api/admin/market/images/:id/cutout', need(ADMINS), async (c) => {
+  const r = await c.env.DB.prepare('SELECT id, original_key, display_key FROM market_model_images WHERE id = ?').bind(c.req.param('id')).first<{ id: string; original_key: string; display_key: string }>();
+  const obj = r ? await c.env.VAULT.get(r.original_key) : null;
+  if (!r || !obj) return c.json({ error: 'not_found' }, 404);
+  const buf = await obj.arrayBuffer();
+  const cut = await removeBackground(c.env, buf, sniffImage(new Uint8Array(buf)) ?? '');
+  if (!cut) return c.json({ error: 'cutout_failed' }, 502);
+  const displayKey = `market/models/${r.id}/cutout.png`;
+  await c.env.VAULT.put(displayKey, cut, { httpMetadata: { contentType: 'image/png' } });
+  await c.env.DB.prepare("UPDATE market_model_images SET display_key = ?, display_mime = 'image/png', cutout = 1, created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(displayKey, r.id).run();
+  return c.json({ ok: true, cutout: true });
+});
+
+app.delete('/api/admin/market/images/:id', need(ADMINS), async (c) => {
+  const r = await c.env.DB.prepare('SELECT original_key, display_key FROM market_model_images WHERE id = ?').bind(c.req.param('id')).first<{ original_key: string; display_key: string }>();
+  if (!r) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('DELETE FROM market_model_images WHERE id = ?').bind(c.req.param('id')).run();
+  await c.env.VAULT.delete([...new Set([r.original_key, r.display_key])]);
+  await audit(c.env, c.get('user').id, 'market.model_photo_deleted', 'market_model_images', c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+// ───────────────────────── Anajak Secondhand: bag painting / repair / care lessons ─────────────────────────
+const CARE_TOPICS = ['cleaning', 'edge_paint', 'recolor', 'corners', 'hardware', 'odor', 'lining', 'other'] as const;
+const CARE_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
+const MAX_CARE_PHOTO = 8 * 1024 * 1024;
+const careEditor = (c: any) => ADMINS.includes(c.get('user').role);
+type CareLesson = Record<string, any> & { id: string; status: string; before_key: string | null; after_key: string | null };
+
+const careLesson = (env: AppEnv['Bindings'], id: string) => env.DB.prepare('SELECT * FROM care_lessons WHERE id = ?').bind(id).first<CareLesson>();
+/** What the public sees of a lesson: never the storage keys, only whether a photo exists. */
+const careOut = (l: CareLesson) => {
+  const { before_key, after_key, created_by, ...rest } = l;
+  return { ...rest, has_before: !!before_key, has_after: !!after_key };
+};
+
+/** Published lessons for everyone; editors also see drafts. */
+app.get('/api/care/lessons', async (c) => {
+  const all = careEditor(c) && c.req.query('all') === '1';
+  const rows = (await c.env.DB.prepare(`SELECT l.*, (SELECT COUNT(*) FROM care_lesson_steps s WHERE s.lesson_id = l.id) AS steps
+    FROM care_lessons l ${all ? '' : "WHERE l.status = 'published'"} ORDER BY l.status = 'published' DESC, COALESCE(l.published_at, l.updated_at) DESC`).all<CareLesson>()).results;
+  return c.json({ lessons: rows.map(careOut) });
+});
+
+app.get('/api/care/lessons/:id', async (c) => {
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l || (l.status !== 'published' && !careEditor(c))) return c.json({ error: 'not_found' }, 404);
+  const steps = (await c.env.DB.prepare('SELECT id, sort, body, tip, photo_key FROM care_lesson_steps WHERE lesson_id = ? ORDER BY sort').bind(l.id).all<Record<string, any>>()).results
+    .map(({ photo_key, ...s }) => ({ ...s, has_photo: !!photo_key }));
+  return c.json({ lesson: careOut(l), steps });
+});
+
+const servePhoto = async (c: any, key: string | null | undefined) => {
+  const obj = key ? await c.env.VAULT.get(key) : null;
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? 'image/jpeg', 'cache-control': 'public, max-age=3600' } });
+};
+app.get('/api/care/lessons/:id/photo/:which', async (c) => {
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l || (l.status !== 'published' && !careEditor(c))) return c.json({ error: 'not_found' }, 404);
+  return servePhoto(c, c.req.param('which') === 'before' ? l.before_key : c.req.param('which') === 'after' ? l.after_key : null);
+});
+app.get('/api/care/steps/:id/photo', async (c) => {
+  const s = await c.env.DB.prepare('SELECT s.photo_key, l.status FROM care_lesson_steps s JOIN care_lessons l ON l.id = s.lesson_id WHERE s.id = ?').bind(c.req.param('id')).first<{ photo_key: string | null; status: string }>();
+  if (!s || (s.status !== 'published' && !careEditor(c))) return c.json({ error: 'not_found' }, 404);
+  return servePhoto(c, s.photo_key);
+});
+
+const careFields = z.object({
+  topic: z.enum(CARE_TOPICS), level: z.enum(CARE_LEVELS),
+  title_km: z.string().trim().min(3).max(160), title_en: z.string().trim().max(160).nullable().optional(),
+  summary: z.string().trim().max(800).nullable().optional(), materials: z.string().trim().max(1500).nullable().optional(),
+  safety: z.string().trim().max(1000).nullable().optional(), minutes: z.number().int().min(1).max(1440).nullable().optional(),
+});
+
+app.post('/api/admin/care/lessons', need(ADMINS), async (c) => {
+  const b = await parse(c, careFields);
+  const id = uid('cl_');
+  await c.env.DB.prepare(`INSERT INTO care_lessons (id, topic, level, title_km, title_en, summary, materials, safety, minutes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, b.topic, b.level, b.title_km, b.title_en || null, b.summary || null, b.materials || null, b.safety || null, b.minutes ?? null, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'care.lesson_created', 'care_lessons', id);
+  return c.json({ ok: true, id });
+});
+
+app.put('/api/admin/care/lessons/:id', need(ADMINS), async (c) => {
+  const b = await parse(c, careFields);
+  const r = await c.env.DB.prepare(`UPDATE care_lessons SET topic = ?, level = ?, title_km = ?, title_en = ?, summary = ?, materials = ?, safety = ?, minutes = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.topic, b.level, b.title_km, b.title_en || null, b.summary || null, b.materials || null, b.safety || null, b.minutes ?? null, c.req.param('id')).run();
+  if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
+  return c.json({ ok: true });
+});
+
+app.post('/api/admin/care/lessons/:id/status', need(ADMINS), async (c) => {
+  const { status } = await parse(c, z.object({ status: z.enum(['draft', 'published']) }));
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  if (status === 'published') {
+    const n = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM care_lesson_steps WHERE lesson_id = ?').bind(l.id).first<{ n: number }>())?.n ?? 0;
+    if (n === 0) return c.json({ error: 'no_steps' }, 400);
+  }
+  await c.env.DB.prepare(`UPDATE care_lessons SET status = ?, published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, strftime('%Y-%m-%dT%H:%M:%fZ','now')) ELSE published_at END,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`).bind(status, status, l.id).run();
+  await audit(c.env, c.get('user').id, `care.lesson_${status}`, 'care_lessons', l.id);
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/care/lessons/:id', need(ADMINS), async (c) => {
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  const keys = (await c.env.DB.prepare('SELECT photo_key FROM care_lesson_steps WHERE lesson_id = ? AND photo_key IS NOT NULL').bind(l.id).all<{ photo_key: string }>()).results.map((r) => r.photo_key);
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM care_lesson_steps WHERE lesson_id = ?').bind(l.id),
+    c.env.DB.prepare('DELETE FROM care_lessons WHERE id = ?').bind(l.id),
+  ]);
+  const all = [...keys, l.before_key, l.after_key].filter((k): k is string => !!k);
+  if (all.length) await c.env.VAULT.delete(all);
+  await audit(c.env, c.get('user').id, 'care.lesson_deleted', 'care_lessons', l.id);
+  return c.json({ ok: true });
+});
+
+/** Read an uploaded photo from a multipart form (field "file"): checked to be a real image and not too large. */
+async function carePhotoFrom(c: any): Promise<{ buf: ArrayBuffer; mime: string } | Response> {
+  const file = (await c.req.formData()).get('file');
+  if (!(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_CARE_PHOTO) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffImage(new Uint8Array(buf));
+  return mime ? { buf, mime } : c.json({ error: 'not_an_image' }, 415);
+}
+
+app.post('/api/admin/care/lessons/:id/photo/:which', need(ADMINS), async (c) => {
+  const which = c.req.param('which');
+  if (which !== 'before' && which !== 'after') return c.json({ error: 'invalid_input' }, 400);
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  const p = await carePhotoFrom(c);
+  if (p instanceof Response) return p;
+  const key = `care/${l.id}/${which}-${uid()}.${p.mime.split('/')[1]}`;
+  await c.env.VAULT.put(key, p.buf, { httpMetadata: { contentType: p.mime } });
+  await c.env.DB.prepare(`UPDATE care_lessons SET ${which === 'before' ? 'before_key' : 'after_key'} = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`).bind(key, l.id).run();
+  const old = which === 'before' ? l.before_key : l.after_key;
+  if (old) await c.env.VAULT.delete(old);
+  return c.json({ ok: true });
+});
+
+const stepFields = z.object({ body: z.string().trim().min(3).max(2000), tip: z.string().trim().max(600).nullable().optional() });
+
+app.post('/api/admin/care/lessons/:id/steps', need(ADMINS), async (c) => {
+  const b = await parse(c, stepFields);
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  const next = ((await c.env.DB.prepare('SELECT MAX(sort) AS m FROM care_lesson_steps WHERE lesson_id = ?').bind(l.id).first<{ m: number | null }>())?.m ?? 0) + 1;
+  const id = uid('cs_');
+  await c.env.DB.prepare('INSERT INTO care_lesson_steps (id, lesson_id, sort, body, tip) VALUES (?, ?, ?, ?, ?)').bind(id, l.id, next, b.body, b.tip || null).run();
+  await c.env.DB.prepare("UPDATE care_lessons SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(l.id).run();
+  return c.json({ ok: true, id });
+});
+
+app.put('/api/admin/care/steps/:id', need(ADMINS), async (c) => {
+  const b = await parse(c, stepFields);
+  const r = await c.env.DB.prepare('UPDATE care_lesson_steps SET body = ?, tip = ? WHERE id = ?').bind(b.body, b.tip || null, c.req.param('id')).run();
+  return r.meta.changes ? c.json({ ok: true }) : c.json({ error: 'not_found' }, 404);
+});
+
+/** Move a step one place up or down (swaps its position with the neighbour). */
+app.post('/api/admin/care/steps/:id/move', need(ADMINS), async (c) => {
+  const { dir } = await parse(c, z.object({ dir: z.enum(['up', 'down']) }));
+  const s = await c.env.DB.prepare('SELECT id, lesson_id, sort FROM care_lesson_steps WHERE id = ?').bind(c.req.param('id')).first<{ id: string; lesson_id: string; sort: number }>();
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const n = await c.env.DB.prepare(`SELECT id, sort FROM care_lesson_steps WHERE lesson_id = ? AND sort ${dir === 'up' ? '<' : '>'} ? ORDER BY sort ${dir === 'up' ? 'DESC' : 'ASC'} LIMIT 1`)
+    .bind(s.lesson_id, s.sort).first<{ id: string; sort: number }>();
+  if (!n) return c.json({ ok: true });
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE care_lesson_steps SET sort = ? WHERE id = ?').bind(n.sort, s.id),
+    c.env.DB.prepare('UPDATE care_lesson_steps SET sort = ? WHERE id = ?').bind(s.sort, n.id),
+  ]);
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/care/steps/:id', need(ADMINS), async (c) => {
+  const s = await c.env.DB.prepare('SELECT photo_key FROM care_lesson_steps WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>();
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('DELETE FROM care_lesson_steps WHERE id = ?').bind(c.req.param('id')).run();
+  if (s.photo_key) await c.env.VAULT.delete(s.photo_key);
+  return c.json({ ok: true });
+});
+
+app.post('/api/admin/care/steps/:id/photo', need(ADMINS), async (c) => {
+  const s = await c.env.DB.prepare('SELECT id, lesson_id, photo_key FROM care_lesson_steps WHERE id = ?').bind(c.req.param('id')).first<{ id: string; lesson_id: string; photo_key: string | null }>();
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const p = await carePhotoFrom(c);
+  if (p instanceof Response) return p;
+  const key = `care/${s.lesson_id}/step-${uid()}.${p.mime.split('/')[1]}`;
+  await c.env.VAULT.put(key, p.buf, { httpMetadata: { contentType: p.mime } });
+  await c.env.DB.prepare('UPDATE care_lesson_steps SET photo_key = ? WHERE id = ?').bind(key, s.id).run();
+  await c.env.DB.prepare("UPDATE care_lessons SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(s.lesson_id).run();
+  if (s.photo_key) await c.env.VAULT.delete(s.photo_key);
+  return c.json({ ok: true });
+});
+
+/** AI drafts the steps (and empty fields) of a lesson that has none yet; it stays a draft for staff to check. */
+app.post('/api/admin/care/lessons/:id/ai-draft', need(ADMINS), async (c) => {
+  const l = await careLesson(c.env, c.req.param('id'));
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const n = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM care_lesson_steps WHERE lesson_id = ?').bind(l.id).first<{ n: number }>())?.n ?? 0;
+  if (n > 0) return c.json({ error: 'has_steps' }, 409);
+  let d;
+  try { d = await draftCareLesson(c.env, { topic: l.topic, level: l.level, title: l.title_km, lang: reqLang(c) }); }
+  catch (e) { console.error('care draft failed:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE care_lessons SET summary = COALESCE(summary, ?), materials = COALESCE(materials, ?), safety = COALESCE(safety, ?), minutes = COALESCE(minutes, ?),
+      ai_drafted = 1, status = 'draft', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`).bind(d.summary || null, d.materials || null, d.safety || null, d.minutes, l.id),
+    ...d.steps.map((s, i) => c.env.DB.prepare('INSERT INTO care_lesson_steps (id, lesson_id, sort, body, tip) VALUES (?, ?, ?, ?, ?)').bind(uid('cs_'), l.id, i + 1, s.body, s.tip)),
+  ]);
+  await audit(c.env, c.get('user').id, 'care.lesson_ai_draft', 'care_lessons', l.id, { steps: d.steps.length, model: aiModel(c.env) });
+  return c.json({ ok: true, steps: d.steps.length });
+});
+
+/** Real counts of what the app teaches and tracks, shown to everyone on the home screen. */
+app.get('/api/stats/public', async (c) => {
+  const one = async (sql: string) => (await c.env.DB.prepare(sql).first<{ n: number }>())?.n ?? 0;
+  return c.json({
+    paintRecipes: await one("SELECT COUNT(*) AS n FROM paint_recipes WHERE status = 'published'"),
+    careLessons: await one("SELECT COUNT(*) AS n FROM care_lessons WHERE status = 'published'"),
+    authLessons: await one("SELECT COUNT(DISTINCT model_id) AS n FROM lesson_steps WHERE status <> 'retired'"),
+    referencePhotos: await one("SELECT COUNT(*) AS n FROM reference_assets WHERE status = 'approved'"),
+    brands: await one("SELECT COUNT(DISTINCT brand_id) AS n FROM reference_assets WHERE status = 'approved'"),
+    marketMonths: await one('SELECT COUNT(DISTINCT country || period) AS n FROM market_trends'),
+  });
+});
+
+// ───────────────────────── Anajak Secondhand: paint mixer (colour recipes measured with a white reference) ─────────────────────────
+const PAINT_KINDS = ['leather_paint', 'edge_paint', 'dye', 'finisher', 'preparer', 'cleaner', 'other'] as const;
+const SURFACES = ['smooth_leather', 'grained_leather', 'vachetta', 'coated_canvas', 'suede', 'edge', 'other'] as const;
+const FINISHES = ['matte', 'satin', 'gloss'] as const;
+const patchSchema = z.object({ mean: z.tuple([z.number(), z.number(), z.number()]), sd: z.number(), clipped: z.number(), n: z.number().int() });
+const measurementSchema = z.object({ sample: patchSchema, white: patchSchema, blur: z.number(), minSide: z.number(), distance: z.number(), r: z.number() });
+
+type PaintProduct = { id: string; brand: string; name: string; kind: string; color_hex: string | null; info: string | null; sources_json: string; photo_key: string | null; active: number; updated_at: string };
+const productOut = ({ photo_key, sources_json, ...p }: PaintProduct & Record<string, unknown>) => ({ ...p, has_photo: !!photo_key, sources: JSON.parse(sources_json || '[]') });
+
+/** Recipes with their parts (paint, brand, ratio). Public: published only. */
+async function paintRecipes(env: AppEnv['Bindings'], all: boolean) {
+  const recipes = (await env.DB.prepare(`SELECT id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, method, status, photo_key, updated_at, mix_text, mix_tts_key FROM paint_recipes
+    ${all ? '' : "WHERE status = 'published'"} ORDER BY lab_l DESC`).all<Record<string, any>>()).results;
+  const parts = (await env.DB.prepare(`SELECT pp.recipe_id, pp.parts, pp.sort, p.id, p.brand, p.name, p.kind, p.color_hex, p.photo_key, p.updated_at
+    FROM paint_recipe_parts pp JOIN paint_products p ON p.id = pp.product_id ORDER BY pp.sort`).all<Record<string, any>>()).results;
+  const steps = (await env.DB.prepare('SELECT id, recipe_id, sort, text, icon, minutes, photo_key, tts_key, voice_key, updated_at FROM paint_recipe_steps ORDER BY sort').all<Record<string, any>>()).results;
+  return recipes.map(({ photo_key, mix_tts_key, ...r }): Record<string, any> => ({
+    ...r, has_photo: !!photo_key, mix_audio: !!mix_tts_key,
+    steps: steps.filter((s) => s.recipe_id === r.id).map(({ recipe_id, photo_key: pk, tts_key, voice_key, ...s }) => ({ ...s, has_photo: !!pk, audio: voice_key ? 'voice' : tts_key ? 'tts' : null })),
+    parts: parts.filter((p) => p.recipe_id === r.id).map(({ recipe_id, photo_key: pk, ...p }) => ({ ...p, has_photo: !!pk })),
+  }));
+}
+
+app.get('/api/paint/recipes', async (c) => c.json({ recipes: await paintRecipes(c.env, careEditor(c) && c.req.query('all') === '1') }));
+app.get('/api/paint/products', async (c) => {
+  const all = careEditor(c) && c.req.query('all') === '1';
+  const rows = (await c.env.DB.prepare(`SELECT * FROM paint_products ${all ? '' : 'WHERE active = 1'} ORDER BY brand, name`).all<PaintProduct>()).results;
+  return c.json({ products: rows.map(productOut) });
+});
+app.get('/api/paint/products/:id/photo', async (c) =>
+  servePhoto(c, (await c.env.DB.prepare('SELECT photo_key FROM paint_products WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>())?.photo_key));
+app.get('/api/paint/recipes/:id/photo', async (c) => {
+  const r = await c.env.DB.prepare('SELECT photo_key, status FROM paint_recipes WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null; status: string }>();
+  if (!r || (r.status !== 'published' && !careEditor(c))) return c.json({ error: 'not_found' }, 404);
+  return servePhoto(c, r.photo_key);
+});
+
+/**
+ * Match a measured bag colour against the published recipes. The measurement is checked again here with the
+ * same rules as the phone; a bad photo gets the reasons and no colour at all. Beyond ΔE2000 6: no recipe.
+ */
+app.post('/api/paint/match', async (c) => {
+  const { measurement } = await parse(c, z.object({ measurement: measurementSchema }));
+  const issues = checkMeasurement(measurement);
+  if (issues.length) return c.json({ ok: false, issues }, 422);
+  const lab = measuredLab(measurement);
+  const ranked = (await paintRecipes(c.env, false))
+    .map((r) => ({ recipe: r, dE: Math.round(deltaE2000(lab, [r.lab_l, r.lab_a, r.lab_b]) * 10) / 10 }))
+    .sort((a, b) => a.dE - b.dE);
+  const usable = ranked.filter((x) => matchLevel(x.dE) !== 'none').slice(0, 3);
+  return c.json({ ok: true, lab, hex: labToHex(lab), matches: usable.map((x) => ({ ...x, level: matchLevel(x.dE) })), nearest: ranked[0]?.dE ?? null });
+});
+
+/** Ask for a recipe for a colour that has none (signed-in users; the colour only, no photo). */
+app.post('/api/paint/requests', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const b = await parse(c, z.object({ measurement: measurementSchema, note: z.string().trim().max(300).nullable().optional() }));
+  const issues = checkMeasurement(b.measurement);
+  if (issues.length) return c.json({ ok: false, issues }, 422);
+  const recent = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM paint_color_requests WHERE user_id = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 day')").bind(me.id).first<{ n: number }>())?.n ?? 0;
+  if (recent >= 10) return c.json({ error: 'too_many' }, 429);
+  const lab = measuredLab(b.measurement);
+  await c.env.DB.prepare('INSERT INTO paint_color_requests (id, user_id, lab_l, lab_a, lab_b, hex, note) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(uid('pq_'), me.id, lab[0], lab[1], lab[2], labToHex(lab), b.note || null).run();
+  return c.json({ ok: true });
+});
+
+app.get('/api/admin/paint/requests', need(ADMINS), async (c) =>
+  c.json({ requests: (await c.env.DB.prepare(`SELECT r.id, r.lab_l, r.lab_a, r.lab_b, r.hex, r.note, r.created_at, u.name AS by_name
+    FROM paint_color_requests r JOIN users u ON u.id = r.user_id ORDER BY r.created_at DESC LIMIT 100`).all()).results }));
+app.delete('/api/admin/paint/requests/:id', need(ADMINS), async (c) => {
+  await c.env.DB.prepare('DELETE FROM paint_color_requests WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+/** Read a multipart form: its text fields and an optional checked image ("file"). */
+async function formWithPhoto(c: any): Promise<{ fields: Record<string, string>; photo: { buf: ArrayBuffer; mime: string } | null } | Response> {
+  const fd = await c.req.formData();
+  const fields: Record<string, string> = {};
+  for (const [k, v] of fd.entries()) if (typeof v === 'string') fields[k] = v;
+  const file = fd.get('file');
+  if (!(file instanceof File) || file.size === 0) return { fields, photo: null };
+  if (file.size > MAX_CARE_PHOTO) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffImage(new Uint8Array(buf));
+  return mime ? { fields, photo: { buf, mime } } : c.json({ error: 'not_an_image' }, 415);
+}
+const putPhoto = async (env: AppEnv['Bindings'], prefix: string, p: { buf: ArrayBuffer; mime: string }) => {
+  const key = `${prefix}-${uid()}.${p.mime.split('/')[1]}`;
+  await env.VAULT.put(key, p.buf, { httpMetadata: { contentType: p.mime } });
+  return key;
+};
+
+const productFields = z.object({
+  brand: z.string().trim().min(1).max(80), name: z.string().trim().min(1).max(120), kind: z.enum(PAINT_KINDS),
+  color_hex: z.string().regex(/^#[0-9a-f]{6}$/).nullable().optional(), info: z.string().trim().max(3000).nullable().optional(),
+  sources: z.array(z.object({ title: z.string().max(200), url: z.string().url().max(500) })).max(10).optional(), active: z.boolean().optional(),
+});
+const productFromForm = (f: Record<string, string>) => productFields.parse({
+  brand: f.brand, name: f.name, kind: f.kind, color_hex: f.color_hex || null, info: f.info || null,
+  sources: f.sources ? JSON.parse(f.sources) : [], active: f.active === undefined ? undefined : f.active === '1',
+});
+
+app.post('/api/admin/paint/products', need(ADMINS), async (c) => {
+  const r = await formWithPhoto(c); if (r instanceof Response) return r;
+  const b = productFromForm(r.fields);
+  const id = uid('pp_');
+  const key = r.photo ? await putPhoto(c.env, `paint/products/${id}`, r.photo) : null;
+  await c.env.DB.prepare(`INSERT INTO paint_products (id, brand, name, kind, color_hex, info, sources_json, photo_key, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, b.brand, b.name, b.kind, b.color_hex ?? null, b.info ?? null, JSON.stringify(b.sources ?? []), key, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'paint.product_created', 'paint_products', id);
+  return c.json({ ok: true, id });
+});
+
+app.put('/api/admin/paint/products/:id', need(ADMINS), async (c) => {
+  const old = await c.env.DB.prepare('SELECT photo_key FROM paint_products WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>();
+  if (!old) return c.json({ error: 'not_found' }, 404);
+  const r = await formWithPhoto(c); if (r instanceof Response) return r;
+  const b = productFromForm(r.fields);
+  const key = r.photo ? await putPhoto(c.env, `paint/products/${c.req.param('id')}`, r.photo) : old.photo_key;
+  await c.env.DB.prepare(`UPDATE paint_products SET brand = ?, name = ?, kind = ?, color_hex = ?, info = ?, sources_json = ?, photo_key = ?, active = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.brand, b.name, b.kind, b.color_hex ?? null, b.info ?? null, JSON.stringify(b.sources ?? []), key, b.active === false ? 0 : 1, c.req.param('id')).run();
+  if (r.photo && old.photo_key) await c.env.VAULT.delete(old.photo_key);
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/paint/products/:id', need(ADMINS), async (c) => {
+  const used = await c.env.DB.prepare('SELECT 1 FROM paint_recipe_parts WHERE product_id = ? LIMIT 1').bind(c.req.param('id')).first();
+  if (used) return c.json({ error: 'in_use' }, 409);
+  const p = await c.env.DB.prepare('SELECT photo_key FROM paint_products WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>();
+  if (!p) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('DELETE FROM paint_products WHERE id = ?').bind(c.req.param('id')).run();
+  if (p.photo_key) await c.env.VAULT.delete(p.photo_key);
+  return c.json({ ok: true });
+});
+
+/** AI looks the product up on the web: a draft (text + real links) for staff to read before using any of it. */
+app.post('/api/admin/paint/products/:id/research', need(ADMINS), async (c) => {
+  const p = await c.env.DB.prepare('SELECT brand, name, kind FROM paint_products WHERE id = ?').bind(c.req.param('id')).first<{ brand: string; name: string; kind: string }>();
+  if (!p) return c.json({ error: 'not_found' }, 404);
+  try {
+    const r = await researchPaintProduct(c.env, { ...p, lang: reqLang(c) });
+    await audit(c.env, c.get('user').id, 'paint.product_research', 'paint_products', c.req.param('id'), { model: r.model, sources: r.sources.length });
+    return c.json({ ok: true, draft: r });
+  } catch (e) {
+    const m = String((e as Error).message);
+    if (m === 'ai_web_not_configured') return c.json({ error: m }, 501);
+    console.error('paint research failed:', m);
+    return c.json({ error: m === 'ai_refused' ? 'ai_refused' : 'ai_failed' }, 502);
+  }
+});
+
+const recipeFields = z.object({
+  name_km: z.string().trim().min(2).max(120), name_en: z.string().trim().max(120).nullable().optional(),
+  surface: z.enum(SURFACES), finish: z.enum(FINISHES), method: z.string().trim().max(3000).nullable().optional(),
+});
+
+/** New recipe: a photo of the bag colour with a white reference, measured with the same rules as for users. */
+app.post('/api/admin/paint/recipes', need(ADMINS), async (c) => {
+  const r = await formWithPhoto(c); if (r instanceof Response) return r;
+  const b = recipeFields.parse({ name_km: r.fields.name_km, name_en: r.fields.name_en || null, surface: r.fields.surface, finish: r.fields.finish, method: r.fields.method || null });
+  const m = measurementSchema.parse(JSON.parse(r.fields.measurement ?? 'null'));
+  const issues = checkMeasurement(m);
+  if (issues.length) return c.json({ ok: false, issues }, 422);
+  const lab = measuredLab(m);
+  const id = uid('pr_');
+  const key = r.photo ? await putPhoto(c.env, `paint/recipes/${id}`, r.photo) : null;
+  await c.env.DB.prepare(`INSERT INTO paint_recipes (id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, measure_json, photo_key, method, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, b.name_km, b.name_en ?? null, b.surface, b.finish, lab[0], lab[1], lab[2], labToHex(lab), JSON.stringify(m), key, b.method ?? null, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'paint.recipe_created', 'paint_recipes', id, { lab });
+  return c.json({ ok: true, id, lab, hex: labToHex(lab) });
+});
+
+app.put('/api/admin/paint/recipes/:id', need(ADMINS), async (c) => {
+  const b = await parse(c, recipeFields.extend({ parts: z.array(z.object({ product_id: z.string(), parts: z.number().positive().max(100) })).max(8), mix_text: z.string().trim().max(500).nullable().optional() }));
+  const ids = new Set(b.parts.map((p) => p.product_id));
+  if (ids.size !== b.parts.length) return c.json({ error: 'duplicate_product' }, 400);
+  const r = await c.env.DB.prepare(`UPDATE paint_recipes SET name_km = ?, name_en = ?, surface = ?, finish = ?, method = ?, mix_text = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.name_km, b.name_en ?? null, b.surface, b.finish, b.method ?? null, b.mix_text || null, c.req.param('id')).run();
+  if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM paint_recipe_parts WHERE recipe_id = ?').bind(c.req.param('id')),
+    ...b.parts.map((p, i) => c.env.DB.prepare('INSERT INTO paint_recipe_parts (recipe_id, product_id, parts, sort) VALUES (?, ?, ?, ?)').bind(c.req.param('id'), p.product_id, p.parts, i)),
+  ]);
+  const voiced = await mixTts(c.env, c.req.param('id'));
+  return c.json({ ok: true, voiced });
+});
+
+app.post('/api/admin/paint/recipes/:id/status', need(ADMINS), async (c) => {
+  const { status } = await parse(c, z.object({ status: z.enum(['draft', 'published']) }));
+  if (status === 'published') {
+    const n = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM paint_recipe_parts WHERE recipe_id = ?').bind(c.req.param('id')).first<{ n: number }>())?.n ?? 0;
+    if (!n) return c.json({ error: 'no_parts' }, 400);
+  }
+  const r = await c.env.DB.prepare("UPDATE paint_recipes SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(status, c.req.param('id')).run();
+  if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await audit(c.env, c.get('user').id, `paint.recipe_${status}`, 'paint_recipes', c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/paint/recipes/:id', need(ADMINS), async (c) => {
+  const r = await c.env.DB.prepare('SELECT photo_key FROM paint_recipes WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>();
+  if (!r) return c.json({ error: 'not_found' }, 404);
+  const files = (await c.env.DB.prepare(`SELECT photo_key AS k FROM paint_recipe_steps WHERE recipe_id = ? UNION ALL SELECT tts_key FROM paint_recipe_steps WHERE recipe_id = ?
+    UNION ALL SELECT voice_key FROM paint_recipe_steps WHERE recipe_id = ? UNION ALL SELECT mix_tts_key FROM paint_recipes WHERE id = ?`)
+    .bind(c.req.param('id'), c.req.param('id'), c.req.param('id'), c.req.param('id')).all<{ k: string | null }>()).results.map((x) => x.k).filter((k): k is string => !!k);
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM paint_recipe_steps WHERE recipe_id = ?').bind(c.req.param('id')),
+    c.env.DB.prepare('DELETE FROM paint_recipe_parts WHERE recipe_id = ?').bind(c.req.param('id')),
+    c.env.DB.prepare('DELETE FROM paint_recipes WHERE id = ?').bind(c.req.param('id')),
+  ]);
+  const all = [...files, r.photo_key].filter((k): k is string => !!k);
+  if (all.length) await c.env.VAULT.delete(all);
+  await audit(c.env, c.get('user').id, 'paint.recipe_deleted', 'paint_recipes', c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+// ───────────────────────── Anajak Secondhand: painting step cards with pictures and voice ─────────────────────────
+const MAX_VOICE = 4 * 1024 * 1024;
+const stepFieldsP = z.object({ text: z.string().trim().min(2).max(500), icon: z.enum(STEP_ICONS).nullable().optional(), minutes: z.number().int().min(1).max(1440).nullable().optional() });
+type PStep = { id: string; recipe_id: string; sort: number; text: string; icon: string | null; minutes: number | null; photo_key: string | null; tts_key: string | null; tts_hash: string | null; voice_key: string | null; voice_mime: string | null; updated_at: string };
+
+/** Is this recipe visible to the caller (published, or the caller edits recipes)? */
+const recipeVisible = async (c: any, recipeId: string) => {
+  const r = await c.env.DB.prepare('SELECT status FROM paint_recipes WHERE id = ?').bind(recipeId).first();
+  return !!r && (r.status === 'published' || careEditor(c));
+};
+const stepOf = (env: AppEnv['Bindings'], id: string) => env.DB.prepare('SELECT * FROM paint_recipe_steps WHERE id = ?').bind(id).first<PStep>();
+const touchRecipe = (env: AppEnv['Bindings'], id: string) => env.DB.prepare("UPDATE paint_recipes SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(id).run();
+
+/** (Re)generate the AI voice of a step when its words changed. Returns false when TTS is unavailable or failed. */
+async function stepTts(env: AppEnv['Bindings'], s: PStep): Promise<boolean> {
+  if (!ttsConfigured(env)) return false;
+  const hash = await ttsHash(env, s.text);
+  if (s.tts_key && s.tts_hash === hash) return true;
+  try {
+    const mp3 = await synthesize(env, s.text);
+    const key = `paint/voice/${s.recipe_id}/${s.id}-${hash.slice(0, 12)}.mp3`;
+    await env.VAULT.put(key, mp3, { httpMetadata: { contentType: 'audio/mpeg' } });
+    await env.DB.prepare('UPDATE paint_recipe_steps SET tts_key = ?, tts_hash = ? WHERE id = ?').bind(key, hash, s.id).run();
+    if (s.tts_key && s.tts_key !== key) await env.VAULT.delete(s.tts_key);
+    return true;
+  } catch (e) { console.error('step tts failed:', (e as Error).message); return false; }
+}
+async function mixTts(env: AppEnv['Bindings'], recipeId: string): Promise<boolean> {
+  const r = await env.DB.prepare('SELECT mix_text, mix_tts_key, mix_tts_hash FROM paint_recipes WHERE id = ?').bind(recipeId).first<{ mix_text: string | null; mix_tts_key: string | null; mix_tts_hash: string | null }>();
+  if (!r?.mix_text || !ttsConfigured(env)) return false;
+  const hash = await ttsHash(env, r.mix_text);
+  if (r.mix_tts_key && r.mix_tts_hash === hash) return true;
+  try {
+    const key = `paint/voice/${recipeId}/mix-${hash.slice(0, 12)}.mp3`;
+    await env.VAULT.put(key, await synthesize(env, r.mix_text), { httpMetadata: { contentType: 'audio/mpeg' } });
+    await env.DB.prepare('UPDATE paint_recipes SET mix_tts_key = ?, mix_tts_hash = ? WHERE id = ?').bind(key, hash, recipeId).run();
+    if (r.mix_tts_key && r.mix_tts_key !== key) await env.VAULT.delete(r.mix_tts_key);
+    return true;
+  } catch (e) { console.error('mix tts failed:', (e as Error).message); return false; }
+}
+
+const serveAudio = async (c: any, key: string | null | undefined, mime = 'audio/mpeg') => {
+  const obj = key ? await c.env.VAULT.get(key) : null;
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? mime, 'cache-control': 'public, max-age=3600' } });
+};
+
+app.get('/api/paint/steps/:id/photo', async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s || !(await recipeVisible(c, s.recipe_id))) return c.json({ error: 'not_found' }, 404);
+  return servePhoto(c, s.photo_key);
+});
+/** The step's voice: the staff recording when there is one, otherwise the AI voice. */
+app.get('/api/paint/steps/:id/audio', async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s || !(await recipeVisible(c, s.recipe_id))) return c.json({ error: 'not_found' }, 404);
+  return s.voice_key ? serveAudio(c, s.voice_key, s.voice_mime ?? 'audio/wav') : serveAudio(c, s.tts_key);
+});
+app.get('/api/paint/recipes/:id/mix-audio', async (c) => {
+  if (!(await recipeVisible(c, c.req.param('id')))) return c.json({ error: 'not_found' }, 404);
+  const r = await c.env.DB.prepare('SELECT mix_tts_key FROM paint_recipes WHERE id = ?').bind(c.req.param('id')).first<{ mix_tts_key: string | null }>();
+  return serveAudio(c, r?.mix_tts_key);
+});
+
+app.post('/api/admin/paint/recipes/:id/steps', need(ADMINS), async (c) => {
+  const b = await parse(c, stepFieldsP);
+  const rid = c.req.param('id');
+  if (!(await c.env.DB.prepare('SELECT 1 FROM paint_recipes WHERE id = ?').bind(rid).first())) return c.json({ error: 'not_found' }, 404);
+  const next = ((await c.env.DB.prepare('SELECT MAX(sort) AS m FROM paint_recipe_steps WHERE recipe_id = ?').bind(rid).first<{ m: number | null }>())?.m ?? 0) + 1;
+  const id = uid('ps_');
+  await c.env.DB.prepare('INSERT INTO paint_recipe_steps (id, recipe_id, sort, text, icon, minutes) VALUES (?, ?, ?, ?, ?, ?)').bind(id, rid, next, b.text, b.icon ?? null, b.minutes ?? null).run();
+  const voiced = await stepTts(c.env, (await stepOf(c.env, id))!);
+  await touchRecipe(c.env, rid);
+  return c.json({ ok: true, id, voiced });
+});
+
+app.put('/api/admin/paint/steps/:id', need(ADMINS), async (c) => {
+  const b = await parse(c, stepFieldsP);
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare("UPDATE paint_recipe_steps SET text = ?, icon = ?, minutes = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(b.text, b.icon ?? null, b.minutes ?? null, s.id).run();
+  const voiced = await stepTts(c.env, { ...s, text: b.text });
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true, voiced });
+});
+
+app.post('/api/admin/paint/steps/:id/move', need(ADMINS), async (c) => {
+  const { dir } = await parse(c, z.object({ dir: z.enum(['up', 'down']) }));
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const n = await c.env.DB.prepare(`SELECT id, sort FROM paint_recipe_steps WHERE recipe_id = ? AND sort ${dir === 'up' ? '<' : '>'} ? ORDER BY sort ${dir === 'up' ? 'DESC' : 'ASC'} LIMIT 1`).bind(s.recipe_id, s.sort).first<{ id: string; sort: number }>();
+  if (n) await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE paint_recipe_steps SET sort = ? WHERE id = ?').bind(n.sort, s.id),
+    c.env.DB.prepare('UPDATE paint_recipe_steps SET sort = ? WHERE id = ?').bind(s.sort, n.id),
+  ]);
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/paint/steps/:id', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('DELETE FROM paint_recipe_steps WHERE id = ?').bind(s.id).run();
+  const keys = [s.photo_key, s.tts_key, s.voice_key].filter((k): k is string => !!k);
+  if (keys.length) await c.env.VAULT.delete(keys);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+
+app.post('/api/admin/paint/steps/:id/photo', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const p = await carePhotoFrom(c);
+  if (p instanceof Response) return p;
+  const key = await putPhoto(c.env, `paint/steps/${s.recipe_id}/${s.id}`, p);
+  await c.env.DB.prepare("UPDATE paint_recipe_steps SET photo_key = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(key, s.id).run();
+  if (s.photo_key) await c.env.VAULT.delete(s.photo_key);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+app.delete('/api/admin/paint/steps/:id/photo', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('UPDATE paint_recipe_steps SET photo_key = NULL WHERE id = ?').bind(s.id).run();
+  if (s.photo_key) await c.env.VAULT.delete(s.photo_key);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+
+/** Staff record their own voice for a step (played instead of the AI voice). */
+app.post('/api/admin/paint/steps/:id/voice', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const file = (await c.req.formData()).get('file');
+  if (!(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_VOICE) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffAudio(new Uint8Array(buf));
+  if (!mime) return c.json({ error: 'not_audio' }, 415);
+  const key = `paint/voice/${s.recipe_id}/${s.id}-rec-${uid()}.${mime.split('/')[1]}`;
+  await c.env.VAULT.put(key, buf, { httpMetadata: { contentType: mime } });
+  await c.env.DB.prepare("UPDATE paint_recipe_steps SET voice_key = ?, voice_mime = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(key, mime, s.id).run();
+  if (s.voice_key) await c.env.VAULT.delete(s.voice_key);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+app.delete('/api/admin/paint/steps/:id/voice', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('UPDATE paint_recipe_steps SET voice_key = NULL, voice_mime = NULL WHERE id = ?').bind(s.id).run();
+  if (s.voice_key) await c.env.VAULT.delete(s.voice_key);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+
+/** Generate the AI voice for every step (and the mixing sentence) that has none or whose words changed. */
+app.post('/api/admin/paint/recipes/:id/voice', need(ADMINS), async (c) => {
+  if (!ttsConfigured(c.env)) return c.json({ error: 'tts_not_configured' }, 501);
+  const rid = c.req.param('id');
+  const steps = (await c.env.DB.prepare('SELECT * FROM paint_recipe_steps WHERE recipe_id = ? ORDER BY sort').bind(rid).all<PStep>()).results;
+  let ok = 0, failed = 0;
+  for (const s of steps) (await stepTts(c.env, s)) ? ok++ : failed++;
+  const mix = await mixTts(c.env, rid);
+  await touchRecipe(c.env, rid);
+  return c.json({ ok: true, steps: ok, failed, mix });
+});
+
+app.get('/api/admin/voice/status', need(ADMINS), (c) => c.json({ tts: ttsConfigured(c.env), region: c.env.AZURE_SPEECH_REGION ?? null }));
+
+/** Public: the spoken version of an app phrase in a language, when staff have generated it. */
+app.get('/api/voice/ui/:lang/:key', async (c) => {
+  const r = await c.env.DB.prepare('SELECT r2_key FROM ui_voice WHERE key = ? AND lang = ?').bind(c.req.param('key'), c.req.param('lang')).first<{ r2_key: string }>();
+  return serveAudio(c, r?.r2_key);
+});
+app.get('/api/voice/ui', async (c) => c.json({ available: (await c.env.DB.prepare('SELECT key, lang FROM ui_voice').all()).results }));
+
+/** Staff generate the app phrases in their language (texts come from the app's own translations; keys are whitelisted). */
+app.post('/api/admin/voice/ui', need(ADMINS), async (c) => {
+  if (!ttsConfigured(c.env)) return c.json({ error: 'tts_not_configured' }, 501);
+  const b = await parse(c, z.object({ lang: z.enum(['km', 'en', 'vi', 'th', 'id']), items: z.array(z.object({ key: z.enum(UI_VOICE_KEYS), text: z.string().trim().min(1).max(300) })).max(UI_VOICE_KEYS.length) }));
+  let made = 0, kept = 0, failed = 0;
+  for (const it of b.items) {
+    const hash = await ttsHash(c.env, it.text);
+    const old = await c.env.DB.prepare('SELECT text_hash, r2_key FROM ui_voice WHERE key = ? AND lang = ?').bind(it.key, b.lang).first<{ text_hash: string; r2_key: string }>();
+    if (old?.text_hash === hash) { kept++; continue; }
+    try {
+      const key = `voice/ui/${b.lang}/${it.key}-${hash.slice(0, 12)}.mp3`;
+      await c.env.VAULT.put(key, await synthesize(c.env, it.text), { httpMetadata: { contentType: 'audio/mpeg' } });
+      await c.env.DB.prepare('INSERT OR REPLACE INTO ui_voice (key, lang, text_hash, r2_key) VALUES (?, ?, ?, ?)').bind(it.key, b.lang, hash, key).run();
+      if (old && old.r2_key !== key) await c.env.VAULT.delete(old.r2_key);
+      made++;
+    } catch (e) { console.error('ui voice failed:', (e as Error).message); failed++; }
+  }
+  await audit(c.env, c.get('user').id, 'voice.ui_generated', 'ui_voice', b.lang, { made, kept, failed });
+  return c.json({ ok: true, made, kept, failed });
+});
+
+// ───────────────────────── Anajak Secondhand: AI recognises the bag (brand + model) before the photo steps ─────────────────────────
+/**
+ * One photo of the whole bag → the brand and model it is styled as, so the customer does not have to pick them.
+ * Identification only (never genuine/fake). The photo is not stored. Signed-in users, 20 a day.
+ */
+app.post('/api/verify/identify', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const file = (await c.req.formData()).get('file');
+  if (!(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_IMAGE_BYTES) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffImage(new Uint8Array(buf));
+  if (!mime) return c.json({ error: 'not_an_image' }, 415);
+  const day = `identify:${chatDay()}`;
+  const counted = await c.env.DB.prepare(`INSERT INTO ai_chat_usage (user_id, day, n) VALUES (?, ?, 1)
+    ON CONFLICT (user_id, day) DO UPDATE SET n = n + 1 WHERE n < 20`).bind(me.id, day).run();
+  if (!counted.meta.changes) return c.json({ error: 'too_many' }, 429);
+  const brands = (await c.env.DB.prepare("SELECT id, name FROM brands WHERE slug <> 'other' ORDER BY name").all<{ id: string; name: string }>()).results;
+  const models = (await c.env.DB.prepare('SELECT id, brand_id, name FROM models ORDER BY name').all<{ id: string; brand_id: string; name: string }>()).results;
+  try {
+    const r = await identifyBag(c.env, { data: buf, mime }, brands, models, reqLang(c));
+    // a brand we do not list goes to the "other brand" choice with its name
+    const other = r.brandId || !r.brandName ? null : await c.env.DB.prepare("SELECT id FROM brands WHERE slug = 'other'").first<{ id: string }>();
+    return c.json({ ...r, otherBrandId: other?.id ?? null, model: aiModel(c.env) });
+  } catch (e) {
+    await c.env.DB.prepare('UPDATE ai_chat_usage SET n = MAX(n - 1, 0) WHERE user_id = ? AND day = ?').bind(me.id, day).run();
+    console.error('identify failed:', (e as Error).message);
+    return c.json({ error: 'ai_failed' }, 502);
+  }
 });
 
 // ───────────────────────── Anajak Secondhand: AI assistant chat (signed-in users) ─────────────────────────

@@ -2,6 +2,8 @@ export interface Env {
   DB: D1Database;
   VAULT: R2Bucket;
   ASSETS: Fetcher;
+  /** Workers AI (background removal for market model photos); optional so the app runs without it */
+  AI?: Ai;
   /** Optional secrets / vars — never required for the app to run */
   ENTRUPY_API_KEY?: string;
   /** Optional override of Entrupy's API base (e.g. a sandbox host Entrupy gives you). Defaults to https://api.entrupy.com */
@@ -20,6 +22,10 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
+  /** Azure AI Speech (Khmer text-to-speech): key is a secret, region a var (e.g. southeastasia); optional Khmer voice name */
+  AZURE_SPEECH_KEY?: string;
+  AZURE_SPEECH_REGION?: string;
+  AZURE_SPEECH_VOICE_KM?: string;
 }
 
 export type Role = 'owner' | 'lead_authenticator' | 'appraiser' | 'reviewer' | 'subscriber' | 'readonly';

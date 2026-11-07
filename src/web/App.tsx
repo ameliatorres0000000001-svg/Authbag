@@ -35,6 +35,8 @@ import Verify from './pages/Verify.tsx';
 import VerifyRequest from './pages/VerifyRequest.tsx';
 import Trends from './pages/Trends.tsx';
 import Restore from './pages/Restore.tsx';
+import RestoreLesson from './pages/RestoreLesson.tsx';
+import Paint from './pages/Paint.tsx';
 import Authenticity from './pages/Authenticity.tsx';
 import Chat from './pages/Chat.tsx';
 
@@ -45,7 +47,7 @@ export const MeContext = React.createContext<Me | null>(null);
 
 // Customer-facing sections; inspections, knowledge & rules, Entrupy, audit and settings live in the admin panel.
 const NAV: [string, string][] = [
-  ['/', 'dashboard'], ['/trends', 'home.trends'], ['/restore', 'home.restore'], ['/authenticity', 'home.authentic'], ['/chat', 'home.chat'],
+  ['/', 'dashboard'], ['/paint', 'paint.title'], ['/restore', 'home.restore'], ['/authenticity', 'home.authentic'], ['/chat', 'home.chat'], ['/trends', 'home.trends'],
   ['/datecode', 'datecode'], ['/check', 'check.title'], ['/check/nfc', 'nav.nfc'], ['/verify', 'nav.verify'],
 ];
 
@@ -62,10 +64,10 @@ function useSecretTaps(onUnlock: () => void, taps = 5, windowMs = 3000) {
 // Mobile tab bar: [route, i18n key, 24×24 SVG path]
 const TABS: [string, string, string][] = [
   ['/', 'home', 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z'],
-  ['/trends', 'tab.trends', 'M3 17l6-6 4 4 8-8M14 7h7v7'],
+  ['/paint', 'tab.restore', 'M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9 15.6l.8-3zM7 13c-2 0-3 1.5-3 3 0 1.3-.7 2.4-2 3 3.5 1.5 8 .5 8-3a3 3 0 0 0-3-3z'],
   ['/check', 'scan', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8'],
+  ['/verify', 'nav.verify', 'M12 8v4l3 2M3.05 11a9 9 0 1 1 .5 4M3 4v5h5'],
   ['/chat', 'tab.chat', 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM8.5 12h.01M12 12h.01M15.5 12h.01'],
-  ['/authenticity', 'tab.learn', 'M9 12l2 2 4-4M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z'],
 ];
 const TabIcon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
@@ -98,7 +100,8 @@ export default function App() {
   // guests browse the feed, albums and date codes; checking a bag needs an account
   const guest = me === null;
   const user: Me = me ?? GUEST;
-  const publicPath = loc.pathname === '/' || /^\/(album|posts)\//.test(loc.pathname) || ['/datecode', '/trends', '/restore', '/authenticity'].includes(loc.pathname);
+  // teaching is open to everyone: painting lessons, bag-checking lessons, date codes and market data
+  const publicPath = loc.pathname === '/' || /^\/(album|posts|restore|learn)\//.test(loc.pathname) || ['/datecode', '/trends', '/restore', '/authenticity', '/learn', '/paint'].includes(loc.pathname);
   const signOut = async () => { await api.post('/api/auth/logout'); setMe(null); nav('/'); };
 
   return (
@@ -137,7 +140,9 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/trends" element={<Trends />} />
+            <Route path="/paint" element={<Paint />} />
             <Route path="/restore" element={<Restore />} />
+            <Route path="/restore/:id" element={<RestoreLesson />} />
             <Route path="/authenticity" element={<Authenticity />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/posts/:modelId" element={<FolderPosts />} />
@@ -200,6 +205,7 @@ function AccountButton({ me, onSignOut }: { me: Me | null; onSignOut: () => void
             <div className="font-semibold">{me.name}</div>
             <div className="truncate text-xs text-muted">{me.email}</div>
             <Link to="/verify" onClick={() => setOpen(false)} className="mt-2 block rounded-lg px-2 py-1.5 hover:bg-surface-low">🏅 {t('nav.verify')}</Link>
+            {STAFF_ROLES.includes(me.role) && <Link to="/admin" onClick={() => setOpen(false)} className="block rounded-lg px-2 py-1.5 hover:bg-surface-low">🛠 {t('acct.admin')}</Link>}
             <button type="button" onClick={() => { setOpen(false); onSignOut(); }} className="block w-full rounded-lg px-2 py-1.5 text-left text-counterfeit hover:bg-surface-low">{t('signOut')}</button>
           </div>
         </>

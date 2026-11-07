@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
 import { MeContext } from '../App.tsx';
@@ -12,6 +12,8 @@ import { ApiError } from '../api.ts';
 import { ADMIN_ROLES, BASES, LICENCES, STAFF_ROLES, annotateAfterUpload, assetImg, uploadReference } from '../studio.ts';
 import VerifyAdmin from '../VerifyAdmin.tsx';
 import MarketAdmin from '../MarketAdmin.tsx';
+import CareAdmin from '../CareAdmin.tsx';
+import PaintAdmin from '../PaintAdmin.tsx';
 import AdminTools, { AiCheck, AiTrackCard, ContactAdmin, ExpertsCard, NotifyCard, VerifyQueue } from '../AdminTools.tsx';
 
 interface Tax { brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] }
@@ -26,6 +28,7 @@ export default function AdminPanel() {
   const [lib, setLib] = useState<{ items: any[]; matrix: any[]; aiConfigured: boolean } | null>(null);
   const [filter, setFilter] = useState({ brandId: '', component: '', label: '' });
   const [open, setOpen] = useState<any | null>(null);
+  const [sp, setSp] = useSearchParams();
 
   const loadTax = useCallback(() => api.get<Tax>('/api/taxonomy').then(setTax), []);
   const loadLib = useCallback(() => {
@@ -33,7 +36,7 @@ export default function AdminPanel() {
     return api.get(`/api/admin/library${q ? `?${q}` : ''}`).then(setLib);
   }, [filter]);
   useEffect(() => { loadTax(); api.get<Comp[]>('/api/components').then(setComps); }, [loadTax]);
-  useEffect(() => { if (STAFF_ROLES.includes(me.role)) loadLib(); }, [loadLib, me.role]);
+  useEffect(() => { if (STAFF_ROLES.includes(me.role) && sp.get('tab') === 'library') loadLib(); }, [loadLib, me.role, sp]);
 
   const compName = (code: string | null) => {
     if (!code || code === 'none') return t('admin.noPart');
@@ -41,26 +44,40 @@ export default function AdminPanel() {
     return c ? (locale === 'km' ? c.name_km : c.name_en) : code;
   };
 
+  const admin = ADMIN_ROLES.includes(me.role);
+  const tabs = ([['today', '📥'], ['library', '📚'], ['paint', '🎨'], ['market', '📈'], ['settings', '⚙️']] as const).filter(([k]) => admin || k === 'today' || k === 'library' || k === 'settings');
+  const asked = sp.get('tab');
+  const tab = tabs.some(([k]) => k === asked) ? asked! : 'today';
+
   if (!STAFF_ROLES.includes(me.role)) return <Page title={t('admin.title')}><Notice tone="bad">{t('admin.forbidden')}</Notice></Page>;
 
   return (
-    <Page title={t('admin.title')} subtitle={t('admin.subtitle')} actions={<Link to="/" className="btn-ghost">{t('admin.close')}</Link>}>
-      <p className="-mt-4 mb-4 font-mono text-[10px] uppercase tracking-widest text-muted">{t('admin.hint')}</p>
+    <Page title={t('acct.admin')} subtitle={tab === 'library' ? t('admin.subtitle') : undefined} actions={<Link to="/" className="btn-ghost">{t('admin.close')}</Link>}>
+      {/* one job per tab, so each screen stays short */}
+      <nav className="sticky top-14 z-10 -mx-4 mb-4 flex gap-1.5 overflow-x-auto bg-surface/95 px-4 py-2 backdrop-blur md:top-0 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={t('admin.title')}>
+        {tabs.map(([k, icon]) => (
+          <button key={k} type="button" onClick={() => setSp({ tab: k }, { replace: true })} aria-current={tab === k}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm ${tab === k ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>
+            <span aria-hidden>{icon}</span>{t(`admin.tab.${k}`)}
+          </button>
+        ))}
+      </nav>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-5">
-        <div className="min-w-0 space-y-4 lg:col-span-2">
-          <NotifyCard />
-          <VerifyQueue />
-          <AiTrackCard />
-          {ADMIN_ROLES.includes(me.role) && <MarketAdmin />}
-          {ADMIN_ROLES.includes(me.role) && <ExpertsCard />}
-          {ADMIN_ROLES.includes(me.role) && <ContactAdmin />}
-          {ADMIN_ROLES.includes(me.role) && <AiCheck />}
-          <AdminTools />
-          {ADMIN_ROLES.includes(me.role) && <VerifyAdmin />}
-          {STAFF_ROLES.includes(me.role) && <TranslatePoints />}
-          <UploadForm tax={tax} comps={comps} compName={compName} canAddTaxonomy={ADMIN_ROLES.includes(me.role)} onTax={loadTax} onDone={loadLib} />
-          <DateCodeGuide />
+        <div className={`min-w-0 space-y-4 ${tab === 'library' ? 'lg:col-span-2' : 'lg:col-span-5 lg:mx-auto lg:w-full lg:max-w-2xl'}`}>
+          {tab === 'today' && <><NotifyCard /><VerifyQueue /><AiTrackCard /></>}
+          {tab === 'library' && (
+            <>
+              <Notice><b>{t('admin.teachTitle')}</b><br />{t('admin.teachBody')}</Notice>
+              <UploadForm tax={tax} comps={comps} compName={compName} canAddTaxonomy={admin} onTax={loadTax} onDone={loadLib} />
+              <TranslatePoints />
+              <DateCodeGuide />
+            </>
+          )}
+          {tab === 'paint' && <><PaintAdmin /><CareAdmin /></>}
+          {tab === 'market' && <MarketAdmin />}
+          {tab === 'settings' && <>{admin && <><ExpertsCard /><ContactAdmin /><AiCheck /><VerifyAdmin /></>}<AdminTools /></>}
         </div>
+        {tab === 'library' && (
         <div className="min-w-0 space-y-4 lg:col-span-3">
           <Matrix lib={lib} tax={tax} compName={compName} onPick={(brandId, component) => setFilter({ brandId, component, label: '' })} />
           <div className="card">
@@ -112,6 +129,7 @@ export default function AdminPanel() {
             </div>
           )}
         </div>
+        )}
       </div>
     </Page>
   );
