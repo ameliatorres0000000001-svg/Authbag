@@ -66,7 +66,7 @@ const TABS: [string, string, string][] = [
   ['/', 'home', 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z'],
   ['/paint', 'tab.restore', 'M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9 15.6l.8-3zM7 13c-2 0-3 1.5-3 3 0 1.3-.7 2.4-2 3 3.5 1.5 8 .5 8-3a3 3 0 0 0-3-3z'],
   ['/check', 'scan', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8'],
-  ['/authenticity', 'tab.learn', 'M9 12l2 2 4-4M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z'],
+  ['/verify', 'nav.verify', 'M12 8v4l3 2M3.05 11a9 9 0 1 1 .5 4M3 4v5h5'],
   ['/chat', 'tab.chat', 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM8.5 12h.01M12 12h.01M15.5 12h.01'],
 ];
 const TabIcon = ({ d }: { d: string }) => (

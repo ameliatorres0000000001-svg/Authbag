@@ -592,3 +592,28 @@ export async function researchPaintProduct(env: Env, x: { brand: string; name: s
   if (!info) throw new Error('ai_empty');
   return { info, sources: urls.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model };
 }
+
+export interface BagIdentity { brandId: string | null; brandName: string | null; modelId: string | null; modelName: string | null; confidence: number; clues: string }
+
+/**
+ * Recognise the brand and model of a bag from one photo of the whole bag, so the customer does not have to
+ * pick them and knows which details to photograph next. Identification only — what the bag is MEANT to be;
+ * it never says whether it is genuine. Brand/model ids must come from the lists; otherwise names only.
+ */
+export async function identifyBag(env: Env, image: VisionImage, brands: { id: string; name: string }[], models: { id: string; brand_id: string; name: string }[], lang: OutLang): Promise<BagIdentity> {
+  const text = await callVision(env,
+    `You recognise which designer brand and model a handbag is styled as, from one photo of the whole bag, for a second-hand shop. ${NO_VERDICT} ` +
+    'Identify only what the bag is presented as (its design), never whether it is genuine. Use visible design features: shape, logo or monogram pattern, hardware, closure, handles. ' +
+    'Pick brand_id and model_id from the lists when one fits; if the brand is not in the list give brand_name only; if the model is not in the list give model_name only. ' +
+    'If the photo is not a bag, is too unclear, or you cannot tell, use nulls and confidence 0. ' +
+    `Reply with JSON only: {"brand_id": id|null, "brand_name": string|null, "model_id": id|null, "model_name": string|null, "confidence": 0..1, "clues": "one short sentence in ${LANG_NAME[lang]} on the visible features used"}`,
+    [image], `Brands: ${JSON.stringify(brands.map((b) => ({ id: b.id, name: b.name })))}\nModels: ${JSON.stringify(models.map((m) => ({ id: m.id, brand_id: m.brand_id, name: m.name })))}`, 800, 'medium');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  let o: any = null; try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { o = null; }
+  const brand = brands.find((x) => x.id === o?.brand_id) ?? null;
+  const model = brand ? models.find((m) => m.id === o?.model_id && m.brand_id === brand.id) ?? null : null;
+  const str = (v: unknown, n: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
+  const brandName = brand?.name ?? str(o?.brand_name, 80);
+  const confidence = brandName ? Math.max(0, Math.min(1, Number(o?.confidence) || 0)) : 0;
+  return { brandId: brand?.id ?? null, brandName, modelId: model?.id ?? null, modelName: model?.name ?? str(o?.model_name, 120), confidence, clues: str(o?.clues, 300) ?? '' };
+}

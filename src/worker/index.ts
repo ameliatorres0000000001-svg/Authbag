@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, researchPaintProduct } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, researchPaintProduct, identifyBag } from './vision.ts';
 import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2775,6 +2775,39 @@ app.post('/api/admin/voice/ui', need(ADMINS), async (c) => {
   }
   await audit(c.env, c.get('user').id, 'voice.ui_generated', 'ui_voice', b.lang, { made, kept, failed });
   return c.json({ ok: true, made, kept, failed });
+});
+
+// ───────────────────────── Anajak Secondhand: AI recognises the bag (brand + model) before the photo steps ─────────────────────────
+/**
+ * One photo of the whole bag → the brand and model it is styled as, so the customer does not have to pick them.
+ * Identification only (never genuine/fake). The photo is not stored. Signed-in users, 20 a day.
+ */
+app.post('/api/verify/identify', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const file = (await c.req.formData()).get('file');
+  if (!(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_IMAGE_BYTES) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffImage(new Uint8Array(buf));
+  if (!mime) return c.json({ error: 'not_an_image' }, 415);
+  const day = `identify:${chatDay()}`;
+  const counted = await c.env.DB.prepare(`INSERT INTO ai_chat_usage (user_id, day, n) VALUES (?, ?, 1)
+    ON CONFLICT (user_id, day) DO UPDATE SET n = n + 1 WHERE n < 20`).bind(me.id, day).run();
+  if (!counted.meta.changes) return c.json({ error: 'too_many' }, 429);
+  const brands = (await c.env.DB.prepare("SELECT id, name FROM brands WHERE slug <> 'other' ORDER BY name").all<{ id: string; name: string }>()).results;
+  const models = (await c.env.DB.prepare('SELECT id, brand_id, name FROM models ORDER BY name').all<{ id: string; brand_id: string; name: string }>()).results;
+  try {
+    const r = await identifyBag(c.env, { data: buf, mime }, brands, models, reqLang(c));
+    // a brand we do not list goes to the "other brand" choice with its name
+    const other = r.brandId || !r.brandName ? null : await c.env.DB.prepare("SELECT id FROM brands WHERE slug = 'other'").first<{ id: string }>();
+    return c.json({ ...r, otherBrandId: other?.id ?? null, model: aiModel(c.env) });
+  } catch (e) {
+    await c.env.DB.prepare('UPDATE ai_chat_usage SET n = MAX(n - 1, 0) WHERE user_id = ? AND day = ?').bind(me.id, day).run();
+    console.error('identify failed:', (e as Error).message);
+    return c.json({ error: 'ai_failed' }, 502);
+  }
 });
 
 // ───────────────────────── Anajak Secondhand: AI assistant chat (signed-in users) ─────────────────────────
