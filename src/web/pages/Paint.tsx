@@ -6,12 +6,17 @@ import { MeContext } from '../App.tsx';
 import { Notice, Page, errText } from '../ui.tsx';
 import ColorScanner from '../ColorScanner.tsx';
 import type { Issue, Measurement } from '../../shared/color.ts';
+import type { StepIcon } from '../../shared/voiceKeys.ts';
+import StepPlayer from '../StepPlayer.tsx';
+import { useUiVoice } from '../voice.ts';
 
 export interface PaintPart { id: string; brand: string; name: string; kind: string; color_hex: string | null; parts: number; has_photo: boolean; updated_at: string }
 export interface PaintRecipe {
   id: string; name_km: string; name_en: string | null; surface: string; finish: string; lab_l: number; lab_a: number; lab_b: number;
   hex: string; method: string | null; status: 'draft' | 'published'; has_photo: boolean; updated_at: string; parts: PaintPart[];
+  mix_text: string | null; mix_audio: boolean; steps: PaintStep[];
 }
+export interface PaintStep { id: string; sort: number; text: string; icon: StepIcon | null; minutes: number | null; has_photo: boolean; audio: 'voice' | 'tts' | null; updated_at: string }
 export interface PaintProduct {
   id: string; brand: string; name: string; kind: string; color_hex: string | null; info: string | null; active: number;
   has_photo: boolean; updated_at: string; sources: { title: string; url: string }[];
@@ -24,6 +29,7 @@ export const productPhoto = (p: { id: string; updated_at: string }) => `/api/pai
 /** One colour recipe: swatch, what to mix in which ratio, how to apply. */
 export function RecipeCard({ r, mine, level, dE }: { r: PaintRecipe; mine?: string; level?: 'exact' | 'close'; dE?: number }) {
   const { t, locale } = useI18n();
+  const [playing, setPlaying] = useState(false);
   const total = r.parts.reduce((s, p) => s + p.parts, 0) || 1;
   return (
     <article className="overflow-hidden rounded-2xl border border-hairline bg-surface-card">
@@ -41,6 +47,10 @@ export function RecipeCard({ r, mine, level, dE }: { r: PaintRecipe; mine?: stri
           <span className="rounded-full bg-surface-low px-2 py-0.5">{t(`paint.finish.${r.finish}`)}</span>
         </div>
         {level === 'close' && <Notice tone="warn">{t('paint.closeWarn')}</Notice>}
+        <button type="button" onClick={() => setPlaying(true)} className="btn-primary flex w-full items-center justify-center gap-2 !py-3 text-base">
+          {t('steps.open')}
+        </button>
+        {playing && <StepPlayer recipe={r} onClose={() => setPlaying(false)} />}
 
         <div>
           <div className="mb-1.5 text-xs font-semibold text-gold">{t('paint.mix')}</div>
@@ -59,7 +69,7 @@ export function RecipeCard({ r, mine, level, dE }: { r: PaintRecipe; mine?: stri
             ))}
           </ul>
         </div>
-        {r.method && (
+        {r.method && r.steps.length === 0 && (
           <div>
             <div className="mb-1 text-xs font-semibold text-gold">{t('paint.method')}</div>
             <p className="whitespace-pre-line text-sm leading-relaxed">{r.method}</p>
@@ -87,6 +97,7 @@ export default function Paint() {
   const [products, setProducts] = useState<PaintProduct[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [hasLessons, setHasLessons] = useState(false);
+  const voice = useUiVoice();
 
   useEffect(() => {
     api.get<{ recipes: PaintRecipe[] }>('/api/paint/recipes').then((r) => setRecipes(r.recipes)).catch(() => setRecipes([]));
@@ -98,7 +109,8 @@ export default function Paint() {
     setRes(null); setErr(''); setSent(false);
     if (!meas || issues.length) { setM(null); return; }
     setM(meas); setBusy(true);
-    api.post<MatchResult>('/api/paint/match', { measurement: meas }).then(setRes)
+    api.post<MatchResult>('/api/paint/match', { measurement: meas })
+      .then((r) => { setRes(r); voice.sayKey(r.matches[0]?.level === 'exact' ? 'paint.exact' : r.matches[0] ? 'paint.close' : 'paint.none'); })
       .catch((e) => setErr(e instanceof ApiError && e.status === 422 ? t('paint.cannot') : errText(e)))
       .finally(() => setBusy(false));
   };
@@ -121,7 +133,11 @@ export default function Paint() {
               ))}
             </ol>
           </div>
-          <ColorScanner onChange={onScan} />
+          <button type="button" onClick={voice.toggle} aria-pressed={voice.on}
+            className={`rounded-full border px-4 py-2 text-sm ${voice.on ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>
+            {voice.on ? '🔊' : '🔇'} {t('voice.guide')}
+          </button>
+          <ColorScanner onChange={onScan} onSay={voice.sayKey} />
         </section>
 
         <section className="space-y-3" aria-live="polite">

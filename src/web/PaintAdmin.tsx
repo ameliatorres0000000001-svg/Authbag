@@ -5,6 +5,11 @@ import { Field, Notice, errText } from './ui.tsx';
 import ColorScanner from './ColorScanner.tsx';
 import { RecipeCard, productPhoto, type PaintProduct, type PaintRecipe } from './pages/Paint.tsx';
 import type { Issue, Measurement } from '../shared/color.ts';
+import { STEP_ICONS, UI_VOICE_KEYS, type StepIcon } from '../shared/voiceKeys.ts';
+import { StepArt } from './StepArt.tsx';
+import VoiceRecorder from './VoiceRecorder.tsx';
+import { mixSentence } from './StepPlayer.tsx';
+import { playUrl } from './voice.ts';
 
 const KINDS = ['leather_paint', 'edge_paint', 'dye', 'finisher', 'preparer', 'cleaner', 'other'] as const;
 const SURFACES = ['smooth_leather', 'grained_leather', 'vachetta', 'coated_canvas', 'suede', 'edge', 'other'] as const;
@@ -28,6 +33,30 @@ export default function PaintAdmin() {
       {tab === 'products' && <Products products={products} reload={loadProducts} />}
       {tab === 'recipes' && <Recipes products={products} />}
       {tab === 'requests' && <Requests />}
+      <VoiceTools />
+    </div>
+  );
+}
+
+/** Azure voice status, and generating the spoken app phrases (scanner guidance) in the current language. */
+function VoiceTools() {
+  const { t, locale } = useI18n();
+  const [st, setSt] = useState<{ tts: boolean } | null>(null);
+  const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.get<{ tts: boolean }>('/api/admin/voice/status').then(setSt).catch(() => setSt(null)); }, []);
+  const gen = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await api.post<{ made: number; kept: number; failed: number }>('/api/admin/voice/ui', { lang: locale, items: UI_VOICE_KEYS.map((key) => ({ key, text: t(key) })) });
+      setMsg({ tone: r.failed ? 'bad' : 'ok', text: `${t('padm.voiceMade')}: ${r.made} · ${r.kept} · ✕ ${r.failed}` });
+    } catch (e) { setMsg({ tone: 'bad', text: errText(e) }); } finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-2 border-t border-hairline pt-3 text-sm">
+      {st && !st.tts && <Notice tone="warn">{t('padm.ttsOff')}</Notice>}
+      <button type="button" className="btn-ghost text-sm" disabled={busy || !st?.tts} onClick={gen}>🔊 {t('padm.uiVoice')}</button>
+      {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
     </div>
   );
 }
@@ -197,7 +226,11 @@ function RecipeEditor({ r, products, onChanged }: { r: PaintRecipe; products: Pa
     catch (e) { setMsg({ tone: 'bad', text: e instanceof ApiError && e.body?.error === 'no_parts' ? t('padm.noParts') : errText(e) }); }
     finally { setBusy(false); }
   };
-  const save = () => run(() => api.put(`/api/admin/paint/recipes/${r.id}`, { ...f, name_en: f.name_en || null, method: f.method || null, parts: parts.filter((p) => p.product_id && p.parts > 0) }), t('madm.saved'));
+  const mixText = () => {
+    const ps = parts.filter((p) => p.product_id && p.parts > 0).map((p) => { const pr = products.find((x) => x.id === p.product_id)!; return { id: pr.id, brand: pr.brand, name: pr.name, color_hex: pr.color_hex, parts: p.parts, kind: pr.kind, has_photo: false, updated_at: '' }; });
+    return ps.length ? mixSentence({ ...r, parts: ps }, t) : null;
+  };
+  const save = () => run(() => api.put(`/api/admin/paint/recipes/${r.id}`, { ...f, name_en: f.name_en || null, method: f.method || null, parts: parts.filter((p) => p.product_id && p.parts > 0), mix_text: mixText() }), t('madm.saved'));
 
   return (
     <div className="mt-2 space-y-2 rounded-lg border border-hairline p-3">
@@ -221,12 +254,17 @@ function RecipeEditor({ r, products, onChanged }: { r: PaintRecipe; products: Pa
         ))}
         <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" onClick={() => setParts([...parts, { product_id: '', parts: 1 }])}>{t('padm.addPart')}</button>
       </div>
-      <Field label={t('padm.method')}><textarea className="input min-h-[100px]" maxLength={3000} value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })} /></Field>
+      <StepsEditor r={r} onChanged={onChanged} />
+      {r.steps.length === 0 && <Field label={t('padm.method')}><textarea className="input min-h-[100px]" maxLength={3000} value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })} /></Field>}
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn-primary" disabled={busy || f.name_km.trim().length < 2} onClick={save}>{t('save')}</button>
         {r.status === 'published'
           ? <button type="button" className="btn-ghost" disabled={busy} onClick={() => run(() => api.post(`/api/admin/paint/recipes/${r.id}/status`, { status: 'draft' }))}>{t('cadm.unpublish')}</button>
           : <button type="button" className="btn-ghost" disabled={busy} onClick={() => run(() => api.post(`/api/admin/paint/recipes/${r.id}/status`, { status: 'published' }), t('cadm.published'))}>{t('cadm.publish')}</button>}
+        <button type="button" className="btn-ghost" disabled={busy} onClick={() => run(async () => {
+          const v = await api.post<{ steps: number; failed: number; mix: boolean }>(`/api/admin/paint/recipes/${r.id}/voice`);
+          setMsg({ tone: v.failed ? 'bad' : 'ok', text: `${t('padm.voiceMade')}: ${v.steps}${v.mix ? ' + ' + t('steps.mix') : ''}${v.failed ? ` · ✕ ${v.failed}` : ''}` });
+        })}>{t('padm.genVoice')}</button>
         <button type="button" className="btn-ghost text-counterfeit" disabled={busy} onClick={() => { if (confirm(`${t('madm.delete')}?`)) run(() => api.del(`/api/admin/paint/recipes/${r.id}`)); }}>{t('madm.delete')}</button>
       </div>
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
@@ -251,5 +289,95 @@ function Requests() {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The painting steps of a recipe: short sentence, picture (illustration or photo), timer, and voice. */
+function StepsEditor({ r, onChanged }: { r: PaintRecipe; onChanged: () => void }) {
+  const { t } = useI18n();
+  const blank = { text: '', icon: 'thin_coat' as StepIcon | '', minutes: '' };
+  const [add, setAdd] = useState(blank);
+  const [edit, setEdit] = useState<{ id: string; text: string; icon: StepIcon | ''; minutes: string } | null>(null);
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState<{ tone: 'ok' | 'bad' | 'warn'; text: string } | null>(null);
+  const run = async (key: string, fn: () => Promise<unknown>) => {
+    setBusy(key); setMsg(null);
+    try {
+      const res = (await fn()) as { voiced?: boolean } | undefined;
+      if (res && res.voiced === false) setMsg({ tone: 'warn', text: t('padm.ttsOff') });
+      onChanged();
+    } catch (e) { setMsg({ tone: 'bad', text: errText(e) }); } finally { setBusy(''); }
+  };
+  const body = (x: { text: string; icon: StepIcon | ''; minutes: string }) => ({ text: x.text, icon: x.icon || null, minutes: x.minutes ? Number(x.minutes) : null });
+  const file = (f: File) => { const fd = new FormData(); fd.append('file', f); return fd; };
+  const audioLabel = (a: 'voice' | 'tts' | null) => (a === 'voice' ? t('padm.audioVoice') : a === 'tts' ? t('padm.audioTts') : t('padm.audioNone'));
+
+  const IconPick = ({ value, onPick }: { value: StepIcon | ''; onPick: (v: StepIcon | '') => void }) => (
+    <div className="flex flex-wrap gap-1">
+      {STEP_ICONS.map((ic) => (
+        <button key={ic} type="button" title={t(`art.${ic}`)} onClick={() => onPick(value === ic ? '' : ic)}
+          className={`h-12 w-14 rounded-lg border p-0.5 ${value === ic ? 'border-charcoal ring-2 ring-gold' : 'border-hairline'}`}><StepArt icon={ic} /></button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="label">{t('padm.steps')}</div>
+      <ol className="space-y-2">
+        {r.steps.map((s, i) => (
+          <li key={s.id} className="rounded-lg border border-hairline p-2 text-sm">
+            {edit?.id === s.id ? (
+              <div className="space-y-1.5">
+                <textarea className="input min-h-[56px]" maxLength={500} value={edit.text} onChange={(e) => setEdit({ ...edit, text: e.target.value })} />
+                <IconPick value={edit.icon} onPick={(v) => setEdit({ ...edit, icon: v })} />
+                <input className="input !w-40" type="number" min={1} max={1440} placeholder={t('padm.minutes')} value={edit.minutes} onChange={(e) => setEdit({ ...edit, minutes: e.target.value })} />
+                <div className="flex gap-2">
+                  <button type="button" className="btn-primary !px-2 !py-0.5 text-xs" disabled={!!busy || edit.text.trim().length < 2}
+                    onClick={() => run('e', () => api.put(`/api/admin/paint/steps/${s.id}`, body(edit))).then(() => setEdit(null))}>{t('save')}</button>
+                  <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" onClick={() => setEdit(null)}>{t('cancel')}</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <div className="h-14 w-16 shrink-0 overflow-hidden rounded-lg bg-surface-low">
+                  {s.has_photo ? <img src={`/api/paint/steps/${s.id}/photo?v=${encodeURIComponent(s.updated_at)}`} alt="" className="h-full w-full object-cover" /> : <StepArt icon={s.icon} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p><span className="font-mono text-xs text-muted">{i + 1}.</span> {s.text}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                    {s.minutes && <span>⏱ {s.minutes} {t('care.minutes')}</span>}
+                    <span>{audioLabel(s.audio)}</span>
+                    {s.audio && <button type="button" className="text-gold" onClick={() => playUrl(`/api/paint/steps/${s.id}/audio?v=${encodeURIComponent(s.updated_at)}`)}>▶</button>}
+                  </div>
+                </div>
+              </div>
+            )}
+            {edit?.id !== s.id && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                <button type="button" className="btn-ghost !px-2 !py-0 text-xs" disabled={!!busy || i === 0} onClick={() => run('m', () => api.post(`/api/admin/paint/steps/${s.id}/move`, { dir: 'up' }))}>↑</button>
+                <button type="button" className="btn-ghost !px-2 !py-0 text-xs" disabled={!!busy || i === r.steps.length - 1} onClick={() => run('m', () => api.post(`/api/admin/paint/steps/${s.id}/move`, { dir: 'down' }))}>↓</button>
+                <button type="button" className="btn-ghost !px-2 !py-0 text-xs" onClick={() => setEdit({ id: s.id, text: s.text, icon: s.icon ?? '', minutes: s.minutes ? String(s.minutes) : '' })}>{t('cadm.edit')}</button>
+                <label className={`btn-ghost cursor-pointer !px-2 !py-0 text-xs ${busy ? 'pointer-events-none opacity-50' : ''}`}>📷
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) run('p', () => api.post(`/api/admin/paint/steps/${s.id}/photo`, file(f))); }} />
+                </label>
+                {s.has_photo && <button type="button" className="btn-ghost !px-2 !py-0 text-xs" onClick={() => run('p', () => api.del(`/api/admin/paint/steps/${s.id}/photo`))}>📷✕</button>}
+                <VoiceRecorder disabled={!!busy} onDone={(f) => run('v', () => api.post(`/api/admin/paint/steps/${s.id}/voice`, file(f)))} />
+                {s.audio === 'voice' && <button type="button" className="btn-ghost !px-2 !py-0 text-xs" onClick={() => run('v', () => api.del(`/api/admin/paint/steps/${s.id}/voice`))}>{t('padm.delRec')}</button>}
+                <button type="button" className="btn-ghost !px-2 !py-0 text-xs text-counterfeit" disabled={!!busy} onClick={() => { if (confirm(`${t('madm.delete')}?`)) run('d', () => api.del(`/api/admin/paint/steps/${s.id}`)); }}>✕</button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ol>
+      <div className="space-y-1.5 rounded-lg bg-surface-low p-2">
+        <textarea className="input min-h-[56px]" maxLength={500} placeholder={t('padm.stepText')} value={add.text} onChange={(e) => setAdd({ ...add, text: e.target.value })} />
+        <IconPick value={add.icon} onPick={(v) => setAdd({ ...add, icon: v })} />
+        <input className="input !w-40" type="number" min={1} max={1440} placeholder={t('padm.minutes')} value={add.minutes} onChange={(e) => setAdd({ ...add, minutes: e.target.value })} />
+        <button type="button" className="btn-ghost text-sm" disabled={!!busy || add.text.trim().length < 2}
+          onClick={() => run('a', () => api.post(`/api/admin/paint/recipes/${r.id}/steps`, body(add))).then(() => setAdd(blank))}>{t('padm.addStep')}</button>
+      </div>
+      {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+    </div>
   );
 }

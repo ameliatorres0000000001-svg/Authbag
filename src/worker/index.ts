@@ -13,6 +13,8 @@ import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from 
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { removeBackground } from './cutout.ts';
+import { sniffAudio, synthesize, ttsConfigured, ttsHash } from './tts.ts';
+import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
@@ -181,6 +183,9 @@ const PUBLIC_GET = [
   /^\/api\/lessons(\/[^/]+)?$/,
   /^\/api\/stats\/public$/,
   /^\/api\/paint\/(recipes|products)(\/[^/]+\/photo)?$/,
+  /^\/api\/paint\/steps\/[^/]+\/(photo|audio)$/,
+  /^\/api\/paint\/recipes\/[^/]+\/mix-audio$/,
+  /^\/api\/voice\/ui(\/[a-z]{2}\/[\w.]+)?$/,
 ];
 
 // everything below requires a session (or is a public read above)
@@ -2368,12 +2373,14 @@ const productOut = ({ photo_key, sources_json, ...p }: PaintProduct & Record<str
 
 /** Recipes with their parts (paint, brand, ratio). Public: published only. */
 async function paintRecipes(env: AppEnv['Bindings'], all: boolean) {
-  const recipes = (await env.DB.prepare(`SELECT id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, method, status, photo_key, updated_at FROM paint_recipes
+  const recipes = (await env.DB.prepare(`SELECT id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, method, status, photo_key, updated_at, mix_text, mix_tts_key FROM paint_recipes
     ${all ? '' : "WHERE status = 'published'"} ORDER BY lab_l DESC`).all<Record<string, any>>()).results;
   const parts = (await env.DB.prepare(`SELECT pp.recipe_id, pp.parts, pp.sort, p.id, p.brand, p.name, p.kind, p.color_hex, p.photo_key, p.updated_at
     FROM paint_recipe_parts pp JOIN paint_products p ON p.id = pp.product_id ORDER BY pp.sort`).all<Record<string, any>>()).results;
-  return recipes.map(({ photo_key, ...r }): Record<string, any> => ({
-    ...r, has_photo: !!photo_key,
+  const steps = (await env.DB.prepare('SELECT id, recipe_id, sort, text, icon, minutes, photo_key, tts_key, voice_key, updated_at FROM paint_recipe_steps ORDER BY sort').all<Record<string, any>>()).results;
+  return recipes.map(({ photo_key, mix_tts_key, ...r }): Record<string, any> => ({
+    ...r, has_photo: !!photo_key, mix_audio: !!mix_tts_key,
+    steps: steps.filter((s) => s.recipe_id === r.id).map(({ recipe_id, photo_key: pk, tts_key, voice_key, ...s }) => ({ ...s, has_photo: !!pk, audio: voice_key ? 'voice' : tts_key ? 'tts' : null })),
     parts: parts.filter((p) => p.recipe_id === r.id).map(({ recipe_id, photo_key: pk, ...p }) => ({ ...p, has_photo: !!pk })),
   }));
 }
@@ -2531,17 +2538,18 @@ app.post('/api/admin/paint/recipes', need(ADMINS), async (c) => {
 });
 
 app.put('/api/admin/paint/recipes/:id', need(ADMINS), async (c) => {
-  const b = await parse(c, recipeFields.extend({ parts: z.array(z.object({ product_id: z.string(), parts: z.number().positive().max(100) })).max(8) }));
+  const b = await parse(c, recipeFields.extend({ parts: z.array(z.object({ product_id: z.string(), parts: z.number().positive().max(100) })).max(8), mix_text: z.string().trim().max(500).nullable().optional() }));
   const ids = new Set(b.parts.map((p) => p.product_id));
   if (ids.size !== b.parts.length) return c.json({ error: 'duplicate_product' }, 400);
-  const r = await c.env.DB.prepare(`UPDATE paint_recipes SET name_km = ?, name_en = ?, surface = ?, finish = ?, method = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
-    .bind(b.name_km, b.name_en ?? null, b.surface, b.finish, b.method ?? null, c.req.param('id')).run();
+  const r = await c.env.DB.prepare(`UPDATE paint_recipes SET name_km = ?, name_en = ?, surface = ?, finish = ?, method = ?, mix_text = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.name_km, b.name_en ?? null, b.surface, b.finish, b.method ?? null, b.mix_text || null, c.req.param('id')).run();
   if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
   await c.env.DB.batch([
     c.env.DB.prepare('DELETE FROM paint_recipe_parts WHERE recipe_id = ?').bind(c.req.param('id')),
     ...b.parts.map((p, i) => c.env.DB.prepare('INSERT INTO paint_recipe_parts (recipe_id, product_id, parts, sort) VALUES (?, ?, ?, ?)').bind(c.req.param('id'), p.product_id, p.parts, i)),
   ]);
-  return c.json({ ok: true });
+  const voiced = await mixTts(c.env, c.req.param('id'));
+  return c.json({ ok: true, voiced });
 });
 
 app.post('/api/admin/paint/recipes/:id/status', need(ADMINS), async (c) => {
@@ -2559,13 +2567,214 @@ app.post('/api/admin/paint/recipes/:id/status', need(ADMINS), async (c) => {
 app.delete('/api/admin/paint/recipes/:id', need(ADMINS), async (c) => {
   const r = await c.env.DB.prepare('SELECT photo_key FROM paint_recipes WHERE id = ?').bind(c.req.param('id')).first<{ photo_key: string | null }>();
   if (!r) return c.json({ error: 'not_found' }, 404);
+  const files = (await c.env.DB.prepare(`SELECT photo_key AS k FROM paint_recipe_steps WHERE recipe_id = ? UNION ALL SELECT tts_key FROM paint_recipe_steps WHERE recipe_id = ?
+    UNION ALL SELECT voice_key FROM paint_recipe_steps WHERE recipe_id = ? UNION ALL SELECT mix_tts_key FROM paint_recipes WHERE id = ?`)
+    .bind(c.req.param('id'), c.req.param('id'), c.req.param('id'), c.req.param('id')).all<{ k: string | null }>()).results.map((x) => x.k).filter((k): k is string => !!k);
   await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM paint_recipe_steps WHERE recipe_id = ?').bind(c.req.param('id')),
     c.env.DB.prepare('DELETE FROM paint_recipe_parts WHERE recipe_id = ?').bind(c.req.param('id')),
     c.env.DB.prepare('DELETE FROM paint_recipes WHERE id = ?').bind(c.req.param('id')),
   ]);
-  if (r.photo_key) await c.env.VAULT.delete(r.photo_key);
+  const all = [...files, r.photo_key].filter((k): k is string => !!k);
+  if (all.length) await c.env.VAULT.delete(all);
   await audit(c.env, c.get('user').id, 'paint.recipe_deleted', 'paint_recipes', c.req.param('id'));
   return c.json({ ok: true });
+});
+
+// ───────────────────────── Anajak Secondhand: painting step cards with pictures and voice ─────────────────────────
+const MAX_VOICE = 4 * 1024 * 1024;
+const stepFieldsP = z.object({ text: z.string().trim().min(2).max(500), icon: z.enum(STEP_ICONS).nullable().optional(), minutes: z.number().int().min(1).max(1440).nullable().optional() });
+type PStep = { id: string; recipe_id: string; sort: number; text: string; icon: string | null; minutes: number | null; photo_key: string | null; tts_key: string | null; tts_hash: string | null; voice_key: string | null; voice_mime: string | null; updated_at: string };
+
+/** Is this recipe visible to the caller (published, or the caller edits recipes)? */
+const recipeVisible = async (c: any, recipeId: string) => {
+  const r = await c.env.DB.prepare('SELECT status FROM paint_recipes WHERE id = ?').bind(recipeId).first();
+  return !!r && (r.status === 'published' || careEditor(c));
+};
+const stepOf = (env: AppEnv['Bindings'], id: string) => env.DB.prepare('SELECT * FROM paint_recipe_steps WHERE id = ?').bind(id).first<PStep>();
+const touchRecipe = (env: AppEnv['Bindings'], id: string) => env.DB.prepare("UPDATE paint_recipes SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(id).run();
+
+/** (Re)generate the AI voice of a step when its words changed. Returns false when TTS is unavailable or failed. */
+async function stepTts(env: AppEnv['Bindings'], s: PStep): Promise<boolean> {
+  if (!ttsConfigured(env)) return false;
+  const hash = await ttsHash(env, s.text);
+  if (s.tts_key && s.tts_hash === hash) return true;
+  try {
+    const mp3 = await synthesize(env, s.text);
+    const key = `paint/voice/${s.recipe_id}/${s.id}-${hash.slice(0, 12)}.mp3`;
+    await env.VAULT.put(key, mp3, { httpMetadata: { contentType: 'audio/mpeg' } });
+    await env.DB.prepare('UPDATE paint_recipe_steps SET tts_key = ?, tts_hash = ? WHERE id = ?').bind(key, hash, s.id).run();
+    if (s.tts_key && s.tts_key !== key) await env.VAULT.delete(s.tts_key);
+    return true;
+  } catch (e) { console.error('step tts failed:', (e as Error).message); return false; }
+}
+async function mixTts(env: AppEnv['Bindings'], recipeId: string): Promise<boolean> {
+  const r = await env.DB.prepare('SELECT mix_text, mix_tts_key, mix_tts_hash FROM paint_recipes WHERE id = ?').bind(recipeId).first<{ mix_text: string | null; mix_tts_key: string | null; mix_tts_hash: string | null }>();
+  if (!r?.mix_text || !ttsConfigured(env)) return false;
+  const hash = await ttsHash(env, r.mix_text);
+  if (r.mix_tts_key && r.mix_tts_hash === hash) return true;
+  try {
+    const key = `paint/voice/${recipeId}/mix-${hash.slice(0, 12)}.mp3`;
+    await env.VAULT.put(key, await synthesize(env, r.mix_text), { httpMetadata: { contentType: 'audio/mpeg' } });
+    await env.DB.prepare('UPDATE paint_recipes SET mix_tts_key = ?, mix_tts_hash = ? WHERE id = ?').bind(key, hash, recipeId).run();
+    if (r.mix_tts_key && r.mix_tts_key !== key) await env.VAULT.delete(r.mix_tts_key);
+    return true;
+  } catch (e) { console.error('mix tts failed:', (e as Error).message); return false; }
+}
+
+const serveAudio = async (c: any, key: string | null | undefined, mime = 'audio/mpeg') => {
+  const obj = key ? await c.env.VAULT.get(key) : null;
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? mime, 'cache-control': 'public, max-age=3600' } });
+};
+
+app.get('/api/paint/steps/:id/photo', async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s || !(await recipeVisible(c, s.recipe_id))) return c.json({ error: 'not_found' }, 404);
+  return servePhoto(c, s.photo_key);
+});
+/** The step's voice: the staff recording when there is one, otherwise the AI voice. */
+app.get('/api/paint/steps/:id/audio', async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s || !(await recipeVisible(c, s.recipe_id))) return c.json({ error: 'not_found' }, 404);
+  return s.voice_key ? serveAudio(c, s.voice_key, s.voice_mime ?? 'audio/wav') : serveAudio(c, s.tts_key);
+});
+app.get('/api/paint/recipes/:id/mix-audio', async (c) => {
+  if (!(await recipeVisible(c, c.req.param('id')))) return c.json({ error: 'not_found' }, 404);
+  const r = await c.env.DB.prepare('SELECT mix_tts_key FROM paint_recipes WHERE id = ?').bind(c.req.param('id')).first<{ mix_tts_key: string | null }>();
+  return serveAudio(c, r?.mix_tts_key);
+});
+
+app.post('/api/admin/paint/recipes/:id/steps', need(ADMINS), async (c) => {
+  const b = await parse(c, stepFieldsP);
+  const rid = c.req.param('id');
+  if (!(await c.env.DB.prepare('SELECT 1 FROM paint_recipes WHERE id = ?').bind(rid).first())) return c.json({ error: 'not_found' }, 404);
+  const next = ((await c.env.DB.prepare('SELECT MAX(sort) AS m FROM paint_recipe_steps WHERE recipe_id = ?').bind(rid).first<{ m: number | null }>())?.m ?? 0) + 1;
+  const id = uid('ps_');
+  await c.env.DB.prepare('INSERT INTO paint_recipe_steps (id, recipe_id, sort, text, icon, minutes) VALUES (?, ?, ?, ?, ?, ?)').bind(id, rid, next, b.text, b.icon ?? null, b.minutes ?? null).run();
+  const voiced = await stepTts(c.env, (await stepOf(c.env, id))!);
+  await touchRecipe(c.env, rid);
+  return c.json({ ok: true, id, voiced });
+});
+
+app.put('/api/admin/paint/steps/:id', need(ADMINS), async (c) => {
+  const b = await parse(c, stepFieldsP);
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare("UPDATE paint_recipe_steps SET text = ?, icon = ?, minutes = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(b.text, b.icon ?? null, b.minutes ?? null, s.id).run();
+  const voiced = await stepTts(c.env, { ...s, text: b.text });
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true, voiced });
+});
+
+app.post('/api/admin/paint/steps/:id/move', need(ADMINS), async (c) => {
+  const { dir } = await parse(c, z.object({ dir: z.enum(['up', 'down']) }));
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const n = await c.env.DB.prepare(`SELECT id, sort FROM paint_recipe_steps WHERE recipe_id = ? AND sort ${dir === 'up' ? '<' : '>'} ? ORDER BY sort ${dir === 'up' ? 'DESC' : 'ASC'} LIMIT 1`).bind(s.recipe_id, s.sort).first<{ id: string; sort: number }>();
+  if (n) await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE paint_recipe_steps SET sort = ? WHERE id = ?').bind(n.sort, s.id),
+    c.env.DB.prepare('UPDATE paint_recipe_steps SET sort = ? WHERE id = ?').bind(s.sort, n.id),
+  ]);
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/paint/steps/:id', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('DELETE FROM paint_recipe_steps WHERE id = ?').bind(s.id).run();
+  const keys = [s.photo_key, s.tts_key, s.voice_key].filter((k): k is string => !!k);
+  if (keys.length) await c.env.VAULT.delete(keys);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+
+app.post('/api/admin/paint/steps/:id/photo', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const p = await carePhotoFrom(c);
+  if (p instanceof Response) return p;
+  const key = await putPhoto(c.env, `paint/steps/${s.recipe_id}/${s.id}`, p);
+  await c.env.DB.prepare("UPDATE paint_recipe_steps SET photo_key = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(key, s.id).run();
+  if (s.photo_key) await c.env.VAULT.delete(s.photo_key);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+app.delete('/api/admin/paint/steps/:id/photo', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('UPDATE paint_recipe_steps SET photo_key = NULL WHERE id = ?').bind(s.id).run();
+  if (s.photo_key) await c.env.VAULT.delete(s.photo_key);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+
+/** Staff record their own voice for a step (played instead of the AI voice). */
+app.post('/api/admin/paint/steps/:id/voice', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  const file = (await c.req.formData()).get('file');
+  if (!(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_VOICE) return c.json({ error: 'too_large' }, 413);
+  const buf = await file.arrayBuffer();
+  const mime = sniffAudio(new Uint8Array(buf));
+  if (!mime) return c.json({ error: 'not_audio' }, 415);
+  const key = `paint/voice/${s.recipe_id}/${s.id}-rec-${uid()}.${mime.split('/')[1]}`;
+  await c.env.VAULT.put(key, buf, { httpMetadata: { contentType: mime } });
+  await c.env.DB.prepare("UPDATE paint_recipe_steps SET voice_key = ?, voice_mime = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").bind(key, mime, s.id).run();
+  if (s.voice_key) await c.env.VAULT.delete(s.voice_key);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+app.delete('/api/admin/paint/steps/:id/voice', need(ADMINS), async (c) => {
+  const s = await stepOf(c.env, c.req.param('id'));
+  if (!s) return c.json({ error: 'not_found' }, 404);
+  await c.env.DB.prepare('UPDATE paint_recipe_steps SET voice_key = NULL, voice_mime = NULL WHERE id = ?').bind(s.id).run();
+  if (s.voice_key) await c.env.VAULT.delete(s.voice_key);
+  await touchRecipe(c.env, s.recipe_id);
+  return c.json({ ok: true });
+});
+
+/** Generate the AI voice for every step (and the mixing sentence) that has none or whose words changed. */
+app.post('/api/admin/paint/recipes/:id/voice', need(ADMINS), async (c) => {
+  if (!ttsConfigured(c.env)) return c.json({ error: 'tts_not_configured' }, 501);
+  const rid = c.req.param('id');
+  const steps = (await c.env.DB.prepare('SELECT * FROM paint_recipe_steps WHERE recipe_id = ? ORDER BY sort').bind(rid).all<PStep>()).results;
+  let ok = 0, failed = 0;
+  for (const s of steps) (await stepTts(c.env, s)) ? ok++ : failed++;
+  const mix = await mixTts(c.env, rid);
+  await touchRecipe(c.env, rid);
+  return c.json({ ok: true, steps: ok, failed, mix });
+});
+
+app.get('/api/admin/voice/status', need(ADMINS), (c) => c.json({ tts: ttsConfigured(c.env), region: c.env.AZURE_SPEECH_REGION ?? null }));
+
+/** Public: the spoken version of an app phrase in a language, when staff have generated it. */
+app.get('/api/voice/ui/:lang/:key', async (c) => {
+  const r = await c.env.DB.prepare('SELECT r2_key FROM ui_voice WHERE key = ? AND lang = ?').bind(c.req.param('key'), c.req.param('lang')).first<{ r2_key: string }>();
+  return serveAudio(c, r?.r2_key);
+});
+app.get('/api/voice/ui', async (c) => c.json({ available: (await c.env.DB.prepare('SELECT key, lang FROM ui_voice').all()).results }));
+
+/** Staff generate the app phrases in their language (texts come from the app's own translations; keys are whitelisted). */
+app.post('/api/admin/voice/ui', need(ADMINS), async (c) => {
+  if (!ttsConfigured(c.env)) return c.json({ error: 'tts_not_configured' }, 501);
+  const b = await parse(c, z.object({ lang: z.enum(['km', 'en', 'vi', 'th', 'id']), items: z.array(z.object({ key: z.enum(UI_VOICE_KEYS), text: z.string().trim().min(1).max(300) })).max(UI_VOICE_KEYS.length) }));
+  let made = 0, kept = 0, failed = 0;
+  for (const it of b.items) {
+    const hash = await ttsHash(c.env, it.text);
+    const old = await c.env.DB.prepare('SELECT text_hash, r2_key FROM ui_voice WHERE key = ? AND lang = ?').bind(it.key, b.lang).first<{ text_hash: string; r2_key: string }>();
+    if (old?.text_hash === hash) { kept++; continue; }
+    try {
+      const key = `voice/ui/${b.lang}/${it.key}-${hash.slice(0, 12)}.mp3`;
+      await c.env.VAULT.put(key, await synthesize(c.env, it.text), { httpMetadata: { contentType: 'audio/mpeg' } });
+      await c.env.DB.prepare('INSERT OR REPLACE INTO ui_voice (key, lang, text_hash, r2_key) VALUES (?, ?, ?, ?)').bind(it.key, b.lang, hash, key).run();
+      if (old && old.r2_key !== key) await c.env.VAULT.delete(old.r2_key);
+      made++;
+    } catch (e) { console.error('ui voice failed:', (e as Error).message); failed++; }
+  }
+  await audit(c.env, c.get('user').id, 'voice.ui_generated', 'ui_voice', b.lang, { made, kept, failed });
+  return c.json({ ok: true, made, kept, failed });
 });
 
 // ───────────────────────── Anajak Secondhand: AI assistant chat (signed-in users) ─────────────────────────

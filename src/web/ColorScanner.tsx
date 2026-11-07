@@ -11,7 +11,7 @@ const rgbCss = (m: [number, number, number]) => `rgb(${m.map(Math.round).join(',
  * The checks are the same ones the server applies; `onChange` gets `issues` and the parent must show
  * no colour result while there is any issue.
  */
-export default function ColorScanner({ onChange }: { onChange: (m: Measurement | null, issues: Issue[], file: File | null) => void }) {
+export default function ColorScanner({ onChange, onSay }: { onChange: (m: Measurement | null, issues: Issue[], file: File | null) => void; onSay?: (key: string) => void }) {
   const { t } = useI18n();
   const canvas = useRef<HTMLCanvasElement>(null);
   const img = useRef<{ data: ImageData; bmp: HTMLCanvasElement; blur: number } | null>(null);
@@ -56,6 +56,7 @@ export default function ColorScanner({ onChange }: { onChange: (m: Measurement |
     };
     const iss = checkMeasurement(meas);
     setM(meas); setIssues(iss); onChange(meas, iss, file);
+    if (iss.length) onSay?.(`paint.issue.${iss[0]}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [white, spot, file]);
 
@@ -80,6 +81,7 @@ export default function ColorScanner({ onChange }: { onChange: (m: Measurement |
       for (let i = 0; i < gray.length; i++) gray[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
       img.current = { data, bmp: cv, blur: laplacianVariance(gray, sw, sh) };
       setFile(f); setWhite(null); setSpot(null); setMode('white'); setVer((v) => v + 1);
+      onSay?.('paint.tapWhite');
     } finally { setLoading(false); }
   };
 
@@ -87,7 +89,7 @@ export default function ColorScanner({ onChange }: { onChange: (m: Measurement |
     const cv = canvas.current; if (!cv || !img.current) return;
     const rect = cv.getBoundingClientRect();
     const p = { x: Math.round(((e.clientX - rect.left) / rect.width) * cv.width), y: Math.round(((e.clientY - rect.top) / rect.height) * cv.height) };
-    if (mode === 'white') { setWhite(p); setMode('spot'); } else setSpot(p);
+    if (mode === 'white') { setWhite(p); setMode('spot'); if (!spot) onSay?.('paint.tapColor'); } else setSpot(p);
   };
 
   const lab = m && !issues.length ? measuredLab(m) : null;
