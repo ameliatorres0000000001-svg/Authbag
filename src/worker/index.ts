@@ -8,13 +8,15 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { removeBackground } from './cutout.ts';
 import { sniffAudio, synthesize, ttsConfigured, ttsHash } from './tts.ts';
+import { chooseSkills, type SkillRow, type SkillUse } from '../shared/skills.ts';
 import { asFeature } from './usage.ts';
+import { evidenceFor, handleFromInput, profileUrl } from '../shared/leads.ts';
 import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
@@ -1937,7 +1939,8 @@ async function runAiReview(env: AppEnv['Bindings'], requestId: string): Promise<
     ORDER BY (model_text IS ?) DESC, answered_at DESC LIMIT 8`).bind(r.brand_id, r.id, r.model_text).all<{ expert_note: string }>()).results.map((x) => x.expert_note.slice(0, 240));
   const id = uid('ar_');
   try {
-    const text = await assessVerification(env, { brand: r.brand, model: r.model_text, photos, refs, knowledge, expertNotes });
+    const skills = (await pickSkills(env, 'check', { brand: r.brand, text: r.model_text ?? '' }, 4000)).map((x) => `${x.title}: ${x.body}`);
+    const text = await assessVerification(env, { brand: r.brand, model: r.model_text, photos, refs, knowledge, expertNotes, skills });
     const a = parseAiReview(text);
     if (!a) throw new Error('ai_unreadable_reply');
     await env.DB.prepare(`INSERT INTO verify_ai_reviews (id, request_id, model, suggested_outcome, confidence, findings_json, summary_en, summary_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -2879,7 +2882,8 @@ app.post('/api/verify/identify', async (c) => {
   const brands = (await c.env.DB.prepare("SELECT id, name FROM brands WHERE slug <> 'other' ORDER BY name").all<{ id: string; name: string }>()).results;
   const models = (await c.env.DB.prepare('SELECT id, brand_id, name FROM models ORDER BY name').all<{ id: string; brand_id: string; name: string }>()).results;
   try {
-    const r = await asFeature('identify', () => identifyBag(c.env, { data: buf, mime }, brands, models, reqLang(c)));
+    const tips = (await pickSkills(c.env, 'identify', {}, 4000)).map((x) => `${x.title}${x.brand ? ` (${x.brand})` : ''}: ${x.body}`);
+    const r = await asFeature('identify', () => identifyBag(c.env, { data: buf, mime }, brands, models, reqLang(c), tips));
     // a brand we do not list goes to the "other brand" choice with its name
     const other = r.brandId || !r.brandName ? null : await c.env.DB.prepare("SELECT id FROM brands WHERE slug = 'other'").first<{ id: string }>();
     return c.json({ ...r, otherBrandId: other?.id ?? null, model: aiModel(c.env) });
@@ -3064,6 +3068,189 @@ app.put('/api/admin/usage', need(['owner']), async (c) => {
   return c.json({ ok: true });
 });
 
+// ───────────────────────── Anajak Secondhand: AI skills (shop knowledge the in-app AI reads) ─────────────────────────
+// Staff write a skill (or let the AI tidy their rough notes into one), test it in a chat, and an admin turns it on.
+// Only active skills reach the AI. A skill is knowledge: the hard rules in each prompt always win, and skills never
+// change an expert outcome.
+const SKILL_AREAS = ['all', 'chat', 'identify', 'check'] as const;
+const skillInput = z.object({
+  area: z.enum(SKILL_AREAS), title: z.string().trim().min(3).max(120), body: z.string().trim().min(10).max(4000),
+  brand: z.string().trim().max(80).nullish().transform((v) => v || null), keywords: z.string().trim().max(300).nullish().transform((v) => v || null),
+});
+
+/** The active skills that fit this moment (see src/shared/skills.ts), and a use count for the admin list. */
+async function pickSkills(env: AppEnv['Bindings'], use: SkillUse, ctx: { text?: string; brand?: string | null; extra?: SkillRow | null }, budget: number): Promise<SkillRow[]> {
+  const rows = (await env.DB.prepare(`SELECT id, area, title, body, brand, keywords FROM ai_skills WHERE status = 'active' AND area IN ('all', ?) ORDER BY updated_at DESC LIMIT 300`)
+    .bind(use).all<SkillRow>()).results;
+  const out = chooseSkills(rows, use, ctx, budget);
+  const ids = out.map((r) => r.id).filter((id) => id !== 'test');
+  if (ids.length) await env.DB.prepare(`UPDATE ai_skills SET uses = uses + 1, last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).run();
+  return out;
+}
+const skillText = (rows: SkillRow[]) => rows.map((r) => `### ${r.title}${r.brand ? ` (${r.brand})` : ''}\n${r.body}`).join('\n\n');
+
+/** Published lessons and the app's tabs, so the assistant can send people to the right place. */
+async function appContext(env: AppEnv['Bindings']): Promise<string> {
+  const lessons = (await env.DB.prepare(`SELECT topic, title_km, title_en FROM care_lessons WHERE status = 'published' ORDER BY published_at DESC LIMIT 25`)
+    .all<{ topic: string; title_km: string; title_en: string | null }>()).results;
+  return [
+    'Tabs: Home (monthly market ranking per country) · Paint (colour mixer with recipes, painting lessons) · Check (photo of the bag → AI recognises brand/model and compares the details with reference photos) · History · AI assistant.',
+    ...lessons.map((l) => `Lesson (${l.topic}): ${l.title_km}${l.title_en ? ` / ${l.title_en}` : ''}`),
+  ].join('\n');
+}
+
+app.get('/api/admin/skills', need(STAFF), async (c) => {
+  const rows = (await c.env.DB.prepare(`SELECT s.*, u.name AS author FROM ai_skills s LEFT JOIN users u ON u.id = s.created_by ORDER BY s.status = 'active' DESC, s.updated_at DESC`).all()).results;
+  return c.json({ skills: rows });
+});
+app.post('/api/admin/skills', need(STAFF), async (c) => {
+  const b = await parse(c, skillInput.extend({ aiDrafted: z.boolean().optional() }));
+  const id = uid('sk_'); const me = c.get('user');
+  await c.env.DB.prepare(`INSERT INTO ai_skills (id, area, title, body, brand, keywords, ai_drafted, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, b.area, b.title, b.body, b.brand, b.keywords, b.aiDrafted ? 1 : 0, me.id, me.id).run();
+  await audit(c.env, me.id, 'skill.create', 'ai_skills', id);
+  return c.json({ id });
+});
+app.put('/api/admin/skills/:id', need(STAFF), async (c) => {
+  const b = await parse(c, skillInput.extend({ status: z.enum(['draft', 'active']) }));
+  const me = c.get('user');
+  // staff may write and edit; turning a skill on (or editing one that is on) is for admins
+  const cur = await c.env.DB.prepare('SELECT status FROM ai_skills WHERE id = ?').bind(c.req.param('id')).first<{ status: string }>();
+  if (!cur) return c.json({ error: 'not_found' }, 404);
+  if ((b.status === 'active' || cur.status === 'active') && !ADMINS.includes(me.role)) return c.json({ error: 'forbidden' }, 403);
+  await c.env.DB.prepare(`UPDATE ai_skills SET area = ?, title = ?, body = ?, brand = ?, keywords = ?, status = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.area, b.title, b.body, b.brand, b.keywords, b.status, me.id, c.req.param('id')).run();
+  await audit(c.env, me.id, b.status === 'active' ? 'skill.activate' : 'skill.update', 'ai_skills', c.req.param('id'));
+  return c.json({ ok: true });
+});
+app.delete('/api/admin/skills/:id', need(ADMINS), async (c) => {
+  await c.env.DB.prepare('DELETE FROM ai_skills WHERE id = ?').bind(c.req.param('id')).run();
+  await audit(c.env, c.get('user').id, 'skill.delete', 'ai_skills', c.req.param('id'));
+  return c.json({ ok: true });
+});
+app.post('/api/admin/skills/draft', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ notes: z.string().trim().min(10).max(6000), area: z.enum(SKILL_AREAS) }));
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  try { return c.json(await asFeature('skill_draft', () => draftSkill(c.env, { notes: b.notes, area: b.area, lang: reqLang(c) }))); }
+  catch (e) { console.error('skill draft failed:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
+});
+/** Ask the assistant one question with the active skills plus the one being written, to see the effect before turning it on. */
+app.post('/api/admin/skills/test', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ question: z.string().trim().min(2).max(2000), skill: skillInput.nullish() }));
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const extra = b.skill ? { id: 'test', ...b.skill } : null;
+  try {
+    const skills = await pickSkills(c.env, 'chat', { text: b.question, extra }, 12000);
+    const reply = await asFeature('skill_test', async () => chatAssistant(c.env, [{ role: 'user', content: b.question }], reqLang(c),
+      { market: await marketContext(c.env), skills: skillText(skills), app: await appContext(c.env) }));
+    return c.json({ reply: reply.trim(), used: skills.map((s) => s.title) });
+  } catch (e) { console.error('skill test failed:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
+});
+
+// ───────────────────────── Anajak Secondhand: find customers (ស្វែងរកម៉ូយ) on TikTok ─────────────────────────
+// Public TikTok accounts in TH / MY / ID that sell second-hand designer bags (often on LIVE): resellers who could buy
+// stock wholesale. An AI web search limited to tiktok.com finds them (weekly per country, or when an admin asks); an
+// account is kept only when a link the search returned belongs to it. Staff only.
+const LEAD_COUNTRIES = ['TH', 'MY', 'ID'] as const;
+const LEAD_STATUSES = ['new', 'saved', 'contacted', 'customer', 'not_fit'] as const;
+const LEAD_EVERY_DAYS = 7;
+
+async function runLeadSearch(env: AppEnv['Bindings'], country: typeof LEAD_COUNTRIES[number], trigger: 'auto' | 'manual', lang: OutLang = 'km'): Promise<{ found: number; added: number; error?: string }> {
+  const runId = uid('lr_');
+  await env.DB.prepare('INSERT INTO lead_runs (id, country, trigger) VALUES (?, ?, ?)').bind(runId, country, trigger).run();
+  try {
+    const known = (await env.DB.prepare('SELECT handle FROM leads WHERE country = ? ORDER BY created_at DESC LIMIT 150').bind(country).all<{ handle: string }>()).results.map((r) => r.handle);
+    const r = await asFeature('lead_search', () => findTiktokSellers(env, { country, lang, known }));
+    let added = 0, kept = 0;
+    for (const x of r.rows) {
+      const handle = handleFromInput(x.handle);
+      const evidence = handle ? evidenceFor(handle, r.found.keys()) : null;
+      if (!handle || !evidence) continue; // never keep an account the search did not show
+      kept++;
+      const seen = await env.DB.prepare(`UPDATE leads SET last_seen_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE platform = 'tiktok' AND lower(handle) = ?`).bind(handle).run();
+      if (seen.meta.changes) continue;
+      const res = await env.DB.prepare(`INSERT OR IGNORE INTO leads (id, country, handle, name, url, kind, sells, why, source_url, source_title, found_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ai')`)
+        .bind(uid('ld_'), country, handle, x.name, profileUrl(handle), x.kind, x.sells || null, x.why || null, evidence, (r.found.get(evidence) ?? '').slice(0, 200) || null).run();
+      if (res.meta.changes) added++;
+    }
+    await env.DB.prepare(`UPDATE lead_runs SET finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), found = ?, added = ? WHERE id = ?`).bind(kept, added, runId).run();
+    return { found: kept, added };
+  } catch (e) {
+    const error = String((e as Error).message).slice(0, 200);
+    await env.DB.prepare(`UPDATE lead_runs SET finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), error = ? WHERE id = ?`).bind(error, runId).run();
+    return { found: 0, added: 0, error };
+  }
+}
+
+/** Every 10 minutes (cron): when automatic search is on, search the one country whose last search is oldest, at most weekly. */
+async function leadsBacklog(env: AppEnv['Bindings']) {
+  if (aiProvider(env) !== 'anthropic' || (await settingStr(env, 'leads_auto')) === '0') return;
+  // one search at a time
+  if (await env.DB.prepare(`SELECT 1 FROM lead_runs WHERE finished_at IS NULL AND started_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes')`).first()) return;
+  let pick: typeof LEAD_COUNTRIES[number] | null = null, oldest = '9999';
+  for (const cc of LEAD_COUNTRIES) {
+    const last = (await env.DB.prepare('SELECT MAX(started_at) AS t FROM lead_runs WHERE country = ?').bind(cc).first<{ t: string | null }>())?.t ?? '';
+    if (last < oldest) { oldest = last; pick = cc; }
+  }
+  if (!pick || (oldest && Date.now() - Date.parse(oldest) < LEAD_EVERY_DAYS * 86_400_000)) return;
+  const r = await runLeadSearch(env, pick, 'auto');
+  console.log(`lead search ${pick}: ${r.error ?? `${r.added} new of ${r.found}`}`);
+}
+
+async function leadSummary(env: AppEnv['Bindings']) {
+  const counts = (await env.DB.prepare('SELECT country, status, COUNT(*) AS n FROM leads GROUP BY country, status').all<{ country: string; status: string; n: number }>()).results;
+  const runs = (await env.DB.prepare(`SELECT country, MAX(started_at) AS at, (SELECT added FROM lead_runs r2 WHERE r2.country = r.country ORDER BY started_at DESC LIMIT 1) AS added,
+    (SELECT error FROM lead_runs r2 WHERE r2.country = r.country ORDER BY started_at DESC LIMIT 1) AS error,
+    (SELECT finished_at IS NULL FROM lead_runs r2 WHERE r2.country = r.country ORDER BY started_at DESC LIMIT 1) AS running
+    FROM lead_runs r GROUP BY country`).all<{ country: string; at: string; added: number; error: string | null; running: number }>()).results;
+  return { counts, runs, auto: (await settingStr(env, 'leads_auto')) !== '0', webSearch: aiProvider(env) === 'anthropic', everyDays: LEAD_EVERY_DAYS };
+}
+
+app.get('/api/admin/leads/summary', need(STAFF), async (c) => {
+  const latest = (await c.env.DB.prepare(`SELECT id, country, handle, name, url, kind, sells, why, status, created_at FROM leads WHERE status IN ('new','saved') ORDER BY created_at DESC LIMIT 6`).all()).results;
+  return c.json({ ...(await leadSummary(c.env)), latest });
+});
+app.get('/api/admin/leads', need(STAFF), async (c) => {
+  const country = c.req.query('country'), status = c.req.query('status');
+  const where: string[] = [], binds: string[] = [];
+  if (country && (LEAD_COUNTRIES as readonly string[]).includes(country)) { where.push('country = ?'); binds.push(country); }
+  if (status && (LEAD_STATUSES as readonly string[]).includes(status)) { where.push('status = ?'); binds.push(status); }
+  const rows = (await c.env.DB.prepare(`SELECT * FROM leads ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT 300`).bind(...binds).all()).results;
+  return c.json({ leads: rows, ...(await leadSummary(c.env)) });
+});
+app.post('/api/admin/leads', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ link: z.string().trim().min(2).max(500), country: z.enum(LEAD_COUNTRIES), kind: z.enum(['live_seller', 'reseller', 'shop']), sells: z.string().trim().max(300).nullish(), note: z.string().trim().max(500).nullish() }));
+  const handle = handleFromInput(b.link);
+  if (!handle) return c.json({ error: 'not_a_tiktok_account' }, 400);
+  const id = uid('ld_');
+  const r = await c.env.DB.prepare(`INSERT OR IGNORE INTO leads (id, country, handle, url, kind, sells, note, found_by, created_by, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'staff', ?, 'saved')`)
+    .bind(id, b.country, handle, profileUrl(handle), b.kind, b.sells || null, b.note || null, c.get('user').id).run();
+  if (!r.meta.changes) return c.json({ error: 'already_added' }, 409);
+  return c.json({ id });
+});
+app.put('/api/admin/leads/:id', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ status: z.enum(LEAD_STATUSES), note: z.string().trim().max(500).nullish() }));
+  const r = await c.env.DB.prepare(`UPDATE leads SET status = ?, note = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`).bind(b.status, b.note || null, c.req.param('id')).run();
+  return r.meta.changes ? c.json({ ok: true }) : c.json({ error: 'not_found' }, 404);
+});
+app.delete('/api/admin/leads/:id', need(ADMINS), async (c) => {
+  await c.env.DB.prepare('DELETE FROM leads WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+app.post('/api/admin/leads/search', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ country: z.enum(LEAD_COUNTRIES) }));
+  if (aiProvider(c.env) !== 'anthropic') return c.json({ error: 'ai_web_not_configured' }, 501);
+  if (await c.env.DB.prepare(`SELECT 1 FROM lead_runs WHERE finished_at IS NULL AND started_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes')`).first()) return c.json({ error: 'search_running' }, 409);
+  const r = await runLeadSearch(c.env, b.country, 'manual', reqLang(c));
+  await audit(c.env, c.get('user').id, 'leads.search', 'leads', b.country);
+  return r.error ? c.json({ error: 'ai_failed', detail: r.error }, 502) : c.json(r);
+});
+app.put('/api/admin/leads-settings', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ auto: z.boolean() }));
+  await putSetting(c.env, 'leads_auto', b.auto ? '1' : '0', c.get('user').id);
+  return c.json({ ok: true });
+});
+
 // ───────────────────────── Anajak Secondhand: AI assistant chat (signed-in users) ─────────────────────────
 const chatDay = () => new Date().toISOString().slice(0, 10);
 
@@ -3105,7 +3292,9 @@ app.post('/api/chat', async (c) => {
   const turns = b.messages.slice(-12);
   while (turns.length && turns[0].role !== 'user') turns.shift();
   try {
-    const reply = await asFeature('chat', async () => chatAssistant(c.env, turns, reqLang(c), await marketContext(c.env)));
+    const recent = turns.filter((t) => t.role === 'user').slice(-3).map((t) => t.content).join('\n');
+    const reply = await asFeature('chat', async () => chatAssistant(c.env, turns, reqLang(c),
+      { market: await marketContext(c.env), skills: skillText(await pickSkills(c.env, 'chat', { text: recent }, 12000)), app: await appContext(c.env) }));
     return c.json({ reply: reply.trim() });
   } catch (e) {
     await c.env.DB.prepare('UPDATE ai_chat_usage SET n = MAX(n - 1, 0) WHERE user_id = ? AND day = ?').bind(me.id, day).run();
@@ -3147,5 +3336,6 @@ export default {
   async scheduled(_event: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
     ctx.waitUntil(asFeature('translate', () => translateBacklog(env)));
     ctx.waitUntil(asFeature('precheck', () => aiReviewBacklog(env)));
+    ctx.waitUntil(leadsBacklog(env).catch((e) => console.error('lead search:', (e as Error).message)));
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>;

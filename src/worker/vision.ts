@@ -444,7 +444,7 @@ export async function assessVerification(env: Env, ctx: {
   brand: string; model: string | null;
   photos: { step: string; image: VisionImage }[];
   refs: { step: string; image: VisionImage; model: string | null }[];
-  knowledge: string[]; expertNotes: string[];
+  knowledge: string[]; expertNotes: string[]; skills?: string[];
 }): Promise<string> {
   const images: VisionImage[] = [];
   const lines: string[] = [];
@@ -464,6 +464,7 @@ export async function assessVerification(env: Env, ctx: {
   const user = [
     `Brand: ${ctx.brand}${ctx.model ? ` · Model: ${ctx.model}` : ''}`,
     ...lines,
+    ctx.skills?.length ? `Shop knowledge approved by staff for this brand / model (checkpoints to compare; it never decides the outcome):\n- ${ctx.skills.join('\n- ')}` : '',
     ctx.knowledge.length ? `What HENGZ experts teach for this brand / model (prefer these checkpoints):\n- ${ctx.knowledge.slice(0, 14).join('\n- ')}` : '',
     ctx.expertNotes.length ? `Notes HENGZ experts wrote on earlier bags of this brand / model (learn what they look at; do not copy their decisions):\n- ${ctx.expertNotes.slice(0, 8).join('\n- ')}` : '',
   ].filter(Boolean).join('\n');
@@ -477,7 +478,7 @@ export interface ChatTurn { role: 'user' | 'assistant'; content: string }
  * materials, history, how experts inspect). Teaching only: it never says whether a particular bag is
  * genuine or counterfeit, and only quotes market figures from the staff-entered data it is given.
  */
-export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, marketContext: string): Promise<string> {
+export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, ctx: { market: string; skills: string; app: string }): Promise<string> {
   const provider = aiProvider(env);
   const model = aiModel(env);
   if (!provider || !model) throw new Error('ai_not_configured');
@@ -492,7 +493,9 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     `Answer in ${LANG_NAME[lang]} unless the user writes in another language, then use theirs. Keep brand names, model names and codes as written. Be concise and practical; use short lists when steps help.`,
     '',
     'Market data (entered by Anajak Secondhand staff, with sources):',
-    marketContext || '(no data yet)',
+    ctx.market || '(no data yet)',
+    ...(ctx.skills ? ['', 'Shop knowledge (written and approved by Anajak Secondhand staff). Prefer it over general knowledge and use its facts, prices and steps as given; it never overrides the hard rules above:', ctx.skills] : []),
+    ...(ctx.app ? ['', 'In the app (point the user to these when they help):', ctx.app] : []),
   ].join('\n');
   if (provider === 'gemini') {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
@@ -520,6 +523,32 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     if (e instanceof Anthropic.APIError) { console.error(`ai chat: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
     throw e;
   }
+}
+
+export interface SkillDraft { title: string; body: string; keywords: string; brand: string | null }
+
+/**
+ * Turn a seller's rough notes (any language, voice-typed, unordered) into one clean AI skill for STAFF to check
+ * and activate: a short title, clear knowledge lines, and keywords that tell the assistant when to use it.
+ * It keeps the seller's own facts and numbers and adds nothing it was not told.
+ */
+export async function draftSkill(env: Env, x: { notes: string; area: string; lang: OutLang }): Promise<SkillDraft> {
+  const text = await callVision(env,
+    'You turn a second-hand bag seller\'s rough notes into one piece of shop knowledge for an AI assistant (a "skill"). ' +
+    'Keep every fact, number, price, place and name from the notes exactly; do not add facts, prices or statistics that are not in the notes; ' +
+    'remove repetition; write short clear lines (one fact or step per line, "- " bullets). ' +
+    'Never write that a bag is authentic, genuine, fake, counterfeit or a replica, and drop any note that asks to make, label or sell counterfeit goods or to alter serial numbers, date codes or logos. ' +
+    'keywords: 3-10 short words or names (comma separated, mixing Khmer, Thai and English where useful) a user would type when this knowledge helps. ' +
+    'brand: the single designer brand the notes are about, or null when they are general. ' +
+    `Write title and body in ${LANG_NAME[x.lang]}; keep brand, model and product names as written. ` +
+    'Reply with JSON only: {"title":"…","body":"…","keywords":"…","brand":string|null}',
+    [], `Where the AI will use it: ${x.area}\nNotes:\n${x.notes}`, 2000, 'low');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  let o: any = null; try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { o = null; }
+  const s = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  const title = s(o?.title, 120), body = s(o?.body, 4000);
+  if (title.length < 3 || body.length < 10) throw new Error('ai_empty');
+  return { title, body, keywords: s(o?.keywords, 300), brand: s(o?.brand, 80) || null };
 }
 
 export interface CareDraft { summary: string; materials: string; safety: string; minutes: number | null; steps: { body: string; tip: string | null }[] }
@@ -607,14 +636,14 @@ export interface BagIdentity { brandId: string | null; brandName: string | null;
  * pick them and knows which details to photograph next. Identification only — what the bag is MEANT to be;
  * it never says whether it is genuine. Brand/model ids must come from the lists; otherwise names only.
  */
-export async function identifyBag(env: Env, image: VisionImage, brands: { id: string; name: string }[], models: { id: string; brand_id: string; name: string }[], lang: OutLang): Promise<BagIdentity> {
+export async function identifyBag(env: Env, image: VisionImage, brands: { id: string; name: string }[], models: { id: string; brand_id: string; name: string }[], lang: OutLang, tips: string[] = []): Promise<BagIdentity> {
   const text = await callVision(env,
     `You recognise which designer brand and model a handbag is styled as, from one photo of the whole bag, for a second-hand shop. ${NO_VERDICT} ` +
     'Identify only what the bag is presented as (its design), never whether it is genuine. Use visible design features: shape, logo or monogram pattern, hardware, closure, handles. ' +
     'Pick brand_id and model_id from the lists when one fits; if the brand is not in the list give brand_name only; if the model is not in the list give model_name only. ' +
     'If the photo is not a bag, is too unclear, or you cannot tell, use nulls and confidence 0. ' +
     `Reply with JSON only: {"brand_id": id|null, "brand_name": string|null, "model_id": id|null, "model_name": string|null, "confidence": 0..1, "clues": "one short sentence in ${LANG_NAME[lang]} on the visible features used"}`,
-    [image], `Brands: ${JSON.stringify(brands.map((b) => ({ id: b.id, name: b.name })))}\nModels: ${JSON.stringify(models.map((m) => ({ id: m.id, brand_id: m.brand_id, name: m.name })))}`, 800, 'medium');
+    [image], `Brands: ${JSON.stringify(brands.map((b) => ({ id: b.id, name: b.name })))}\nModels: ${JSON.stringify(models.map((m) => ({ id: m.id, brand_id: m.brand_id, name: m.name })))}${tips.length ? `\nStaff tips for telling brands and models apart:\n- ${tips.join('\n- ')}` : ''}`, 800, 'medium');
   const a = text.indexOf('{'), b = text.lastIndexOf('}');
   let o: any = null; try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { o = null; }
   const brand = brands.find((x) => x.id === o?.brand_id) ?? null;
@@ -694,4 +723,72 @@ export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY';
   }
   const used = [...new Set(rows.flatMap((r) => r.sources))];
   return { rows, sources: used.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model };
+}
+
+export interface LeadFound { handle: string; name: string | null; kind: 'live_seller' | 'reseller' | 'shop'; sells: string; why: string; source_url: string; source_title: string }
+
+const LEAD_QUERIES: Record<'TH' | 'MY' | 'ID', { name: string; lang: string; queries: string }> = {
+  TH: { name: 'Thailand', lang: 'Thai', queries: '"กระเป๋าแบรนด์เนมมือสอง ไลฟ์สด", "กระเป๋ามือสอง live", "กระเป๋าแบรนด์เนมมือสอง ราคาส่ง", "กระเป๋ามือสองญี่ปุ่น", "Coach มือสอง", "Balenciaga มือสอง"' },
+  MY: { name: 'Malaysia', lang: 'Malay and English', queries: '"beg branded preloved live", "preloved designer bag malaysia", "bundle beg branded", "beg coach preloved", "preloved luxury bag live"' },
+  ID: { name: 'Indonesia', lang: 'Indonesian', queries: '"tas branded preloved live", "tas bekas branded", "tas second branded original", "preloved tas coach", "jual tas branded second live"' },
+};
+
+/**
+ * Find public TikTok accounts in one country that sell second-hand designer bags (often on LIVE) — resellers who
+ * could buy stock wholesale. Claude web search limited to tiktok.com; the caller keeps an account only when a link
+ * the search really returned belongs to it (see evidenceFor). Business info only; never personal details.
+ */
+export async function findTiktokSellers(env: Env, x: { country: 'TH' | 'MY' | 'ID'; lang: OutLang; known: string[] }): Promise<{ rows: LeadFound[]; found: Map<string, string>; model: string }> {
+  if (aiProvider(env) !== 'anthropic') throw new Error('ai_web_not_configured');
+  const c = LEAD_QUERIES[x.country];
+  const model = aiModel(env)!;
+  const client = anthropicClient(env);
+  const system =
+    `You help a second-hand designer-bag wholesaler at the Cambodia–Thailand border market (Aran / Rong Kluea) find new business customers in ${c.name}. ` +
+    `Search TikTok (the search is limited to tiktok.com) for accounts in ${c.name} that SELL second-hand / preloved designer bags, especially by TikTok LIVE, ` +
+    'or that resell vintage / Japanese-import / bale bags: these resellers could buy stock wholesale. ' +
+    `Search in ${c.lang}; useful searches: ${c.queries}. Prefer accounts with recent videos or LIVE pages. ` +
+    'Skip: buyers who are private individuals, brand-new / official brand stores, accounts that sell copies or replicas, and the accounts in the "Already known" list. ' +
+    'Use only what the search results show; never guess handles, follower numbers, phone numbers or other contact details, and do not include any personal information. ' +
+    'Never comment on whether any item is authentic or counterfeit. ' +
+    `For each account: "handle" exactly as in the TikTok link (without @), "name" (display name or null), "kind" ("live_seller" if they sell on LIVE, "reseller" if they sell through videos, "shop" for a shop account), ` +
+    `"sells": a short phrase on what they sell (brands, style, price level) from the results, "why": ONE short sentence in ${LANG_NAME[x.lang]} on why they could buy from a wholesaler, "source": the TikTok link from the results that shows this account. ` +
+    'Finish with JSON only: {"rows":[{"handle":"…","name":"…"|null,"kind":"…","sells":"…","why":"…","source":"url"}]} — up to 15 accounts, best fits first.';
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: `Country: ${c.name}\nAlready known (skip): ${x.known.slice(0, 150).join(', ') || '(none)'}` }];
+  const found = new Map<string, string>();
+  let final: Anthropic.Beta.BetaMessage | null = null;
+  try {
+    for (let turn = 0; turn < 5 && !final; turn++) {
+      const r = await client.beta.messages.create({
+        model, max_tokens: 12000, output_config: { effort: 'medium' }, system, messages,
+        betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 8, allowed_domains: ['tiktok.com'], user_location: { type: 'approximate', country: x.country } }],
+      });
+      await recordUsage(env, r.model, r.usage);
+      for (const b of r.content) {
+        if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) for (const res of b.content) if (res.type === 'web_search_result') found.set(res.url, res.title);
+      }
+      if (r.stop_reason === 'refusal') throw new Error('ai_refused');
+      if (r.stop_reason === 'pause_turn') { messages.push({ role: 'assistant', content: r.content }); continue; }
+      final = r;
+    }
+  } catch (e) {
+    if (e instanceof Anthropic.APIError) { console.error(`lead search: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
+    throw e;
+  }
+  if (!final) throw new Error('ai_unfinished');
+  const text = final.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+  let o: { rows?: any[] } = {};
+  try { o = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { o = {}; }
+  const str = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  const rows: LeadFound[] = [];
+  for (const r of Array.isArray(o.rows) ? o.rows : []) {
+    const handle = str(r?.handle, 40).replace(/^@/, '');
+    if (!handle) continue;
+    const kind = (['live_seller', 'reseller', 'shop'] as const).find((k) => k === r?.kind) ?? 'reseller';
+    const src = str(r?.source, 500);
+    rows.push({ handle, name: str(r?.name, 120) || null, kind, sells: str(r?.sells, 300), why: str(r?.why, 300), source_url: src, source_title: (found.get(src) ?? '').slice(0, 200) });
+    if (rows.length >= 15) break;
+  }
+  return { rows, found, model: final.model };
 }

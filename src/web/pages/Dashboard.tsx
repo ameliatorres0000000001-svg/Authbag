@@ -5,6 +5,7 @@ import { COUNTRIES, FLAG, TrendTable, type Overview } from '../Market.tsx';
 import { useI18n } from '../i18n.tsx';
 import { FolderCard, LooseFolderCard, type Folder } from '../FeedFolders.tsx';
 import Timeline from '../Timeline.tsx';
+import { LeadsHome } from '../Leads.tsx';
 
 export interface StudioModel {
   id: string; name: string; brand: string; brand_id: string;
@@ -94,6 +95,9 @@ export default function Dashboard() {
         </ul>
         <p className="mt-3 text-[11px] text-muted">{t('market.info')}</p>
       </section>
+
+      {/* staff: customers found on TikTok, next to the market data */}
+      <LeadsHome />
 
       {/* the app's focus: two big lessons cards */}
       <section aria-labelledby="focus-h">
