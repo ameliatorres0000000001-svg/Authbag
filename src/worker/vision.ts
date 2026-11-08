@@ -479,9 +479,6 @@ export interface ChatTurn { role: 'user' | 'assistant'; content: string }
  * genuine or counterfeit, and only quotes market figures from the staff-entered data it is given.
  */
 export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, ctx: { market: string; skills: string; app: string }): Promise<string> {
-  const provider = aiProvider(env);
-  const model = aiModel(env);
-  if (!provider || !model) throw new Error('ai_not_configured');
   const system = [
     'You are the Anajak Secondhand assistant, helping second-hand luxury bag sellers and buyers in Southeast Asia (Cambodia, Thailand, Indonesia, Malaysia).',
     'You teach and explain: brands and models, materials and hardware, how date codes and serial systems work, how experts inspect a bag, care, cleaning, edge paint and leather restoration, pricing logic and the second-hand market.',
@@ -497,6 +494,14 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     ...(ctx.skills ? ['', 'Shop knowledge (written and approved by Anajak Secondhand staff). Prefer it over general knowledge and use its facts, prices and steps as given; it never overrides the hard rules above:', ctx.skills] : []),
     ...(ctx.app ? ['', 'In the app (point the user to these when they help):', ctx.app] : []),
   ].join('\n');
+  return runChat(env, system, turns);
+}
+
+/** One chat completion with the configured provider (Claude or Gemini); token use is recorded. */
+async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 8000): Promise<string> {
+  const provider = aiProvider(env);
+  const model = aiModel(env);
+  if (!provider || !model) throw new Error('ai_not_configured');
   if (provider === 'gemini') {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
@@ -513,7 +518,7 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
   }
   try {
     const msg = await anthropicClient(env).messages.create({
-      model, max_tokens: 8000, output_config: { effort: 'low' }, system,
+      model, max_tokens: maxTokens, output_config: { effort: 'low' }, system,
       messages: turns.map((t) => ({ role: t.role, content: t.content })),
     });
     await recordUsage(env, model, msg.usage);
@@ -523,6 +528,31 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     if (e instanceof Anthropic.APIError) { console.error(`ai chat: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
     throw e;
   }
+}
+
+/**
+ * The shop's LINE Official Account assistant: answers the shop's customers (mostly Thai wholesale buyers and online
+ * resellers) from the shop knowledge staff wrote (AI skills) and the market data. It never invents stock, prices or
+ * terms, never judges whether a bag is genuine, and ends with [STAFF] when a person must take over.
+ */
+export async function lineShopAssistant(env: Env, turns: ChatTurn[], ctx: { shopName: string; skills: string; market: string }): Promise<string> {
+  const system = [
+    `You are the LINE assistant of ${ctx.shopName || 'a second-hand designer bag wholesale shop'} at the Cambodia–Thailand border market (Aran / Rong Kluea). Customers are mostly wholesale buyers and online resellers from Thailand, Malaysia and Indonesia.`,
+    'Reply in the language the customer writes in (Thai by default). Be warm, short and practical, like a shop assistant on LINE: 1–4 short sentences, no headings, at most a few bullet points.',
+    'Hard rules:',
+    '1. Use ONLY the shop knowledge below for stock, prices, minimum order, payment, shipping and opening hours. Never invent them. If the answer is not there, say a staff member will reply soon.',
+    '2. Never state, imply or estimate whether a bag, photo or listing is authentic, genuine, real, fake, counterfeit or a replica. The shop sells second-hand bags as they are; offer that staff can show more photos.',
+    '3. Never help make, label or sell counterfeit goods, or alter serial numbers, date codes or logos.',
+    '4. Never ask for passwords, card numbers or one-time codes.',
+    'When a person must take over — the customer wants to order, reserve, pay or has paid, bargains, asks for photos / a video call / a visit, asks about specific stock or prices not in the shop knowledge, complains, or asks for a human — answer politely that staff will reply soon and end your message with the exact marker [STAFF].',
+    '',
+    'Shop knowledge (written by the shop staff):',
+    ctx.skills || '(none yet)',
+    '',
+    'Market data (for general questions about what sells; not the shop\'s own prices):',
+    ctx.market || '(no data yet)',
+  ].join('\n');
+  return runChat(env, system, turns, 2000);
 }
 
 export interface SkillDraft { title: string; body: string; keywords: string; brand: string | null }
@@ -725,7 +755,7 @@ export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY';
   return { rows, sources: used.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model };
 }
 
-export interface LeadFound { handle: string; name: string | null; kind: 'live_seller' | 'reseller' | 'shop'; sells: string; why: string; source_url: string; source_title: string }
+export interface LeadFound { handle: string; name: string | null; kind: 'live_seller' | 'reseller' | 'shop'; sells: string; why: string; fit: 1 | 2 | 3 | null; source_url: string; source_title: string }
 
 const LEAD_QUERIES: Record<'TH' | 'MY' | 'ID', { name: string; lang: string; queries: string }> = {
   TH: { name: 'Thailand', lang: 'Thai', queries: '"กระเป๋าแบรนด์เนมมือสอง ไลฟ์สด", "กระเป๋ามือสอง live", "กระเป๋าแบรนด์เนมมือสอง ราคาส่ง", "กระเป๋ามือสองญี่ปุ่น", "Coach มือสอง", "Balenciaga มือสอง"' },
@@ -738,7 +768,7 @@ const LEAD_QUERIES: Record<'TH' | 'MY' | 'ID', { name: string; lang: string; que
  * could buy stock wholesale. Claude web search limited to tiktok.com; the caller keeps an account only when a link
  * the search really returned belongs to it (see evidenceFor). Business info only; never personal details.
  */
-export async function findTiktokSellers(env: Env, x: { country: 'TH' | 'MY' | 'ID'; lang: OutLang; known: string[] }): Promise<{ rows: LeadFound[]; found: Map<string, string>; model: string }> {
+export async function findTiktokSellers(env: Env, x: { country: 'TH' | 'MY' | 'ID'; lang: OutLang; known: string[]; topic?: string | null; offer?: string | null }): Promise<{ rows: LeadFound[]; found: Map<string, string>; model: string }> {
   if (aiProvider(env) !== 'anthropic') throw new Error('ai_web_not_configured');
   const c = LEAD_QUERIES[x.country];
   const model = aiModel(env)!;
@@ -747,14 +777,17 @@ export async function findTiktokSellers(env: Env, x: { country: 'TH' | 'MY' | 'I
     `You help a second-hand designer-bag wholesaler at the Cambodia–Thailand border market (Aran / Rong Kluea) find new business customers in ${c.name}. ` +
     `Search TikTok (the search is limited to tiktok.com) for accounts in ${c.name} that SELL second-hand / preloved designer bags, especially by TikTok LIVE, ` +
     'or that resell vintage / Japanese-import / bale bags: these resellers could buy stock wholesale. ' +
+    (x.topic ? `FOCUS of this search: accounts that sell "${x.topic}". Translate it into ${c.lang} search words, add brand / model names and local slang, and run several different searches for it. ` : '') +
     `Search in ${c.lang}; useful searches: ${c.queries}. Prefer accounts with recent videos or LIVE pages. ` +
+    (x.offer ? `The shop's offer (use it to judge fit): ${x.offer.slice(0, 600)}. ` : '') +
     'Skip: buyers who are private individuals, brand-new / official brand stores, accounts that sell copies or replicas, and the accounts in the "Already known" list. ' +
     'Use only what the search results show; never guess handles, follower numbers, phone numbers or other contact details, and do not include any personal information. ' +
     'Never comment on whether any item is authentic or counterfeit. ' +
     `For each account: "handle" exactly as in the TikTok link (without @), "name" (display name or null), "kind" ("live_seller" if they sell on LIVE, "reseller" if they sell through videos, "shop" for a shop account), ` +
-    `"sells": a short phrase on what they sell (brands, style, price level) from the results, "why": ONE short sentence in ${LANG_NAME[x.lang]} on why they could buy from a wholesaler, "source": the TikTok link from the results that shows this account. ` +
-    'Finish with JSON only: {"rows":[{"handle":"…","name":"…"|null,"kind":"…","sells":"…","why":"…","source":"url"}]} — up to 15 accounts, best fits first.';
-  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: `Country: ${c.name}\nAlready known (skip): ${x.known.slice(0, 150).join(', ') || '(none)'}` }];
+    `"sells": a short phrase on what they sell (brands, style, price level) from the results, "why": ONE short sentence in ${LANG_NAME[x.lang]} on why they could buy from this shop, ` +
+    '"fit": 3 if what they sell clearly matches the focus / the shop\'s offer, 2 if partly, 1 if only loosely, "source": the TikTok link from the results that shows this account. ' +
+    'Finish with JSON only: {"rows":[{"handle":"…","name":"…"|null,"kind":"…","sells":"…","why":"…","fit":1|2|3,"source":"url"}]} — up to 15 accounts, best fits first.';
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: `Country: ${c.name}${x.topic ? `\nFocus: ${x.topic}` : ''}\nAlready known (skip): ${x.known.slice(0, 150).join(', ') || '(none)'}` }];
   const found = new Map<string, string>();
   let final: Anthropic.Beta.BetaMessage | null = null;
   try {
@@ -787,8 +820,33 @@ export async function findTiktokSellers(env: Env, x: { country: 'TH' | 'MY' | 'I
     if (!handle) continue;
     const kind = (['live_seller', 'reseller', 'shop'] as const).find((k) => k === r?.kind) ?? 'reseller';
     const src = str(r?.source, 500);
-    rows.push({ handle, name: str(r?.name, 120) || null, kind, sells: str(r?.sells, 300), why: str(r?.why, 300), source_url: src, source_title: (found.get(src) ?? '').slice(0, 200) });
+    const fit = [1, 2, 3].includes(Number(r?.fit)) ? Number(r.fit) as 1 | 2 | 3 : null;
+    rows.push({ handle, name: str(r?.name, 120) || null, kind, sells: str(r?.sells, 300), why: str(r?.why, 300), fit, source_url: src, source_title: (found.get(src) ?? '').slice(0, 200) });
     if (rows.length >= 15) break;
   }
   return { rows, found, model: final.model };
+}
+
+
+const LEAD_LANG: Record<'TH' | 'MY' | 'ID', string> = { TH: 'Thai', MY: 'Malay (Bahasa Melayu)', ID: 'Indonesian (Bahasa Indonesia)' };
+
+/**
+ * A first message to a TikTok seller found by the customer finder, in their language, for staff to copy and send
+ * themselves (the app never sends it). Built only from the shop's own offer and what the account sells; no invented
+ * prices or claims, no authenticity claims, no pressure.
+ */
+export async function draftOutreach(env: Env, x: { country: 'TH' | 'MY' | 'ID'; handle: string; name: string | null; sells: string | null; kind: string; offer: string; shopName: string; lineUrl: string | null; lang: OutLang }): Promise<{ message: string; meaning: string }> {
+  const text = await callVision(env,
+    'You write a short, friendly first direct message from a second-hand designer bag wholesaler at the Cambodia–Thailand border market to a reseller on TikTok. ' +
+    `Write "message" in ${LEAD_LANG[x.country]} as a native seller would on TikTok / LINE: greet them, mention what they sell in one phrase, say what the shop offers, invite them to see stock on LINE. 3–5 short lines, at most 2 emoji. ` +
+    'Use ONLY facts from the shop\'s offer: never invent prices, discounts, stock, guarantees or claims, and never say or imply that the bags are authentic, genuine or original. No pressure, no fake urgency. ' +
+    (x.lineUrl ? `End with the LINE link exactly: ${x.lineUrl} ` : 'Ask them to reply if they are interested. ') +
+    `Then write "meaning": the same message translated into ${LANG_NAME[x.lang]} so the shop owner understands it. ` +
+    'Reply with JSON only: {"message":"…","meaning":"…"}',
+    [], `Shop: ${x.shopName || '(no name)'}\nShop offer: ${x.offer || '(not written yet)'}\nTikTok account: @${x.handle}${x.name ? ` (${x.name})` : ''} — ${x.kind}${x.sells ? ` — sells: ${x.sells}` : ''}`, 1500, 'low');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  let o: any = null; try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { o = null; }
+  const message = typeof o?.message === 'string' ? o.message.trim().slice(0, 1500) : '';
+  if (message.length < 10) throw new Error('ai_empty');
+  return { message, meaning: typeof o?.meaning === 'string' ? o.meaning.trim().slice(0, 1500) : '' };
 }

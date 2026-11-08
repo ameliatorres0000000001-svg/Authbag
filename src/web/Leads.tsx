@@ -8,8 +8,8 @@ import { ADMIN_ROLES, STAFF_ROLES } from './studio.ts';
 
 type Country = 'TH' | 'MY' | 'ID';
 type Status = 'new' | 'saved' | 'contacted' | 'customer' | 'not_fit';
-export interface Lead { id: string; country: Country; handle: string; name: string | null; url: string; kind: 'live_seller' | 'reseller' | 'shop'; sells: string | null; why: string | null; source_url?: string | null; status: Status; note?: string | null; found_by?: string; created_at: string }
-interface Summary { counts: { country: Country; status: Status; n: number }[]; runs: { country: Country; at: string; added: number | null; error: string | null; running: number }[]; auto: boolean; webSearch: boolean; everyDays: number }
+export interface Lead { id: string; country: Country; handle: string; name: string | null; url: string; kind: 'live_seller' | 'reseller' | 'shop'; sells: string | null; why: string | null; fit?: number | null; topic?: string | null; source_url?: string | null; status: Status; note?: string | null; found_by?: string; created_at: string }
+interface Summary { counts: { country: Country; status: Status; n: number }[]; runs: { country: Country; at: string; added: number | null; error: string | null; running: number }[]; auto: boolean; webSearch: boolean; everyDays: number; offer: string; shopName: string; lineUrl: string | null }
 const CC: Country[] = ['TH', 'MY', 'ID'];
 const FLAG: Record<Country, string> = { TH: '🇹🇭', MY: '🇲🇾', ID: '🇮🇩' };
 const STATUSES: Status[] = ['new', 'saved', 'contacted', 'customer', 'not_fit'];
@@ -17,11 +17,22 @@ const TONE: Record<Status, string> = { new: 'bg-review-bg text-review', saved: '
 const day = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : '');
 const count = (s: Summary | null, cc: Country, st?: Status) => (s?.counts ?? []).filter((x) => x.country === cc && (!st || x.status === st)).reduce((a, x) => a + x.n, 0);
 
+const Fit = ({ n }: { n?: number | null }) => (n ? <span className="text-[11px] text-gold" title={`fit ${n}/3`}>{'★'.repeat(n)}<span className="text-hairline">{'★'.repeat(3 - n)}</span></span> : null);
+
 function LeadRow({ l, compact, onSaved }: { l: Lead; compact?: boolean; onSaved?: () => void }) {
   const { t } = useI18n();
   const [status, setStatus] = useState<Status>(l.status);
   const [note, setNote] = useState(l.note ?? '');
+  const [dm, setDm] = useState<{ message: string; meaning: string } | null>(null);
+  const [dmBusy, setDmBusy] = useState(false);
+  const [dmErr, setDmErr] = useState('');
+  const [copied, setCopied] = useState(false);
   const save = async (st: Status, n: string) => { setStatus(st); try { await api.put(`/api/admin/leads/${l.id}`, { status: st, note: n || null }); onSaved?.(); } catch { setStatus(l.status); } };
+  const write = async () => {
+    setDmBusy(true); setDmErr('');
+    try { setDm(await api.post(`/api/admin/leads/${l.id}/message`, {})); } catch (e) { setDmErr(errText(e)); } finally { setDmBusy(false); }
+  };
+  const copy = async () => { try { await navigator.clipboard.writeText(dm!.message); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* user can select the text */ } };
   return (
     <li className="py-3">
       <div className="flex items-start gap-3">
@@ -32,6 +43,8 @@ function LeadRow({ l, compact, onSaved }: { l: Lead; compact?: boolean; onSaved?
           <div className="mt-1 flex flex-wrap gap-1">
             <span className="rounded-full bg-charcoal px-2 py-0.5 text-[10px] text-white">{l.kind === 'live_seller' ? '🔴 LIVE' : t(`ld.kind.${l.kind}`)}</span>
             {!compact && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${TONE[status]}`}>{t(`ld.st.${status}`)}</span>}
+            <Fit n={l.fit} />
+            {l.topic && <span className="rounded-full border border-hairline px-2 py-0.5 text-[10px] text-muted">🔎 {l.topic}</span>}
           </div>
           {l.sells && <p className="mt-1 text-sm">{l.sells}</p>}
           {l.why && <p className="mt-0.5 text-xs text-muted">{l.why}</p>}
@@ -45,6 +58,20 @@ function LeadRow({ l, compact, onSaved }: { l: Lead; compact?: boolean; onSaved?
           <input className="input min-w-0 flex-1 !py-1.5 text-xs" maxLength={500} placeholder={t('ld.note')} value={note} onChange={(e) => setNote(e.target.value)} onBlur={() => note !== (l.note ?? '') && save(status, note)} />
           {l.source_url && <a href={l.source_url} target="_blank" rel="noreferrer" className="text-[11px] text-muted underline">{t('ld.source')}</a>}
           <span className="text-[11px] text-muted">{l.found_by === 'ai' ? '🤖 AI' : '✍️'} · {day(l.created_at)}</span>
+          <button type="button" className="btn-ghost !px-3 !py-1 text-xs" disabled={dmBusy} onClick={write}>{dmBusy ? '…' : `✍️ ${t('ld.writeMsg')}`}</button>
+        </div>
+      )}
+      {dmErr && <div className="mt-2 pl-8"><Notice tone="bad">{dmErr}</Notice></div>}
+      {dm && (
+        <div className="mt-2 space-y-2 rounded-xl bg-surface-low p-3 pl-8 text-sm">
+          <div className="whitespace-pre-wrap rounded-lg bg-surface-card p-2">{dm.message}</div>
+          {dm.meaning && <div className="whitespace-pre-wrap text-xs text-muted">{t('ld.meaning')}: {dm.meaning}</div>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-primary !px-3 !py-1.5 text-xs" onClick={copy}>{copied ? `✓ ${t('ld.copied')}` : t('ld.copy')}</button>
+            <a href={l.url} target="_blank" rel="noreferrer" className="btn-ghost !px-3 !py-1.5 text-xs">{t('ld.openTiktok')} ↗</a>
+            {status !== 'contacted' && status !== 'customer' && <button type="button" className="btn-ghost !px-3 !py-1.5 text-xs" onClick={() => save('contacted', note)}>✓ {t('ld.markSent')}</button>}
+          </div>
+          <p className="text-[11px] text-muted">{t('ld.sendYourself')}</p>
         </div>
       )}
     </li>
@@ -93,18 +120,22 @@ export default function LeadsAdmin({ initialCountry }: { initialCountry?: string
   const [busy, setBusy] = useState<Country | null>(null);
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
   const [add, setAdd] = useState({ link: '', country: 'TH' as Country, kind: 'live_seller' as Lead['kind'], sells: '' });
+  const [topic, setTopic] = useState('');
+  const [topicCc, setTopicCc] = useState<Country>('TH');
+  const [offer, setOffer] = useState<{ offer: string; shopName: string } | null>(null);
   const load = useCallback(() => {
     const q = new URLSearchParams(); if (country) q.set('country', country); if (status) q.set('status', status);
-    return api.get<Summary & { leads: Lead[] }>(`/api/admin/leads?${q}`).then(setData).catch((e) => setMsg({ tone: 'bad', text: errText(e) }));
+    return api.get<Summary & { leads: Lead[] }>(`/api/admin/leads?${q}`).then((d) => { setData(d); setOffer((o) => o ?? { offer: d.offer, shopName: d.shopName }); }).catch((e) => setMsg({ tone: 'bad', text: errText(e) }));
   }, [country, status]);
   useEffect(() => { load(); }, [load]);
 
-  const search = async (cc: Country) => {
+  const search = async (cc: Country, q?: string) => {
     setBusy(cc); setMsg(null);
-    try { const r = await api.post<{ found: number; added: number }>('/api/admin/leads/search', { country: cc }); setMsg({ tone: 'ok', text: t('ld.searched').replace('{found}', String(r.found)).replace('{added}', String(r.added)) }); await load(); }
+    try { const r = await api.post<{ found: number; added: number }>('/api/admin/leads/search', { country: cc, topic: q?.trim() || null }); setMsg({ tone: 'ok', text: t('ld.searched').replace('{found}', String(r.found)).replace('{added}', String(r.added)) }); await load(); }
     catch (e) { setMsg({ tone: 'bad', text: e instanceof ApiError && e.body?.error === 'ai_web_not_configured' ? t('ld.needClaude') : e instanceof ApiError && e.body?.error === 'search_running' ? t('ld.running') : errText(e) }); }
     finally { setBusy(null); }
   };
+  const saveOffer = async () => { if (!offer) return; try { await api.put('/api/admin/leads-settings', offer); setMsg({ tone: 'ok', text: t('madm.saved') }); } catch (e) { setMsg({ tone: 'bad', text: errText(e) }); } };
   const toggleAuto = async () => { if (!data) return; try { await api.put('/api/admin/leads-settings', { auto: !data.auto }); await load(); } catch (e) { setMsg({ tone: 'bad', text: errText(e) }); } };
   const addOne = async () => {
     setMsg(null);
@@ -143,6 +174,33 @@ export default function LeadsAdmin({ initialCountry }: { initialCountry?: string
       </div>
 
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+
+      {/* search for exactly what you want to sell */}
+      {admin && (
+        <div className="card space-y-2">
+          <div className="text-sm font-semibold">🔎 {t('ld.topicTitle')}</div>
+          <p className="text-xs text-muted">{t('ld.topicHelp')}</p>
+          <input className="input" maxLength={120} placeholder={t('ld.topicPh')} value={topic} onChange={(e) => setTopic(e.target.value)} />
+          <div className="flex gap-2">
+            <select className="input !w-auto" value={topicCc} onChange={(e) => setTopicCc(e.target.value as Country)} aria-label={t('ld.country')}>{CC.map((cc) => <option key={cc} value={cc}>{FLAG[cc]} {t(`market.country.${cc}`)}</option>)}</select>
+            <button type="button" className="btn-primary flex-1" disabled={!!busy || !data?.webSearch || topic.trim().length < 2} onClick={() => search(topicCc, topic)}>{busy === topicCc ? t('ld.searching') : t('ld.searchNow')}</button>
+          </div>
+        </div>
+      )}
+
+      {/* your offer: used to judge fit and to write first messages */}
+      {offer && (
+        <details className="card" open={!offer.offer}>
+          <summary className="cursor-pointer text-sm font-semibold">🏷️ {t('ld.offerTitle')}</summary>
+          <div className="mt-2 space-y-2">
+            <p className="text-xs text-muted">{t('ld.offerHelp')}</p>
+            <Field label={t('ln.shopName')}><input className="input" maxLength={80} disabled={!admin} value={offer.shopName} onChange={(e) => setOffer({ ...offer, shopName: e.target.value })} /></Field>
+            <textarea className="input min-h-[96px]" maxLength={1000} disabled={!admin} placeholder={t('ld.offerPh')} value={offer.offer} onChange={(e) => setOffer({ ...offer, offer: e.target.value })} />
+            <p className="text-xs text-muted">{data?.lineUrl ? `LINE: ${data.lineUrl}` : t('ld.noLine')}</p>
+            {admin && <button type="button" className="btn-primary" onClick={saveOffer}>{t('save')}</button>}
+          </div>
+        </details>
+      )}
 
       <div className="card space-y-3">
         <div className="flex flex-wrap gap-1.5">
