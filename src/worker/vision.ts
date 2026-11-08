@@ -724,3 +724,71 @@ export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY';
   const used = [...new Set(rows.flatMap((r) => r.sources))];
   return { rows, sources: used.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model };
 }
+
+export interface LeadFound { handle: string; name: string | null; kind: 'live_seller' | 'reseller' | 'shop'; sells: string; why: string; source_url: string; source_title: string }
+
+const LEAD_QUERIES: Record<'TH' | 'MY' | 'ID', { name: string; lang: string; queries: string }> = {
+  TH: { name: 'Thailand', lang: 'Thai', queries: '"กระเป๋าแบรนด์เนมมือสอง ไลฟ์สด", "กระเป๋ามือสอง live", "กระเป๋าแบรนด์เนมมือสอง ราคาส่ง", "กระเป๋ามือสองญี่ปุ่น", "Coach มือสอง", "Balenciaga มือสอง"' },
+  MY: { name: 'Malaysia', lang: 'Malay and English', queries: '"beg branded preloved live", "preloved designer bag malaysia", "bundle beg branded", "beg coach preloved", "preloved luxury bag live"' },
+  ID: { name: 'Indonesia', lang: 'Indonesian', queries: '"tas branded preloved live", "tas bekas branded", "tas second branded original", "preloved tas coach", "jual tas branded second live"' },
+};
+
+/**
+ * Find public TikTok accounts in one country that sell second-hand designer bags (often on LIVE) — resellers who
+ * could buy stock wholesale. Claude web search limited to tiktok.com; the caller keeps an account only when a link
+ * the search really returned belongs to it (see evidenceFor). Business info only; never personal details.
+ */
+export async function findTiktokSellers(env: Env, x: { country: 'TH' | 'MY' | 'ID'; lang: OutLang; known: string[] }): Promise<{ rows: LeadFound[]; found: Map<string, string>; model: string }> {
+  if (aiProvider(env) !== 'anthropic') throw new Error('ai_web_not_configured');
+  const c = LEAD_QUERIES[x.country];
+  const model = aiModel(env)!;
+  const client = anthropicClient(env);
+  const system =
+    `You help a second-hand designer-bag wholesaler at the Cambodia–Thailand border market (Aran / Rong Kluea) find new business customers in ${c.name}. ` +
+    `Search TikTok (the search is limited to tiktok.com) for accounts in ${c.name} that SELL second-hand / preloved designer bags, especially by TikTok LIVE, ` +
+    'or that resell vintage / Japanese-import / bale bags: these resellers could buy stock wholesale. ' +
+    `Search in ${c.lang}; useful searches: ${c.queries}. Prefer accounts with recent videos or LIVE pages. ` +
+    'Skip: buyers who are private individuals, brand-new / official brand stores, accounts that sell copies or replicas, and the accounts in the "Already known" list. ' +
+    'Use only what the search results show; never guess handles, follower numbers, phone numbers or other contact details, and do not include any personal information. ' +
+    'Never comment on whether any item is authentic or counterfeit. ' +
+    `For each account: "handle" exactly as in the TikTok link (without @), "name" (display name or null), "kind" ("live_seller" if they sell on LIVE, "reseller" if they sell through videos, "shop" for a shop account), ` +
+    `"sells": a short phrase on what they sell (brands, style, price level) from the results, "why": ONE short sentence in ${LANG_NAME[x.lang]} on why they could buy from a wholesaler, "source": the TikTok link from the results that shows this account. ` +
+    'Finish with JSON only: {"rows":[{"handle":"…","name":"…"|null,"kind":"…","sells":"…","why":"…","source":"url"}]} — up to 15 accounts, best fits first.';
+  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: `Country: ${c.name}\nAlready known (skip): ${x.known.slice(0, 150).join(', ') || '(none)'}` }];
+  const found = new Map<string, string>();
+  let final: Anthropic.Beta.BetaMessage | null = null;
+  try {
+    for (let turn = 0; turn < 5 && !final; turn++) {
+      const r = await client.beta.messages.create({
+        model, max_tokens: 12000, output_config: { effort: 'medium' }, system, messages,
+        betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 8, allowed_domains: ['tiktok.com'], user_location: { type: 'approximate', country: x.country } }],
+      });
+      await recordUsage(env, r.model, r.usage);
+      for (const b of r.content) {
+        if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) for (const res of b.content) if (res.type === 'web_search_result') found.set(res.url, res.title);
+      }
+      if (r.stop_reason === 'refusal') throw new Error('ai_refused');
+      if (r.stop_reason === 'pause_turn') { messages.push({ role: 'assistant', content: r.content }); continue; }
+      final = r;
+    }
+  } catch (e) {
+    if (e instanceof Anthropic.APIError) { console.error(`lead search: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
+    throw e;
+  }
+  if (!final) throw new Error('ai_unfinished');
+  const text = final.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+  let o: { rows?: any[] } = {};
+  try { o = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { o = {}; }
+  const str = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  const rows: LeadFound[] = [];
+  for (const r of Array.isArray(o.rows) ? o.rows : []) {
+    const handle = str(r?.handle, 40).replace(/^@/, '');
+    if (!handle) continue;
+    const kind = (['live_seller', 'reseller', 'shop'] as const).find((k) => k === r?.kind) ?? 'reseller';
+    const src = str(r?.source, 500);
+    rows.push({ handle, name: str(r?.name, 120) || null, kind, sells: str(r?.sells, 300), why: str(r?.why, 300), source_url: src, source_title: (found.get(src) ?? '').slice(0, 200) });
+    if (rows.length >= 15) break;
+  }
+  return { rows, found, model: final.model };
+}

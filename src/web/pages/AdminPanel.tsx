@@ -16,6 +16,7 @@ import CareAdmin from '../CareAdmin.tsx';
 import { MembershipSettingsCard, PaymentsCard, UsageCard } from '../MemberAdmin.tsx';
 import PaintAdmin from '../PaintAdmin.tsx';
 import SkillsAdmin from '../SkillsAdmin.tsx';
+import LeadsAdmin from '../Leads.tsx';
 import AdminTools, { AiCheck, AiTrackCard, ContactAdmin, ExpertReviewCard, ExpertsCard, NotifyCard, VerifyQueue } from '../AdminTools.tsx';
 
 interface Tax { brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] }
@@ -47,7 +48,7 @@ export default function AdminPanel() {
   };
 
   const admin = ADMIN_ROLES.includes(me.role);
-  const tabs = ([['today', '📥'], ['skills', '🧠'], ['library', '📚'], ['paint', '🎨'], ['market', '📈'], ['settings', '⚙️']] as const).filter(([k]) => admin || k === 'today' || k === 'skills' || k === 'library' || k === 'settings');
+  const tabs = ([['today', '📥'], ['leads', '🎯'], ['skills', '🧠'], ['library', '📚'], ['paint', '🎨'], ['market', '📈'], ['settings', '⚙️']] as const).filter(([k]) => admin || k === 'today' || k === 'leads' || k === 'skills' || k === 'library' || k === 'settings');
   const asked = sp.get('tab');
   const tab = tabs.some(([k]) => k === asked) ? asked! : 'today';
 
@@ -78,6 +79,7 @@ export default function AdminPanel() {
           {tab === 'paint' && <><PaintAdmin /><CareAdmin /></>}
           {tab === 'market' && <MarketAdmin />}
           {tab === 'skills' && <SkillsAdmin />}
+          {tab === 'leads' && <LeadsAdmin initialCountry={sp.get('country')} />}
           {tab === 'settings' && <>{admin && <><ExpertReviewCard owner={me.role === 'owner'} /><MembershipSettingsCard /><ExpertsCard /><ContactAdmin /><AiCheck /><VerifyAdmin /></>}<AdminTools /></>}
         </div>
         {tab === 'library' && (
