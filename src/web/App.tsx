@@ -38,6 +38,7 @@ import Restore from './pages/Restore.tsx';
 import RestoreLesson from './pages/RestoreLesson.tsx';
 import Paint from './pages/Paint.tsx';
 import Membership, { MembershipLine, type MembershipInfo } from './pages/Membership.tsx';
+import Aran from './pages/Aran.tsx';
 import Authenticity from './pages/Authenticity.tsx';
 import Chat from './pages/Chat.tsx';
 
@@ -151,6 +152,7 @@ export default function App() {
             <Route path="/trends" element={<Trends />} />
             <Route path="/paint" element={<Paint />} />
             <Route path="/subscribe" element={<Membership />} />
+            <Route path="/aran" element={<Aran />} />
             <Route path="/restore" element={<Restore />} />
             <Route path="/restore/:id" element={<RestoreLesson />} />
             <Route path="/authenticity" element={<Authenticity />} />

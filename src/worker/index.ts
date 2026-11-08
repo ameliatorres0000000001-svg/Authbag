@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, lineShopAssistant, draftOutreach, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -17,8 +17,6 @@ import { sniffAudio, synthesize, ttsConfigured, ttsHash } from './tts.ts';
 import { chooseSkills, type SkillRow, type SkillUse } from '../shared/skills.ts';
 import { asFeature } from './usage.ts';
 import { evidenceFor, handleFromInput, profileUrl } from '../shared/leads.ts';
-import { lineFriendLinks, lineSignatureOk, linkCodeMatches, splitHandoff } from '../shared/line.ts';
-import { lineBotConfigured, lineBotInfo, lineProfile, lineQuota, lineReply, lineSetWebhook, lineTestWebhook, lineWebhookInfo } from './lineBot.ts';
 import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
@@ -196,7 +194,7 @@ const PUBLIC_GET = [
 // everything below requires a session (or is a public read above)
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
-  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p === '/api/line/webhook' || p.startsWith('/api/public/cert/')) return next();
+  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p.startsWith('/api/public/cert/')) return next();
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
   if (!user) {
     // guests can browse the public teaching pages (read only); everything else needs an account
@@ -3075,9 +3073,11 @@ app.put('/api/admin/usage', need(['owner']), async (c) => {
 // Only active skills reach the AI. A skill is knowledge: the hard rules in each prompt always win, and skills never
 // change an expert outcome.
 const SKILL_AREAS = ['all', 'chat', 'identify', 'check'] as const;
+const ARAN_TOPICS = ['market', 'bales', 'grading', 'pricing', 'buyers', 'logistics', 'online', 'care'] as const;
 const skillInput = z.object({
   area: z.enum(SKILL_AREAS), title: z.string().trim().min(3).max(120), body: z.string().trim().min(10).max(4000),
   brand: z.string().trim().max(80).nullish().transform((v) => v || null), keywords: z.string().trim().max(300).nullish().transform((v) => v || null),
+  topic: z.enum(ARAN_TOPICS).nullish().transform((v) => v ?? null), public: z.boolean().optional().default(false),
 });
 
 /** The active skills that fit this moment (see src/shared/skills.ts), and a use count for the admin list. */
@@ -3096,7 +3096,7 @@ async function appContext(env: AppEnv['Bindings']): Promise<string> {
   const lessons = (await env.DB.prepare(`SELECT topic, title_km, title_en FROM care_lessons WHERE status = 'published' ORDER BY published_at DESC LIMIT 25`)
     .all<{ topic: string; title_km: string; title_en: string | null }>()).results;
   return [
-    'Tabs: Home (monthly market ranking per country) · Paint (colour mixer with recipes, painting lessons) · Check (photo of the bag → AI recognises brand/model and compares the details with reference photos) · History · AI assistant.',
+    'Pages: Aran market (lessons about the Rong Kluea second-hand market + price board) · Tabs: Home (monthly market ranking per country) · Paint (colour mixer with recipes, painting lessons) · Check (photo of the bag → AI recognises brand/model and compares the details with reference photos) · History · AI assistant.',
     ...lessons.map((l) => `Lesson (${l.topic}): ${l.title_km}${l.title_en ? ` / ${l.title_en}` : ''}`),
   ].join('\n');
 }
@@ -3108,8 +3108,9 @@ app.get('/api/admin/skills', need(STAFF), async (c) => {
 app.post('/api/admin/skills', need(STAFF), async (c) => {
   const b = await parse(c, skillInput.extend({ aiDrafted: z.boolean().optional() }));
   const id = uid('sk_'); const me = c.get('user');
-  await c.env.DB.prepare(`INSERT INTO ai_skills (id, area, title, body, brand, keywords, ai_drafted, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, b.area, b.title, b.body, b.brand, b.keywords, b.aiDrafted ? 1 : 0, me.id, me.id).run();
+  // showing a lesson to users is an admin decision (like turning a skill on)
+  await c.env.DB.prepare(`INSERT INTO ai_skills (id, area, title, body, brand, keywords, topic, public, ai_drafted, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, b.area, b.title, b.body, b.brand, b.keywords, b.topic, b.public && ADMINS.includes(me.role) ? 1 : 0, b.aiDrafted ? 1 : 0, me.id, me.id).run();
   await audit(c.env, me.id, 'skill.create', 'ai_skills', id);
   return c.json({ id });
 });
@@ -3117,11 +3118,11 @@ app.put('/api/admin/skills/:id', need(STAFF), async (c) => {
   const b = await parse(c, skillInput.extend({ status: z.enum(['draft', 'active']) }));
   const me = c.get('user');
   // staff may write and edit; turning a skill on (or editing one that is on) is for admins
-  const cur = await c.env.DB.prepare('SELECT status FROM ai_skills WHERE id = ?').bind(c.req.param('id')).first<{ status: string }>();
+  const cur = await c.env.DB.prepare('SELECT status, public FROM ai_skills WHERE id = ?').bind(c.req.param('id')).first<{ status: string; public: number }>();
   if (!cur) return c.json({ error: 'not_found' }, 404);
-  if ((b.status === 'active' || cur.status === 'active') && !ADMINS.includes(me.role)) return c.json({ error: 'forbidden' }, 403);
-  await c.env.DB.prepare(`UPDATE ai_skills SET area = ?, title = ?, body = ?, brand = ?, keywords = ?, status = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
-    .bind(b.area, b.title, b.body, b.brand, b.keywords, b.status, me.id, c.req.param('id')).run();
+  if ((b.status === 'active' || cur.status === 'active' || b.public || cur.public) && !ADMINS.includes(me.role)) return c.json({ error: 'forbidden' }, 403);
+  await c.env.DB.prepare(`UPDATE ai_skills SET area = ?, title = ?, body = ?, brand = ?, keywords = ?, topic = ?, public = ?, status = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.area, b.title, b.body, b.brand, b.keywords, b.topic, b.public ? 1 : 0, b.status, me.id, c.req.param('id')).run();
   await audit(c.env, me.id, b.status === 'active' ? 'skill.activate' : 'skill.update', 'ai_skills', c.req.param('id'));
   return c.json({ ok: true });
 });
@@ -3208,7 +3209,7 @@ async function leadSummary(env: AppEnv['Bindings']) {
     (SELECT finished_at IS NULL FROM lead_runs r2 WHERE r2.country = r.country ORDER BY started_at DESC LIMIT 1) AS running
     FROM lead_runs r GROUP BY country`).all<{ country: string; at: string; added: number; error: string | null; running: number }>()).results;
   return { counts, runs, auto: (await settingStr(env, 'leads_auto')) !== '0', webSearch: aiProvider(env) === 'anthropic', everyDays: LEAD_EVERY_DAYS,
-    offer: (await settingStr(env, 'lead_offer')) ?? '', shopName: (await settingStr(env, 'shop_name')) ?? '', lineUrl: lineFriendLinks(await settingStr(env, 'line_basic_id'))?.url ?? null };
+    offer: (await settingStr(env, 'lead_offer')) ?? '', shopName: (await settingStr(env, 'shop_name')) ?? '' };
 }
 
 /** Remember the site address (for links in notifications sent by the cron, which has no request). */
@@ -3270,173 +3271,47 @@ app.post('/api/admin/leads/:id/message', need(STAFF), async (c) => {
   const l = await c.env.DB.prepare('SELECT country, handle, name, sells, kind FROM leads WHERE id = ?').bind(c.req.param('id')).first<{ country: 'TH' | 'MY' | 'ID'; handle: string; name: string | null; sells: string | null; kind: string }>();
   if (!l) return c.json({ error: 'not_found' }, 404);
   try {
-    const r = await asFeature('lead_message', async () => draftOutreach(c.env, { ...l, offer: (await settingStr(c.env, 'lead_offer')) ?? '', shopName: (await settingStr(c.env, 'shop_name')) ?? '',
-      lineUrl: lineFriendLinks(await settingStr(c.env, 'line_basic_id'))?.url ?? null, lang: reqLang(c) }));
+    const r = await asFeature('lead_message', async () => draftOutreach(c.env, { ...l, offer: (await settingStr(c.env, 'lead_offer')) ?? '', shopName: (await settingStr(c.env, 'shop_name')) ?? '', lang: reqLang(c) }));
     return c.json(r);
   } catch (e) { console.error('lead message failed:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
 });
 
-// ───────────────────────── Anajak Secondhand: LINE Official Account (Messaging API) ─────────────────────────
-// Customers who add the shop's LINE get answers from the AI (shop knowledge = active AI skills). When they want to order,
-// pay, bargain or send photos, the AI hands over to staff (needs_staff) and staff are told (phone + linked LINE).
-// Staff answer in the LINE OA Manager app; they can pause the AI for one customer. Old messages are deleted after 30 days.
-const LINE_PHOTO_REPLY = 'ได้รับแล้วค่ะ 🙏 ทีมงานจะตอบกลับโดยเร็ว\nReceived — our team will reply soon.';
-type LineContact = { line_user_id: string; display_name: string | null; role: 'customer' | 'staff'; needs_staff: number; ai_paused_until: string | null };
+// ───────────────────────── Anajak Secondhand: Aran (Rong Kluea) market — lessons and price board ─────────────────────────
+// Lessons = active AI skills an admin chose to show (public = 1), grouped by topic. Prices = what staff saw at the
+// market (or read in a source) with the date. Both teach users and feed the AI; nothing here is invented.
+type AranPrice = { id: string; category: 'bale' | 'bag' | 'service'; item: string; grade: string | null; price_min: number | null; price_max: number | null; currency: string; unit: string; observed_on: string; source: string; note: string | null };
+const aranPrices = async (env: AppEnv['Bindings'], limit: number, sinceDays?: number) => (await env.DB.prepare(
+  `SELECT id, category, item, grade, price_min, price_max, currency, unit, observed_on, source, note FROM aran_prices
+   ${sinceDays ? `WHERE observed_on >= date('now', '-${Math.round(sinceDays)} days')` : ''} ORDER BY observed_on DESC, created_at DESC LIMIT ?`).bind(limit).all<AranPrice>()).results;
 
-async function lineContact(env: AppEnv['Bindings'], userId: string): Promise<LineContact> {
-  const get = () => env.DB.prepare('SELECT line_user_id, display_name, role, needs_staff, ai_paused_until FROM line_contacts WHERE line_user_id = ?').bind(userId).first<LineContact>();
-  const found = await get();
-  if (found) return found;
-  const p = await lineProfile(env, userId);
-  await env.DB.prepare('INSERT OR IGNORE INTO line_contacts (line_user_id, display_name) VALUES (?, ?)').bind(userId, p.displayName?.slice(0, 120) ?? null).run();
-  return (await get())!;
-}
-async function lineLog(env: AppEnv['Bindings'], userId: string, role: 'user' | 'assistant', content: string) {
-  await env.DB.batch([
-    env.DB.prepare('INSERT INTO line_messages (id, line_user_id, role, content) VALUES (?, ?, ?, ?)').bind(uid('lm_'), userId, role, content.slice(0, 5000)),
-    env.DB.prepare(`UPDATE line_contacts SET messages = messages + 1, last_message_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE line_user_id = ?`).bind(userId),
-  ]);
-}
-/** Flag a customer for staff, and tell staff once (not again until the flag is cleared). */
-async function lineNeedsStaff(env: AppEnv['Bindings'], ct: LineContact, why: string, origin: string) {
-  if (ct.role === 'staff') return;
-  const r = await env.DB.prepare('UPDATE line_contacts SET needs_staff = 1 WHERE line_user_id = ? AND needs_staff = 0').bind(ct.line_user_id).run();
-  if (r.meta.changes) await notifyStaff(env, { title: `💬 LINE · ${ct.display_name ?? 'Customer'}`, body: why.slice(0, 200), url: '/admin?tab=line', tag: `line-${ct.line_user_id}` }, origin).catch(() => 0);
+/** The Aran price board as plain text for the AI (last 120 days). */
+async function aranContext(env: AppEnv['Bindings']): Promise<string> {
+  const rows = await aranPrices(env, 40, 120);
+  return rows.map((r) => `${r.observed_on} · ${r.category} · ${r.item}${r.grade ? ` (grade ${r.grade})` : ''}: ${r.price_min ?? '?'}–${r.price_max ?? '?'} ${r.currency}/${r.unit}${r.note ? ` — ${r.note}` : ''} [source: ${r.source}]`).join('\n');
 }
 
-async function handleLineEvent(env: AppEnv['Bindings'], ev: any, origin: string) {
-  const userId = ev?.source?.type === 'user' ? String(ev.source.userId ?? '') : '';
-  if (!/^U[0-9a-f]{32}$/i.test(userId) || ev.mode === 'standby') return;
-  if (ev.type === 'unfollow') { await env.DB.prepare('UPDATE line_contacts SET followed = 0 WHERE line_user_id = ?').bind(userId).run(); return; }
-  const ct = await lineContact(env, userId);
-  if (ev.type === 'follow') {
-    await env.DB.prepare('UPDATE line_contacts SET followed = 1 WHERE line_user_id = ?').bind(userId).run();
-    const welcome = await settingStr(env, 'line_welcome');
-    if (welcome && ev.replyToken) await lineReply(env, ev.replyToken, welcome);
-    return;
-  }
-  if (ev.type !== 'message' || !ev.replyToken) return;
-  const aiOn = (await settingStr(env, 'line_ai_reply')) !== '0' && !(ct.ai_paused_until && Date.parse(ct.ai_paused_until) > Date.now());
-
-  if (ev.message?.type !== 'text') {
-    if (ev.message?.type === 'sticker' || ct.role === 'staff') return;
-    await lineLog(env, userId, 'user', `[${String(ev.message?.type ?? 'message').slice(0, 20)}]`);
-    await lineNeedsStaff(env, ct, `sent a ${ev.message?.type ?? 'message'}`, origin);
-    if (aiOn) { await lineReply(env, ev.replyToken, LINE_PHOTO_REPLY); await lineLog(env, userId, 'assistant', LINE_PHOTO_REPLY); }
-    return;
-  }
-  const text = String(ev.message.text ?? '').slice(0, 2000);
-  // a staff member linking their LINE for shop notifications
-  const lc = JSON.parse((await settingStr(env, 'line_link_code')) ?? 'null') as { code: string; by: string; exp: string } | null;
-  if (lc && Date.parse(lc.exp) > Date.now() && linkCodeMatches(text, lc.code)) {
-    await env.DB.batch([
-      env.DB.prepare(`UPDATE line_contacts SET role = 'staff', staff_user_id = ?, needs_staff = 0 WHERE line_user_id = ?`).bind(lc.by, userId),
-      env.DB.prepare(`DELETE FROM settings WHERE key = 'line_link_code'`),
-    ]);
-    await lineReply(env, ev.replyToken, '✅ ភ្ជាប់រួចរាល់ — អ្នកនឹងទទួលដំណឹងពីហាងនៅទីនេះ។\nLinked — shop notifications will come here.');
-    return;
-  }
-  await lineLog(env, userId, 'user', text);
-  if (!aiOn) { await lineNeedsStaff(env, ct, text, origin); return; }
-  const limit = await getSettingNumber(env, 'line_daily_limit', 20);
-  const today = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM line_messages WHERE line_user_id = ? AND role = 'assistant' AND created_at >= ?`).bind(userId, `${chatDay()}T00:00:00`).first<{ n: number }>())?.n ?? 0;
-  if ((ct.role !== 'staff' && today >= limit) || !aiConfigured(env)) { await lineNeedsStaff(env, ct, text, origin); return; }
-
-  const history = (await env.DB.prepare('SELECT role, content FROM line_messages WHERE line_user_id = ? ORDER BY created_at DESC LIMIT 12').bind(userId).all<{ role: 'user' | 'assistant'; content: string }>()).results.reverse();
-  while (history.length && history[0].role !== 'user') history.shift();
-  const recent = history.filter((t) => t.role === 'user').slice(-3).map((t) => t.content).join('\n');
-  let reply: string;
-  try {
-    reply = await asFeature('line_bot', async () => lineShopAssistant(env, history, {
-      shopName: (await settingStr(env, 'shop_name')) ?? '', skills: skillText(await pickSkills(env, 'chat', { text: recent }, 10000)), market: await marketContext(env),
-    }));
-  } catch (e) { console.error('line ai:', (e as Error).message); await lineNeedsStaff(env, ct, text, origin); return; }
-  const { text: answer, handoff } = splitHandoff(reply);
-  if (answer) { await lineReply(env, ev.replyToken, answer); await lineLog(env, userId, 'assistant', answer); }
-  if (handoff) await lineNeedsStaff(env, ct, text, origin);
-}
-
-/** LINE → us. Authenticated by the X-Line-Signature of the raw body; events are handled after the 200 answer. */
-app.post('/api/line/webhook', async (c) => {
-  if (!lineBotConfigured(c.env)) return c.json({ error: 'not_configured' }, 404);
-  const raw = await c.req.text();
-  if (!(await lineSignatureOk(c.env.LINE_MESSAGING_SECRET!, raw, c.req.header('x-line-signature')))) return c.json({ error: 'forbidden' }, 403);
-  let events: any[] = [];
-  try { events = (JSON.parse(raw)?.events ?? []).slice(0, 20); } catch { events = []; }
-  const origin = new URL(c.req.url).origin;
-  for (const ev of events) c.executionCtx.waitUntil(handleLineEvent(c.env, ev, origin).catch((e) => console.error('line event:', (e as Error).message)));
-  return c.json({ ok: true });
+app.get('/api/aran', async (c) => {
+  const lessons = (await c.env.DB.prepare(`SELECT id, topic, title, body, brand, updated_at FROM ai_skills WHERE public = 1 AND status = 'active' ORDER BY topic, updated_at DESC`).all()).results;
+  return c.json({ lessons, prices: await aranPrices(c.env, 120), topics: ARAN_TOPICS });
 });
-
-app.get('/api/admin/line', need(STAFF), async (c) => {
-  const configured = lineBotConfigured(c.env);
-  let bot: { basicId?: string; displayName?: string; pictureUrl?: string } | null = null, webhook: { endpoint?: string; active?: boolean } | null = null, quota = null as null | { limit: number | null; used: number | null }, error: string | null = null;
-  if (configured) {
-    try {
-      [bot, webhook, quota] = await Promise.all([lineBotInfo(c.env), lineWebhookInfo(c.env).catch(() => null), lineQuota(c.env)]);
-      if (bot?.basicId && bot.basicId !== (await settingStr(c.env, 'line_basic_id'))) await putSetting(c.env, 'line_basic_id', bot.basicId, c.get('user').id);
-    } catch (e) { error = String((e as Error).message).slice(0, 200); }
-  }
-  const staff = (await c.env.DB.prepare(`SELECT l.line_user_id, l.display_name, u.name AS user_name FROM line_contacts l LEFT JOIN users u ON u.id = l.staff_user_id WHERE l.role = 'staff' ORDER BY l.first_seen_at`).all()).results;
-  const counts = await c.env.DB.prepare(`SELECT COUNT(*) AS total, SUM(needs_staff) AS waiting, SUM(followed) AS following FROM line_contacts WHERE role = 'customer'`).first<{ total: number; waiting: number | null; following: number | null }>();
-  return c.json({
-    configured, error, bot: bot ? { name: bot.displayName ?? null, basicId: bot.basicId ?? null, picture: bot.pictureUrl ?? null } : null, links: lineFriendLinks(bot?.basicId),
-    webhook: { url: `${new URL(c.req.url).origin}/api/line/webhook`, current: webhook?.endpoint ?? null, active: !!webhook?.active }, quota,
-    settings: { aiReply: (await settingStr(c.env, 'line_ai_reply')) !== '0', notify: (await settingStr(c.env, 'line_notify')) !== '0', shopName: (await settingStr(c.env, 'shop_name')) ?? '',
-      welcome: (await settingStr(c.env, 'line_welcome')) ?? '', dailyLimit: await getSettingNumber(c.env, 'line_daily_limit', 20) },
-    staff, counts: { total: counts?.total ?? 0, waiting: counts?.waiting ?? 0, following: counts?.following ?? 0 },
-  });
+app.get('/api/admin/aran/prices', need(STAFF), async (c) => c.json({ prices: await aranPrices(c.env, 300) }));
+app.post('/api/admin/aran/prices', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({
+    category: z.enum(['bale', 'bag', 'service']), item: z.string().trim().min(2).max(120), grade: z.string().trim().max(20).nullish().transform((v) => v || null),
+    priceMin: z.number().int().min(0).max(10_000_000).nullable(), priceMax: z.number().int().min(0).max(10_000_000).nullable(),
+    currency: z.enum(['THB', 'USD', 'KHR']), unit: z.enum(['bale', 'kg', 'piece', 'job']), observedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    source: z.string().trim().min(2).max(300), note: z.string().trim().max(300).nullish().transform((v) => v || null),
+  }).refine((x) => x.priceMin !== null || x.priceMax !== null).refine((x) => x.priceMin === null || x.priceMax === null || x.priceMax >= x.priceMin)
+    .refine((x) => x.observedOn <= new Date().toISOString().slice(0, 10)));
+  const id = uid('ap_');
+  await c.env.DB.prepare(`INSERT INTO aran_prices (id, category, item, grade, price_min, price_max, currency, unit, observed_on, source, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, b.category, b.item, b.grade, b.priceMin, b.priceMax, b.currency, b.unit, b.observedOn, b.source, b.note, c.get('user').id).run();
+  await audit(c.env, c.get('user').id, 'aran.price', 'aran_prices', id);
+  return c.json({ id });
 });
-app.post('/api/admin/line/webhook', need(ADMINS), async (c) => {
-  if (!lineBotConfigured(c.env)) return c.json({ error: 'line_not_configured' }, 400);
-  const url = `${new URL(c.req.url).origin}/api/line/webhook`;
-  try {
-    await lineSetWebhook(c.env, url);
-    const test = await lineTestWebhook(c.env);
-    await audit(c.env, c.get('user').id, 'line.webhook_set', 'settings', null, { url });
-    return c.json({ ok: !!test.success, url, test });
-  } catch (e) { return c.json({ error: 'line_failed', detail: String((e as Error).message).slice(0, 200) }, 502); }
-});
-app.put('/api/admin/line/settings', need(ADMINS), async (c) => {
-  const b = await parse(c, z.object({ aiReply: z.boolean(), notify: z.boolean(), shopName: z.string().trim().max(80), welcome: z.string().trim().max(1000), dailyLimit: z.number().int().min(1).max(200) }));
-  const by = c.get('user').id;
-  await putSetting(c.env, 'line_ai_reply', b.aiReply ? '1' : '0', by);
-  await putSetting(c.env, 'line_notify', b.notify ? '1' : '0', by);
-  await putSetting(c.env, 'shop_name', b.shopName, by);
-  if (b.welcome) await putSetting(c.env, 'line_welcome', b.welcome, by); else await c.env.DB.prepare(`DELETE FROM settings WHERE key = 'line_welcome'`).run();
-  await putSetting(c.env, 'line_daily_limit', String(b.dailyLimit), by);
-  await audit(c.env, by, 'line.settings', 'settings', null);
-  return c.json({ ok: true });
-});
-/** A one-time code (10 minutes) a staff member sends to the shop's LINE to get notifications there. */
-app.post('/api/admin/line/link-code', need(STAFF), async (c) => {
-  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 900000 + 100000);
-  const exp = new Date(Date.now() + 10 * 60_000).toISOString();
-  await putSetting(c.env, 'line_link_code', JSON.stringify({ code, by: c.get('user').id, exp }), c.get('user').id);
-  return c.json({ code: `LINK ${code}`, exp });
-});
-app.delete('/api/admin/line/staff/:id', need(STAFF), async (c) => {
-  const me = c.get('user');
-  // staff may unlink their own LINE; admins may unlink anyone's
-  const r = await c.env.DB.prepare(`UPDATE line_contacts SET role = 'customer', staff_user_id = NULL WHERE line_user_id = ? AND role = 'staff' AND (staff_user_id = ? OR ?)`)
-    .bind(c.req.param('id'), me.id, ADMINS.includes(me.role) ? 1 : 0).run();
-  return r.meta.changes ? c.json({ ok: true }) : c.json({ error: 'not_found' }, 404);
-});
-app.get('/api/admin/line/contacts', need(STAFF), async (c) => {
-  const rows = (await c.env.DB.prepare(`SELECT l.line_user_id, l.display_name, l.followed, l.needs_staff, l.ai_paused_until, l.messages, l.last_message_at,
-      (SELECT content FROM line_messages m WHERE m.line_user_id = l.line_user_id ORDER BY created_at DESC LIMIT 1) AS last_text
-    FROM line_contacts l WHERE l.role = 'customer' AND l.last_message_at IS NOT NULL ORDER BY l.needs_staff DESC, l.last_message_at DESC LIMIT 100`).all()).results;
-  return c.json({ contacts: rows });
-});
-app.get('/api/admin/line/contacts/:id/messages', need(STAFF), async (c) => {
-  const rows = (await c.env.DB.prepare('SELECT role, content, created_at FROM line_messages WHERE line_user_id = ? ORDER BY created_at DESC LIMIT 40').bind(c.req.param('id')).all()).results.reverse();
-  return c.json({ messages: rows });
-});
-app.put('/api/admin/line/contacts/:id', need(STAFF), async (c) => {
-  const b = await parse(c, z.object({ pauseHours: z.number().int().min(0).max(720).optional(), done: z.boolean().optional() }));
-  const id = c.req.param('id');
-  if (b.pauseHours !== undefined) await c.env.DB.prepare('UPDATE line_contacts SET ai_paused_until = ? WHERE line_user_id = ?').bind(b.pauseHours ? new Date(Date.now() + b.pauseHours * 3_600_000).toISOString() : null, id).run();
-  if (b.done) await c.env.DB.prepare('UPDATE line_contacts SET needs_staff = 0 WHERE line_user_id = ?').bind(id).run();
+app.delete('/api/admin/aran/prices/:id', need(ADMINS), async (c) => {
+  await c.env.DB.prepare('DELETE FROM aran_prices WHERE id = ?').bind(c.req.param('id')).run();
+  await audit(c.env, c.get('user').id, 'aran.price_delete', 'aran_prices', c.req.param('id'));
   return c.json({ ok: true });
 });
 
@@ -3454,6 +3329,8 @@ async function marketContext(env: AppEnv['Bindings']): Promise<string> {
   }
   const ups = (await env.DB.prepare('SELECT country, title, body, source, created_at FROM market_updates ORDER BY created_at DESC LIMIT 5').all<Record<string, string | null>>()).results;
   for (const u of ups) out.push(`Update ${u.created_at?.slice(0, 10)} ${u.country ?? ''}: ${u.title}${u.body ? ` — ${String(u.body).slice(0, 300)}` : ''} [source: ${u.source}]`);
+  const aran = await aranContext(env);
+  if (aran) out.push(`Aran (Rong Kluea) market prices seen by staff:\n${aran}`);
   return out.join('\n');
 }
 
@@ -3526,6 +3403,5 @@ export default {
     ctx.waitUntil(asFeature('translate', () => translateBacklog(env)));
     ctx.waitUntil(asFeature('precheck', () => aiReviewBacklog(env)));
     ctx.waitUntil(leadsBacklog(env).catch((e) => console.error('lead search:', (e as Error).message)));
-    ctx.waitUntil(env.DB.prepare(`DELETE FROM line_messages WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')`).run().catch(() => null));
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>;

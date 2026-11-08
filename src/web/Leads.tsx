@@ -9,7 +9,7 @@ import { ADMIN_ROLES, STAFF_ROLES } from './studio.ts';
 type Country = 'TH' | 'MY' | 'ID';
 type Status = 'new' | 'saved' | 'contacted' | 'customer' | 'not_fit';
 export interface Lead { id: string; country: Country; handle: string; name: string | null; url: string; kind: 'live_seller' | 'reseller' | 'shop'; sells: string | null; why: string | null; fit?: number | null; topic?: string | null; source_url?: string | null; status: Status; note?: string | null; found_by?: string; created_at: string }
-interface Summary { counts: { country: Country; status: Status; n: number }[]; runs: { country: Country; at: string; added: number | null; error: string | null; running: number }[]; auto: boolean; webSearch: boolean; everyDays: number; offer: string; shopName: string; lineUrl: string | null }
+interface Summary { counts: { country: Country; status: Status; n: number }[]; runs: { country: Country; at: string; added: number | null; error: string | null; running: number }[]; auto: boolean; webSearch: boolean; everyDays: number; offer: string; shopName: string }
 const CC: Country[] = ['TH', 'MY', 'ID'];
 const FLAG: Record<Country, string> = { TH: '🇹🇭', MY: '🇲🇾', ID: '🇮🇩' };
 const STATUSES: Status[] = ['new', 'saved', 'contacted', 'customer', 'not_fit'];
@@ -194,9 +194,8 @@ export default function LeadsAdmin({ initialCountry }: { initialCountry?: string
           <summary className="cursor-pointer text-sm font-semibold">🏷️ {t('ld.offerTitle')}</summary>
           <div className="mt-2 space-y-2">
             <p className="text-xs text-muted">{t('ld.offerHelp')}</p>
-            <Field label={t('ln.shopName')}><input className="input" maxLength={80} disabled={!admin} value={offer.shopName} onChange={(e) => setOffer({ ...offer, shopName: e.target.value })} /></Field>
+            <Field label={t('ld.shopName')}><input className="input" maxLength={80} disabled={!admin} value={offer.shopName} onChange={(e) => setOffer({ ...offer, shopName: e.target.value })} /></Field>
             <textarea className="input min-h-[96px]" maxLength={1000} disabled={!admin} placeholder={t('ld.offerPh')} value={offer.offer} onChange={(e) => setOffer({ ...offer, offer: e.target.value })} />
-            <p className="text-xs text-muted">{data?.lineUrl ? `LINE: ${data.lineUrl}` : t('ld.noLine')}</p>
             {admin && <button type="button" className="btn-primary" onClick={saveOffer}>{t('save')}</button>}
           </div>
         </details>

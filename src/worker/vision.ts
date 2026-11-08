@@ -530,31 +530,6 @@ async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 
   }
 }
 
-/**
- * The shop's LINE Official Account assistant: answers the shop's customers (mostly Thai wholesale buyers and online
- * resellers) from the shop knowledge staff wrote (AI skills) and the market data. It never invents stock, prices or
- * terms, never judges whether a bag is genuine, and ends with [STAFF] when a person must take over.
- */
-export async function lineShopAssistant(env: Env, turns: ChatTurn[], ctx: { shopName: string; skills: string; market: string }): Promise<string> {
-  const system = [
-    `You are the LINE assistant of ${ctx.shopName || 'a second-hand designer bag wholesale shop'} at the Cambodia–Thailand border market (Aran / Rong Kluea). Customers are mostly wholesale buyers and online resellers from Thailand, Malaysia and Indonesia.`,
-    'Reply in the language the customer writes in (Thai by default). Be warm, short and practical, like a shop assistant on LINE: 1–4 short sentences, no headings, at most a few bullet points.',
-    'Hard rules:',
-    '1. Use ONLY the shop knowledge below for stock, prices, minimum order, payment, shipping and opening hours. Never invent them. If the answer is not there, say a staff member will reply soon.',
-    '2. Never state, imply or estimate whether a bag, photo or listing is authentic, genuine, real, fake, counterfeit or a replica. The shop sells second-hand bags as they are; offer that staff can show more photos.',
-    '3. Never help make, label or sell counterfeit goods, or alter serial numbers, date codes or logos.',
-    '4. Never ask for passwords, card numbers or one-time codes.',
-    'When a person must take over — the customer wants to order, reserve, pay or has paid, bargains, asks for photos / a video call / a visit, asks about specific stock or prices not in the shop knowledge, complains, or asks for a human — answer politely that staff will reply soon and end your message with the exact marker [STAFF].',
-    '',
-    'Shop knowledge (written by the shop staff):',
-    ctx.skills || '(none yet)',
-    '',
-    'Market data (for general questions about what sells; not the shop\'s own prices):',
-    ctx.market || '(no data yet)',
-  ].join('\n');
-  return runChat(env, system, turns, 2000);
-}
-
 export interface SkillDraft { title: string; body: string; keywords: string; brand: string | null }
 
 /**
@@ -835,12 +810,12 @@ const LEAD_LANG: Record<'TH' | 'MY' | 'ID', string> = { TH: 'Thai', MY: 'Malay (
  * themselves (the app never sends it). Built only from the shop's own offer and what the account sells; no invented
  * prices or claims, no authenticity claims, no pressure.
  */
-export async function draftOutreach(env: Env, x: { country: 'TH' | 'MY' | 'ID'; handle: string; name: string | null; sells: string | null; kind: string; offer: string; shopName: string; lineUrl: string | null; lang: OutLang }): Promise<{ message: string; meaning: string }> {
+export async function draftOutreach(env: Env, x: { country: 'TH' | 'MY' | 'ID'; handle: string; name: string | null; sells: string | null; kind: string; offer: string; shopName: string; lang: OutLang }): Promise<{ message: string; meaning: string }> {
   const text = await callVision(env,
     'You write a short, friendly first direct message from a second-hand designer bag wholesaler at the Cambodia–Thailand border market to a reseller on TikTok. ' +
-    `Write "message" in ${LEAD_LANG[x.country]} as a native seller would on TikTok / LINE: greet them, mention what they sell in one phrase, say what the shop offers, invite them to see stock on LINE. 3–5 short lines, at most 2 emoji. ` +
+    `Write "message" in ${LEAD_LANG[x.country]} as a native seller would on TikTok / LINE: greet them, mention what they sell in one phrase, say what the shop offers, invite them to reply to see stock. 3–5 short lines, at most 2 emoji. ` +
     'Use ONLY facts from the shop\'s offer: never invent prices, discounts, stock, guarantees or claims, and never say or imply that the bags are authentic, genuine or original. No pressure, no fake urgency. ' +
-    (x.lineUrl ? `End with the LINE link exactly: ${x.lineUrl} ` : 'Ask them to reply if they are interested. ') +
+    'Ask them to reply if they are interested. ' +
     `Then write "meaning": the same message translated into ${LANG_NAME[x.lang]} so the shop owner understands it. ` +
     'Reply with JSON only: {"message":"…","meaning":"…"}',
     [], `Shop: ${x.shopName || '(no name)'}\nShop offer: ${x.offer || '(not written yet)'}\nTikTok account: @${x.handle}${x.name ? ` (${x.name})` : ''} — ${x.kind}${x.sells ? ` — sells: ${x.sells}` : ''}`, 1500, 'low');

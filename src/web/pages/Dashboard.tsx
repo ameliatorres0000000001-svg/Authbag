@@ -6,6 +6,7 @@ import { useI18n } from '../i18n.tsx';
 import { FolderCard, LooseFolderCard, type Folder } from '../FeedFolders.tsx';
 import Timeline from '../Timeline.tsx';
 import { LeadsHome } from '../Leads.tsx';
+import { PriceTable, type AranPrice } from './Aran.tsx';
 
 export interface StudioModel {
   id: string; name: string; brand: string; brand_id: string;
@@ -36,10 +37,12 @@ export default function Dashboard() {
   const { t, locale } = useI18n();
   const [market, setMarket] = useState<Overview | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [aran, setAran] = useState<{ lessons: unknown[]; prices: AranPrice[] } | null>(null);
   useEffect(() => {
     let on = true;
     api.get<Overview>('/api/market/overview?top=5').then((r) => on && setMarket(r)).catch(() => on && setMarket({ countries: [], updates: [] }));
     api.get<Stats>('/api/stats/public').then((r) => on && setStats(r)).catch(() => {});
+    api.get<{ lessons: unknown[]; prices: AranPrice[] }>('/api/aran').then((r) => on && setAran(r)).catch(() => on && setAran({ lessons: [], prices: [] }));
     return () => { on = false; };
   }, []);
   const focus: [string, string, string, string, number | undefined][] = [
@@ -94,6 +97,22 @@ export default function Dashboard() {
           ))}
         </ul>
         <p className="mt-3 text-[11px] text-muted">{t('market.info')}</p>
+      </section>
+
+      {/* the Aran (Rong Kluea) market: lessons + the newest prices seen there */}
+      <section aria-labelledby="aran-h">
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <h2 id="aran-h" className="text-lg leading-tight">🏪 {t('aran.title')}</h2>
+          <Link to="/aran" className="text-xs font-semibold text-gold">{t('market.seeAll')} →</Link>
+        </div>
+        <Link to="/aran" className="block rounded-2xl border border-hairline bg-surface-card px-4 transition hover:shadow-md">
+          <div className="flex items-center gap-3 border-b border-hairline py-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-light text-lg" aria-hidden>📚</span>
+            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{t('aran.learn')}</span><span className="block text-xs text-muted">{t('aran.homeSub')}</span></span>
+            <span className="font-serif text-2xl">{aran?.lessons.length ?? '–'}</span>
+          </div>
+          {aran && aran.prices.length > 0 ? <PriceTable rows={aran.prices.slice(0, 3)} /> : <p className="py-3 text-sm text-muted">🏷️ {t('aran.board')}: {t('noData')}</p>}
+        </Link>
       </section>
 
       {/* staff: customers found on TikTok, next to the market data */}
