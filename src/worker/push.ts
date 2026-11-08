@@ -1,5 +1,6 @@
 import type { Env } from './env.ts';
 import { encryptPush, makeVapidKeys, vapidHeader } from '../shared/webpush.ts';
+import { lineBotConfigured, linePush } from './lineBot.ts';
 
 // Phone notifications for experts. The VAPID key pair is created once and kept in D1 (private key never sent out).
 
@@ -13,8 +14,27 @@ export async function vapidKeys(env: Env): Promise<{ publicKey: string; privateJ
 
 export interface PushNote { title: string; body: string; url: string; tag?: string }
 
-/** Send one notification to every phone of all active experts (staff). Dead subscriptions are removed. */
+/** The same note to staff who linked their LINE to the shop's LINE OA (when LINE notifications are on). */
+async function notifyLineStaff(env: Env, note: PushNote, origin: string): Promise<number> {
+  if (!lineBotConfigured(env)) return 0;
+  const on = await env.DB.prepare(`SELECT value FROM settings WHERE key = 'line_notify'`).first<{ value: string }>().catch(() => null);
+  if (on?.value === '0') return 0;
+  const to = (await env.DB.prepare(`SELECT l.line_user_id FROM line_contacts l JOIN users u ON u.id = l.staff_user_id
+    WHERE l.role = 'staff' AND l.followed = 1 AND u.active = 1`).all<{ line_user_id: string }>().catch(() => ({ results: [] as { line_user_id: string }[] }))).results;
+  let sent = 0;
+  for (const t of to) {
+    try { await linePush(env, t.line_user_id, `${note.title}\n${note.body}\n${origin}${note.url}`); sent++; } catch (e) { console.error('line push', (e as Error).message); }
+  }
+  return sent;
+}
+
+/** Send one notification to every phone of all active experts (staff), and to their linked LINE. Dead subscriptions are removed. */
 export async function notifyStaff(env: Env, note: PushNote, origin: string): Promise<number> {
+  const viaLine = await notifyLineStaff(env, note, origin);
+  return viaLine + (await notifyPhones(env, note, origin));
+}
+
+async function notifyPhones(env: Env, note: PushNote, origin: string): Promise<number> {
   const subs = (await env.DB.prepare(
     `SELECT s.id, s.endpoint, s.p256dh, s.auth FROM push_subscriptions s JOIN users u ON u.id = s.user_id
      WHERE u.active = 1 AND u.role IN ('owner','lead_authenticator','appraiser')`,

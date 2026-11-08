@@ -19,6 +19,9 @@ export interface Env {
   /** LINE Login channel (LINE Developers): channel ID and channel secret */
   LINE_CHANNEL_ID?: string;
   LINE_CHANNEL_SECRET?: string;
+  /** LINE Official Account (Messaging API channel): channel secret (webhook signatures) and channel access token */
+  LINE_MESSAGING_SECRET?: string;
+  LINE_MESSAGING_TOKEN?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;

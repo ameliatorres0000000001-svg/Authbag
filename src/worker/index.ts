@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, lineShopAssistant, draftOutreach, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -17,6 +17,8 @@ import { sniffAudio, synthesize, ttsConfigured, ttsHash } from './tts.ts';
 import { chooseSkills, type SkillRow, type SkillUse } from '../shared/skills.ts';
 import { asFeature } from './usage.ts';
 import { evidenceFor, handleFromInput, profileUrl } from '../shared/leads.ts';
+import { lineFriendLinks, lineSignatureOk, linkCodeMatches, splitHandoff } from '../shared/line.ts';
+import { lineBotConfigured, lineBotInfo, lineProfile, lineQuota, lineReply, lineSetWebhook, lineTestWebhook, lineWebhookInfo } from './lineBot.ts';
 import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
@@ -194,7 +196,7 @@ const PUBLIC_GET = [
 // everything below requires a session (or is a public read above)
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
-  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p.startsWith('/api/public/cert/')) return next();
+  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p === '/api/line/webhook' || p.startsWith('/api/public/cert/')) return next();
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
   if (!user) {
     // guests can browse the public teaching pages (read only); everything else needs an account
@@ -3155,25 +3157,27 @@ const LEAD_COUNTRIES = ['TH', 'MY', 'ID'] as const;
 const LEAD_STATUSES = ['new', 'saved', 'contacted', 'customer', 'not_fit'] as const;
 const LEAD_EVERY_DAYS = 7;
 
-async function runLeadSearch(env: AppEnv['Bindings'], country: typeof LEAD_COUNTRIES[number], trigger: 'auto' | 'manual', lang: OutLang = 'km'): Promise<{ found: number; added: number; error?: string }> {
+async function runLeadSearch(env: AppEnv['Bindings'], country: typeof LEAD_COUNTRIES[number], trigger: 'auto' | 'manual', lang: OutLang = 'km', topic: string | null = null, origin?: string): Promise<{ found: number; added: number; error?: string }> {
   const runId = uid('lr_');
-  await env.DB.prepare('INSERT INTO lead_runs (id, country, trigger) VALUES (?, ?, ?)').bind(runId, country, trigger).run();
+  await env.DB.prepare('INSERT INTO lead_runs (id, country, trigger, topic) VALUES (?, ?, ?, ?)').bind(runId, country, trigger, topic).run();
   try {
     const known = (await env.DB.prepare('SELECT handle FROM leads WHERE country = ? ORDER BY created_at DESC LIMIT 150').bind(country).all<{ handle: string }>()).results.map((r) => r.handle);
-    const r = await asFeature('lead_search', () => findTiktokSellers(env, { country, lang, known }));
+    const offer = await settingStr(env, 'lead_offer');
+    const r = await asFeature('lead_search', () => findTiktokSellers(env, { country, lang, known, topic, offer }));
     let added = 0, kept = 0;
     for (const x of r.rows) {
       const handle = handleFromInput(x.handle);
       const evidence = handle ? evidenceFor(handle, r.found.keys()) : null;
       if (!handle || !evidence) continue; // never keep an account the search did not show
       kept++;
-      const seen = await env.DB.prepare(`UPDATE leads SET last_seen_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE platform = 'tiktok' AND lower(handle) = ?`).bind(handle).run();
+      const seen = await env.DB.prepare(`UPDATE leads SET last_seen_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), fit = MAX(COALESCE(fit, 0), COALESCE(?, 0)) WHERE platform = 'tiktok' AND lower(handle) = ?`).bind(x.fit, handle).run();
       if (seen.meta.changes) continue;
-      const res = await env.DB.prepare(`INSERT OR IGNORE INTO leads (id, country, handle, name, url, kind, sells, why, source_url, source_title, found_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ai')`)
-        .bind(uid('ld_'), country, handle, x.name, profileUrl(handle), x.kind, x.sells || null, x.why || null, evidence, (r.found.get(evidence) ?? '').slice(0, 200) || null).run();
+      const res = await env.DB.prepare(`INSERT OR IGNORE INTO leads (id, country, handle, name, url, kind, sells, why, fit, topic, source_url, source_title, found_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ai')`)
+        .bind(uid('ld_'), country, handle, x.name, profileUrl(handle), x.kind, x.sells || null, x.why || null, x.fit, topic, evidence, (r.found.get(evidence) ?? '').slice(0, 200) || null).run();
       if (res.meta.changes) added++;
     }
     await env.DB.prepare(`UPDATE lead_runs SET finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), found = ?, added = ? WHERE id = ?`).bind(kept, added, runId).run();
+    if (added && origin) await notifyStaff(env, { title: `🎯 ${added} new TikTok sellers · ${country}`, body: topic ? `Search: ${topic}` : 'Weekly customer search', url: `/admin?tab=leads&country=${country}`, tag: `leads-${country}` }, origin).catch(() => 0);
     return { found: kept, added };
   } catch (e) {
     const error = String((e as Error).message).slice(0, 200);
@@ -3193,7 +3197,7 @@ async function leadsBacklog(env: AppEnv['Bindings']) {
     if (last < oldest) { oldest = last; pick = cc; }
   }
   if (!pick || (oldest && Date.now() - Date.parse(oldest) < LEAD_EVERY_DAYS * 86_400_000)) return;
-  const r = await runLeadSearch(env, pick, 'auto');
+  const r = await runLeadSearch(env, pick, 'auto', 'km', null, (await settingStr(env, 'site_origin')) ?? undefined);
   console.log(`lead search ${pick}: ${r.error ?? `${r.added} new of ${r.found}`}`);
 }
 
@@ -3203,11 +3207,18 @@ async function leadSummary(env: AppEnv['Bindings']) {
     (SELECT error FROM lead_runs r2 WHERE r2.country = r.country ORDER BY started_at DESC LIMIT 1) AS error,
     (SELECT finished_at IS NULL FROM lead_runs r2 WHERE r2.country = r.country ORDER BY started_at DESC LIMIT 1) AS running
     FROM lead_runs r GROUP BY country`).all<{ country: string; at: string; added: number; error: string | null; running: number }>()).results;
-  return { counts, runs, auto: (await settingStr(env, 'leads_auto')) !== '0', webSearch: aiProvider(env) === 'anthropic', everyDays: LEAD_EVERY_DAYS };
+  return { counts, runs, auto: (await settingStr(env, 'leads_auto')) !== '0', webSearch: aiProvider(env) === 'anthropic', everyDays: LEAD_EVERY_DAYS,
+    offer: (await settingStr(env, 'lead_offer')) ?? '', shopName: (await settingStr(env, 'shop_name')) ?? '', lineUrl: lineFriendLinks(await settingStr(env, 'line_basic_id'))?.url ?? null };
 }
 
+/** Remember the site address (for links in notifications sent by the cron, which has no request). */
+async function rememberOrigin(c: any) {
+  const origin = new URL(c.req.url).origin;
+  if (origin.startsWith('https://') && (await settingStr(c.env, 'site_origin')) !== origin) await putSetting(c.env, 'site_origin', origin, c.get('user').id);
+}
 app.get('/api/admin/leads/summary', need(STAFF), async (c) => {
-  const latest = (await c.env.DB.prepare(`SELECT id, country, handle, name, url, kind, sells, why, status, created_at FROM leads WHERE status IN ('new','saved') ORDER BY created_at DESC LIMIT 6`).all()).results;
+  await rememberOrigin(c);
+  const latest = (await c.env.DB.prepare(`SELECT id, country, handle, name, url, kind, sells, why, fit, topic, status, created_at FROM leads WHERE status IN ('new','saved') ORDER BY substr(created_at, 1, 10) DESC, COALESCE(fit, 0) DESC LIMIT 6`).all()).results;
   return c.json({ ...(await leadSummary(c.env)), latest });
 });
 app.get('/api/admin/leads', need(STAFF), async (c) => {
@@ -3215,7 +3226,7 @@ app.get('/api/admin/leads', need(STAFF), async (c) => {
   const where: string[] = [], binds: string[] = [];
   if (country && (LEAD_COUNTRIES as readonly string[]).includes(country)) { where.push('country = ?'); binds.push(country); }
   if (status && (LEAD_STATUSES as readonly string[]).includes(status)) { where.push('status = ?'); binds.push(status); }
-  const rows = (await c.env.DB.prepare(`SELECT * FROM leads ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT 300`).bind(...binds).all()).results;
+  const rows = (await c.env.DB.prepare(`SELECT * FROM leads ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY substr(created_at, 1, 10) DESC, COALESCE(fit, 0) DESC, created_at DESC LIMIT 300`).bind(...binds).all()).results;
   return c.json({ leads: rows, ...(await leadSummary(c.env)) });
 });
 app.post('/api/admin/leads', need(STAFF), async (c) => {
@@ -3238,16 +3249,194 @@ app.delete('/api/admin/leads/:id', need(ADMINS), async (c) => {
   return c.json({ ok: true });
 });
 app.post('/api/admin/leads/search', need(ADMINS), async (c) => {
-  const b = await parse(c, z.object({ country: z.enum(LEAD_COUNTRIES) }));
+  const b = await parse(c, z.object({ country: z.enum(LEAD_COUNTRIES), topic: z.string().trim().max(120).nullish().transform((v) => v || null) }));
   if (aiProvider(c.env) !== 'anthropic') return c.json({ error: 'ai_web_not_configured' }, 501);
   if (await c.env.DB.prepare(`SELECT 1 FROM lead_runs WHERE finished_at IS NULL AND started_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes')`).first()) return c.json({ error: 'search_running' }, 409);
-  const r = await runLeadSearch(c.env, b.country, 'manual', reqLang(c));
+  const r = await runLeadSearch(c.env, b.country, 'manual', reqLang(c), b.topic, new URL(c.req.url).origin);
   await audit(c.env, c.get('user').id, 'leads.search', 'leads', b.country);
   return r.error ? c.json({ error: 'ai_failed', detail: r.error }, 502) : c.json(r);
 });
 app.put('/api/admin/leads-settings', need(ADMINS), async (c) => {
-  const b = await parse(c, z.object({ auto: z.boolean() }));
-  await putSetting(c.env, 'leads_auto', b.auto ? '1' : '0', c.get('user').id);
+  const b = await parse(c, z.object({ auto: z.boolean().optional(), offer: z.string().trim().max(1000).optional(), shopName: z.string().trim().max(80).optional() }));
+  const by = c.get('user').id;
+  if (b.auto !== undefined) await putSetting(c.env, 'leads_auto', b.auto ? '1' : '0', by);
+  if (b.offer !== undefined) await putSetting(c.env, 'lead_offer', b.offer, by);
+  if (b.shopName !== undefined) await putSetting(c.env, 'shop_name', b.shopName, by);
+  return c.json({ ok: true });
+});
+/** A first message to one account, in their language, for staff to copy and send themselves. */
+app.post('/api/admin/leads/:id/message', need(STAFF), async (c) => {
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const l = await c.env.DB.prepare('SELECT country, handle, name, sells, kind FROM leads WHERE id = ?').bind(c.req.param('id')).first<{ country: 'TH' | 'MY' | 'ID'; handle: string; name: string | null; sells: string | null; kind: string }>();
+  if (!l) return c.json({ error: 'not_found' }, 404);
+  try {
+    const r = await asFeature('lead_message', async () => draftOutreach(c.env, { ...l, offer: (await settingStr(c.env, 'lead_offer')) ?? '', shopName: (await settingStr(c.env, 'shop_name')) ?? '',
+      lineUrl: lineFriendLinks(await settingStr(c.env, 'line_basic_id'))?.url ?? null, lang: reqLang(c) }));
+    return c.json(r);
+  } catch (e) { console.error('lead message failed:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
+});
+
+// ───────────────────────── Anajak Secondhand: LINE Official Account (Messaging API) ─────────────────────────
+// Customers who add the shop's LINE get answers from the AI (shop knowledge = active AI skills). When they want to order,
+// pay, bargain or send photos, the AI hands over to staff (needs_staff) and staff are told (phone + linked LINE).
+// Staff answer in the LINE OA Manager app; they can pause the AI for one customer. Old messages are deleted after 30 days.
+const LINE_PHOTO_REPLY = 'ได้รับแล้วค่ะ 🙏 ทีมงานจะตอบกลับโดยเร็ว\nReceived — our team will reply soon.';
+type LineContact = { line_user_id: string; display_name: string | null; role: 'customer' | 'staff'; needs_staff: number; ai_paused_until: string | null };
+
+async function lineContact(env: AppEnv['Bindings'], userId: string): Promise<LineContact> {
+  const get = () => env.DB.prepare('SELECT line_user_id, display_name, role, needs_staff, ai_paused_until FROM line_contacts WHERE line_user_id = ?').bind(userId).first<LineContact>();
+  const found = await get();
+  if (found) return found;
+  const p = await lineProfile(env, userId);
+  await env.DB.prepare('INSERT OR IGNORE INTO line_contacts (line_user_id, display_name) VALUES (?, ?)').bind(userId, p.displayName?.slice(0, 120) ?? null).run();
+  return (await get())!;
+}
+async function lineLog(env: AppEnv['Bindings'], userId: string, role: 'user' | 'assistant', content: string) {
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO line_messages (id, line_user_id, role, content) VALUES (?, ?, ?, ?)').bind(uid('lm_'), userId, role, content.slice(0, 5000)),
+    env.DB.prepare(`UPDATE line_contacts SET messages = messages + 1, last_message_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE line_user_id = ?`).bind(userId),
+  ]);
+}
+/** Flag a customer for staff, and tell staff once (not again until the flag is cleared). */
+async function lineNeedsStaff(env: AppEnv['Bindings'], ct: LineContact, why: string, origin: string) {
+  if (ct.role === 'staff') return;
+  const r = await env.DB.prepare('UPDATE line_contacts SET needs_staff = 1 WHERE line_user_id = ? AND needs_staff = 0').bind(ct.line_user_id).run();
+  if (r.meta.changes) await notifyStaff(env, { title: `💬 LINE · ${ct.display_name ?? 'Customer'}`, body: why.slice(0, 200), url: '/admin?tab=line', tag: `line-${ct.line_user_id}` }, origin).catch(() => 0);
+}
+
+async function handleLineEvent(env: AppEnv['Bindings'], ev: any, origin: string) {
+  const userId = ev?.source?.type === 'user' ? String(ev.source.userId ?? '') : '';
+  if (!/^U[0-9a-f]{32}$/i.test(userId) || ev.mode === 'standby') return;
+  if (ev.type === 'unfollow') { await env.DB.prepare('UPDATE line_contacts SET followed = 0 WHERE line_user_id = ?').bind(userId).run(); return; }
+  const ct = await lineContact(env, userId);
+  if (ev.type === 'follow') {
+    await env.DB.prepare('UPDATE line_contacts SET followed = 1 WHERE line_user_id = ?').bind(userId).run();
+    const welcome = await settingStr(env, 'line_welcome');
+    if (welcome && ev.replyToken) await lineReply(env, ev.replyToken, welcome);
+    return;
+  }
+  if (ev.type !== 'message' || !ev.replyToken) return;
+  const aiOn = (await settingStr(env, 'line_ai_reply')) !== '0' && !(ct.ai_paused_until && Date.parse(ct.ai_paused_until) > Date.now());
+
+  if (ev.message?.type !== 'text') {
+    if (ev.message?.type === 'sticker' || ct.role === 'staff') return;
+    await lineLog(env, userId, 'user', `[${String(ev.message?.type ?? 'message').slice(0, 20)}]`);
+    await lineNeedsStaff(env, ct, `sent a ${ev.message?.type ?? 'message'}`, origin);
+    if (aiOn) { await lineReply(env, ev.replyToken, LINE_PHOTO_REPLY); await lineLog(env, userId, 'assistant', LINE_PHOTO_REPLY); }
+    return;
+  }
+  const text = String(ev.message.text ?? '').slice(0, 2000);
+  // a staff member linking their LINE for shop notifications
+  const lc = JSON.parse((await settingStr(env, 'line_link_code')) ?? 'null') as { code: string; by: string; exp: string } | null;
+  if (lc && Date.parse(lc.exp) > Date.now() && linkCodeMatches(text, lc.code)) {
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE line_contacts SET role = 'staff', staff_user_id = ?, needs_staff = 0 WHERE line_user_id = ?`).bind(lc.by, userId),
+      env.DB.prepare(`DELETE FROM settings WHERE key = 'line_link_code'`),
+    ]);
+    await lineReply(env, ev.replyToken, '✅ ភ្ជាប់រួចរាល់ — អ្នកនឹងទទួលដំណឹងពីហាងនៅទីនេះ។\nLinked — shop notifications will come here.');
+    return;
+  }
+  await lineLog(env, userId, 'user', text);
+  if (!aiOn) { await lineNeedsStaff(env, ct, text, origin); return; }
+  const limit = await getSettingNumber(env, 'line_daily_limit', 20);
+  const today = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM line_messages WHERE line_user_id = ? AND role = 'assistant' AND created_at >= ?`).bind(userId, `${chatDay()}T00:00:00`).first<{ n: number }>())?.n ?? 0;
+  if ((ct.role !== 'staff' && today >= limit) || !aiConfigured(env)) { await lineNeedsStaff(env, ct, text, origin); return; }
+
+  const history = (await env.DB.prepare('SELECT role, content FROM line_messages WHERE line_user_id = ? ORDER BY created_at DESC LIMIT 12').bind(userId).all<{ role: 'user' | 'assistant'; content: string }>()).results.reverse();
+  while (history.length && history[0].role !== 'user') history.shift();
+  const recent = history.filter((t) => t.role === 'user').slice(-3).map((t) => t.content).join('\n');
+  let reply: string;
+  try {
+    reply = await asFeature('line_bot', async () => lineShopAssistant(env, history, {
+      shopName: (await settingStr(env, 'shop_name')) ?? '', skills: skillText(await pickSkills(env, 'chat', { text: recent }, 10000)), market: await marketContext(env),
+    }));
+  } catch (e) { console.error('line ai:', (e as Error).message); await lineNeedsStaff(env, ct, text, origin); return; }
+  const { text: answer, handoff } = splitHandoff(reply);
+  if (answer) { await lineReply(env, ev.replyToken, answer); await lineLog(env, userId, 'assistant', answer); }
+  if (handoff) await lineNeedsStaff(env, ct, text, origin);
+}
+
+/** LINE → us. Authenticated by the X-Line-Signature of the raw body; events are handled after the 200 answer. */
+app.post('/api/line/webhook', async (c) => {
+  if (!lineBotConfigured(c.env)) return c.json({ error: 'not_configured' }, 404);
+  const raw = await c.req.text();
+  if (!(await lineSignatureOk(c.env.LINE_MESSAGING_SECRET!, raw, c.req.header('x-line-signature')))) return c.json({ error: 'forbidden' }, 403);
+  let events: any[] = [];
+  try { events = (JSON.parse(raw)?.events ?? []).slice(0, 20); } catch { events = []; }
+  const origin = new URL(c.req.url).origin;
+  for (const ev of events) c.executionCtx.waitUntil(handleLineEvent(c.env, ev, origin).catch((e) => console.error('line event:', (e as Error).message)));
+  return c.json({ ok: true });
+});
+
+app.get('/api/admin/line', need(STAFF), async (c) => {
+  const configured = lineBotConfigured(c.env);
+  let bot: { basicId?: string; displayName?: string; pictureUrl?: string } | null = null, webhook: { endpoint?: string; active?: boolean } | null = null, quota = null as null | { limit: number | null; used: number | null }, error: string | null = null;
+  if (configured) {
+    try {
+      [bot, webhook, quota] = await Promise.all([lineBotInfo(c.env), lineWebhookInfo(c.env).catch(() => null), lineQuota(c.env)]);
+      if (bot?.basicId && bot.basicId !== (await settingStr(c.env, 'line_basic_id'))) await putSetting(c.env, 'line_basic_id', bot.basicId, c.get('user').id);
+    } catch (e) { error = String((e as Error).message).slice(0, 200); }
+  }
+  const staff = (await c.env.DB.prepare(`SELECT l.line_user_id, l.display_name, u.name AS user_name FROM line_contacts l LEFT JOIN users u ON u.id = l.staff_user_id WHERE l.role = 'staff' ORDER BY l.first_seen_at`).all()).results;
+  const counts = await c.env.DB.prepare(`SELECT COUNT(*) AS total, SUM(needs_staff) AS waiting, SUM(followed) AS following FROM line_contacts WHERE role = 'customer'`).first<{ total: number; waiting: number | null; following: number | null }>();
+  return c.json({
+    configured, error, bot: bot ? { name: bot.displayName ?? null, basicId: bot.basicId ?? null, picture: bot.pictureUrl ?? null } : null, links: lineFriendLinks(bot?.basicId),
+    webhook: { url: `${new URL(c.req.url).origin}/api/line/webhook`, current: webhook?.endpoint ?? null, active: !!webhook?.active }, quota,
+    settings: { aiReply: (await settingStr(c.env, 'line_ai_reply')) !== '0', notify: (await settingStr(c.env, 'line_notify')) !== '0', shopName: (await settingStr(c.env, 'shop_name')) ?? '',
+      welcome: (await settingStr(c.env, 'line_welcome')) ?? '', dailyLimit: await getSettingNumber(c.env, 'line_daily_limit', 20) },
+    staff, counts: { total: counts?.total ?? 0, waiting: counts?.waiting ?? 0, following: counts?.following ?? 0 },
+  });
+});
+app.post('/api/admin/line/webhook', need(ADMINS), async (c) => {
+  if (!lineBotConfigured(c.env)) return c.json({ error: 'line_not_configured' }, 400);
+  const url = `${new URL(c.req.url).origin}/api/line/webhook`;
+  try {
+    await lineSetWebhook(c.env, url);
+    const test = await lineTestWebhook(c.env);
+    await audit(c.env, c.get('user').id, 'line.webhook_set', 'settings', null, { url });
+    return c.json({ ok: !!test.success, url, test });
+  } catch (e) { return c.json({ error: 'line_failed', detail: String((e as Error).message).slice(0, 200) }, 502); }
+});
+app.put('/api/admin/line/settings', need(ADMINS), async (c) => {
+  const b = await parse(c, z.object({ aiReply: z.boolean(), notify: z.boolean(), shopName: z.string().trim().max(80), welcome: z.string().trim().max(1000), dailyLimit: z.number().int().min(1).max(200) }));
+  const by = c.get('user').id;
+  await putSetting(c.env, 'line_ai_reply', b.aiReply ? '1' : '0', by);
+  await putSetting(c.env, 'line_notify', b.notify ? '1' : '0', by);
+  await putSetting(c.env, 'shop_name', b.shopName, by);
+  if (b.welcome) await putSetting(c.env, 'line_welcome', b.welcome, by); else await c.env.DB.prepare(`DELETE FROM settings WHERE key = 'line_welcome'`).run();
+  await putSetting(c.env, 'line_daily_limit', String(b.dailyLimit), by);
+  await audit(c.env, by, 'line.settings', 'settings', null);
+  return c.json({ ok: true });
+});
+/** A one-time code (10 minutes) a staff member sends to the shop's LINE to get notifications there. */
+app.post('/api/admin/line/link-code', need(STAFF), async (c) => {
+  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 900000 + 100000);
+  const exp = new Date(Date.now() + 10 * 60_000).toISOString();
+  await putSetting(c.env, 'line_link_code', JSON.stringify({ code, by: c.get('user').id, exp }), c.get('user').id);
+  return c.json({ code: `LINK ${code}`, exp });
+});
+app.delete('/api/admin/line/staff/:id', need(STAFF), async (c) => {
+  const me = c.get('user');
+  // staff may unlink their own LINE; admins may unlink anyone's
+  const r = await c.env.DB.prepare(`UPDATE line_contacts SET role = 'customer', staff_user_id = NULL WHERE line_user_id = ? AND role = 'staff' AND (staff_user_id = ? OR ?)`)
+    .bind(c.req.param('id'), me.id, ADMINS.includes(me.role) ? 1 : 0).run();
+  return r.meta.changes ? c.json({ ok: true }) : c.json({ error: 'not_found' }, 404);
+});
+app.get('/api/admin/line/contacts', need(STAFF), async (c) => {
+  const rows = (await c.env.DB.prepare(`SELECT l.line_user_id, l.display_name, l.followed, l.needs_staff, l.ai_paused_until, l.messages, l.last_message_at,
+      (SELECT content FROM line_messages m WHERE m.line_user_id = l.line_user_id ORDER BY created_at DESC LIMIT 1) AS last_text
+    FROM line_contacts l WHERE l.role = 'customer' AND l.last_message_at IS NOT NULL ORDER BY l.needs_staff DESC, l.last_message_at DESC LIMIT 100`).all()).results;
+  return c.json({ contacts: rows });
+});
+app.get('/api/admin/line/contacts/:id/messages', need(STAFF), async (c) => {
+  const rows = (await c.env.DB.prepare('SELECT role, content, created_at FROM line_messages WHERE line_user_id = ? ORDER BY created_at DESC LIMIT 40').bind(c.req.param('id')).all()).results.reverse();
+  return c.json({ messages: rows });
+});
+app.put('/api/admin/line/contacts/:id', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ pauseHours: z.number().int().min(0).max(720).optional(), done: z.boolean().optional() }));
+  const id = c.req.param('id');
+  if (b.pauseHours !== undefined) await c.env.DB.prepare('UPDATE line_contacts SET ai_paused_until = ? WHERE line_user_id = ?').bind(b.pauseHours ? new Date(Date.now() + b.pauseHours * 3_600_000).toISOString() : null, id).run();
+  if (b.done) await c.env.DB.prepare('UPDATE line_contacts SET needs_staff = 0 WHERE line_user_id = ?').bind(id).run();
   return c.json({ ok: true });
 });
 
@@ -3337,5 +3526,6 @@ export default {
     ctx.waitUntil(asFeature('translate', () => translateBacklog(env)));
     ctx.waitUntil(asFeature('precheck', () => aiReviewBacklog(env)));
     ctx.waitUntil(leadsBacklog(env).catch((e) => console.error('lead search:', (e as Error).message)));
+    ctx.waitUntil(env.DB.prepare(`DELETE FROM line_messages WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')`).run().catch(() => null));
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>;
