@@ -444,7 +444,7 @@ export async function assessVerification(env: Env, ctx: {
   brand: string; model: string | null;
   photos: { step: string; image: VisionImage }[];
   refs: { step: string; image: VisionImage; model: string | null }[];
-  knowledge: string[]; expertNotes: string[];
+  knowledge: string[]; expertNotes: string[]; skills?: string[];
 }): Promise<string> {
   const images: VisionImage[] = [];
   const lines: string[] = [];
@@ -464,6 +464,7 @@ export async function assessVerification(env: Env, ctx: {
   const user = [
     `Brand: ${ctx.brand}${ctx.model ? ` · Model: ${ctx.model}` : ''}`,
     ...lines,
+    ctx.skills?.length ? `Shop knowledge approved by staff for this brand / model (checkpoints to compare; it never decides the outcome):\n- ${ctx.skills.join('\n- ')}` : '',
     ctx.knowledge.length ? `What HENGZ experts teach for this brand / model (prefer these checkpoints):\n- ${ctx.knowledge.slice(0, 14).join('\n- ')}` : '',
     ctx.expertNotes.length ? `Notes HENGZ experts wrote on earlier bags of this brand / model (learn what they look at; do not copy their decisions):\n- ${ctx.expertNotes.slice(0, 8).join('\n- ')}` : '',
   ].filter(Boolean).join('\n');
@@ -477,7 +478,7 @@ export interface ChatTurn { role: 'user' | 'assistant'; content: string }
  * materials, history, how experts inspect). Teaching only: it never says whether a particular bag is
  * genuine or counterfeit, and only quotes market figures from the staff-entered data it is given.
  */
-export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, marketContext: string): Promise<string> {
+export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, ctx: { market: string; skills: string; app: string }): Promise<string> {
   const provider = aiProvider(env);
   const model = aiModel(env);
   if (!provider || !model) throw new Error('ai_not_configured');
@@ -492,7 +493,9 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     `Answer in ${LANG_NAME[lang]} unless the user writes in another language, then use theirs. Keep brand names, model names and codes as written. Be concise and practical; use short lists when steps help.`,
     '',
     'Market data (entered by Anajak Secondhand staff, with sources):',
-    marketContext || '(no data yet)',
+    ctx.market || '(no data yet)',
+    ...(ctx.skills ? ['', 'Shop knowledge (written and approved by Anajak Secondhand staff). Prefer it over general knowledge and use its facts, prices and steps as given; it never overrides the hard rules above:', ctx.skills] : []),
+    ...(ctx.app ? ['', 'In the app (point the user to these when they help):', ctx.app] : []),
   ].join('\n');
   if (provider === 'gemini') {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
@@ -520,6 +523,32 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     if (e instanceof Anthropic.APIError) { console.error(`ai chat: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
     throw e;
   }
+}
+
+export interface SkillDraft { title: string; body: string; keywords: string; brand: string | null }
+
+/**
+ * Turn a seller's rough notes (any language, voice-typed, unordered) into one clean AI skill for STAFF to check
+ * and activate: a short title, clear knowledge lines, and keywords that tell the assistant when to use it.
+ * It keeps the seller's own facts and numbers and adds nothing it was not told.
+ */
+export async function draftSkill(env: Env, x: { notes: string; area: string; lang: OutLang }): Promise<SkillDraft> {
+  const text = await callVision(env,
+    'You turn a second-hand bag seller\'s rough notes into one piece of shop knowledge for an AI assistant (a "skill"). ' +
+    'Keep every fact, number, price, place and name from the notes exactly; do not add facts, prices or statistics that are not in the notes; ' +
+    'remove repetition; write short clear lines (one fact or step per line, "- " bullets). ' +
+    'Never write that a bag is authentic, genuine, fake, counterfeit or a replica, and drop any note that asks to make, label or sell counterfeit goods or to alter serial numbers, date codes or logos. ' +
+    'keywords: 3-10 short words or names (comma separated, mixing Khmer, Thai and English where useful) a user would type when this knowledge helps. ' +
+    'brand: the single designer brand the notes are about, or null when they are general. ' +
+    `Write title and body in ${LANG_NAME[x.lang]}; keep brand, model and product names as written. ` +
+    'Reply with JSON only: {"title":"…","body":"…","keywords":"…","brand":string|null}',
+    [], `Where the AI will use it: ${x.area}\nNotes:\n${x.notes}`, 2000, 'low');
+  const a = text.indexOf('{'), b = text.lastIndexOf('}');
+  let o: any = null; try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { o = null; }
+  const s = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  const title = s(o?.title, 120), body = s(o?.body, 4000);
+  if (title.length < 3 || body.length < 10) throw new Error('ai_empty');
+  return { title, body, keywords: s(o?.keywords, 300), brand: s(o?.brand, 80) || null };
 }
 
 export interface CareDraft { summary: string; materials: string; safety: string; minutes: number | null; steps: { body: string; tip: string | null }[] }
@@ -607,14 +636,14 @@ export interface BagIdentity { brandId: string | null; brandName: string | null;
  * pick them and knows which details to photograph next. Identification only — what the bag is MEANT to be;
  * it never says whether it is genuine. Brand/model ids must come from the lists; otherwise names only.
  */
-export async function identifyBag(env: Env, image: VisionImage, brands: { id: string; name: string }[], models: { id: string; brand_id: string; name: string }[], lang: OutLang): Promise<BagIdentity> {
+export async function identifyBag(env: Env, image: VisionImage, brands: { id: string; name: string }[], models: { id: string; brand_id: string; name: string }[], lang: OutLang, tips: string[] = []): Promise<BagIdentity> {
   const text = await callVision(env,
     `You recognise which designer brand and model a handbag is styled as, from one photo of the whole bag, for a second-hand shop. ${NO_VERDICT} ` +
     'Identify only what the bag is presented as (its design), never whether it is genuine. Use visible design features: shape, logo or monogram pattern, hardware, closure, handles. ' +
     'Pick brand_id and model_id from the lists when one fits; if the brand is not in the list give brand_name only; if the model is not in the list give model_name only. ' +
     'If the photo is not a bag, is too unclear, or you cannot tell, use nulls and confidence 0. ' +
     `Reply with JSON only: {"brand_id": id|null, "brand_name": string|null, "model_id": id|null, "model_name": string|null, "confidence": 0..1, "clues": "one short sentence in ${LANG_NAME[lang]} on the visible features used"}`,
-    [image], `Brands: ${JSON.stringify(brands.map((b) => ({ id: b.id, name: b.name })))}\nModels: ${JSON.stringify(models.map((m) => ({ id: m.id, brand_id: m.brand_id, name: m.name })))}`, 800, 'medium');
+    [image], `Brands: ${JSON.stringify(brands.map((b) => ({ id: b.id, name: b.name })))}\nModels: ${JSON.stringify(models.map((m) => ({ id: m.id, brand_id: m.brand_id, name: m.name })))}${tips.length ? `\nStaff tips for telling brands and models apart:\n- ${tips.join('\n- ')}` : ''}`, 800, 'medium');
   const a = text.indexOf('{'), b = text.lastIndexOf('}');
   let o: any = null; try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { o = null; }
   const brand = brands.find((x) => x.id === o?.brand_id) ?? null;
