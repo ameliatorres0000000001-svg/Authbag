@@ -31,7 +31,7 @@ export default function Login({ onDone, onClose }: { onDone: () => void; onClose
       <form onSubmit={submit} className="card relative w-full max-w-sm space-y-4">
         {onClose && <button type="button" onClick={onClose} aria-label={t('install.close')} className="absolute right-3 top-3 px-2 text-lg text-muted">✕</button>}
         <div>
-          <h1 className="text-3xl">Anajak <span className="text-gold">Secondhand</span></h1>
+          <h1 className="text-3xl">Anajak <span className="text-gold">Bag</span></h1>
           <p className="mt-1 text-sm text-muted">{bootstrap ? t('createOwner') : register ? t('acct.createHelp') : t('acct.signInHelp')}</p>
         </div>
         {creating && <Field label={t('name')}><input className="input" value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} autoComplete="name" /></Field>}

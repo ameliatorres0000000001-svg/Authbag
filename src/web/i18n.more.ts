@@ -157,7 +157,7 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'market.top5': { vi: 'Top 5 theo quốc gia', th: 'Top 5 ตามประเทศ', id: 'Top 5 per negara' },
   'install.topTitle': { vi: 'Bán chạy tháng này', th: 'ขายดีเดือนนี้', id: 'Terlaris bulan ini' },
   'install.installTitle': { vi: 'Cài ứng dụng lên điện thoại', th: 'ติดตั้งแอปบนโทรศัพท์', id: 'Pasang aplikasi di ponsel' },
-  'install.go': { vi: 'Vào ANAJAK SECONDHAND', th: 'เข้าสู่ ANAJAK SECONDHAND', id: 'Masuk ke ANAJAK SECONDHAND' },
+  'install.go': { vi: 'Vào ANAJAK BAG', th: 'เข้าสู่ ANAJAK BAG', id: 'Masuk ke ANAJAK BAG' },
   'market.topBrand': { vi: 'Thương hiệu hàng đầu', th: 'แบรนด์อันดับหนึ่ง', id: 'Merek teratas' },
   'market.modelStyle': { vi: 'Mẫu / kiểu', th: 'รุ่น / สไตล์', id: 'Model / gaya' },
   'install.noPhoto': { vi: 'Chưa có ảnh', th: 'ยังไม่มีรูป', id: 'Belum ada foto' },

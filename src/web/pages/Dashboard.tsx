@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.ts';
-import { COUNTRIES, FLAG, TrendTable, type Overview } from '../Market.tsx';
+import type { Overview } from '../Market.tsx';
 import { useI18n } from '../i18n.tsx';
 import { FolderCard, LooseFolderCard, type Folder } from '../FeedFolders.tsx';
 import Timeline from '../Timeline.tsx';
 import { LeadsHome } from '../Leads.tsx';
+import TrendShowcase from '../TrendShowcase.tsx';
 
 export interface StudioModel {
   id: string; name: string; brand: string; brand_id: string;
@@ -30,8 +31,9 @@ const Svg = ({ d, className = 'h-5 w-5' }: { d: string; className?: string }) =>
 interface Stats { paintRecipes: number; careLessons: number; authLessons: number; referencePhotos: number; brands: number; marketMonths: number }
 
 /**
- * Home (Anajak Secondhand): an AI work assistant for second-hand bag vendors. Skills first — 🎨 paint, 🔍 check,
- * 🧽 repair, 💬 ask — then (for staff) customers found on TikTok, then the monthly market ranking.
+ * Anajak Bag: an AI work assistant for second-hand bag vendors (Aran / Rong Kluea).
+ * Home: this month's fast-selling models on top, then the skills (🎨 paint, 🔍 check, 🧽 repair, 💬 ask), then (for staff)
+ * customers found on TikTok.
  */
 export default function Dashboard() {
   const { t } = useI18n();
@@ -49,12 +51,14 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-7 px-4 pb-8 pt-5 md:px-8">
-      <header>
-        <div className="font-mono text-[10px] uppercase tracking-widest text-gold">Anajak · AI</div>
-        <h1 className="mt-1 text-2xl leading-tight md:text-3xl">{t('home.headline')}</h1>
-        <p className="mt-1 text-sm text-muted">{t('home.sub')}</p>
+    <div className="mx-auto max-w-5xl space-y-6 px-4 pb-8 pt-4 md:px-8">
+      <header className="flex items-center gap-2 text-sm text-muted">
+        <span className="h-1.5 w-1.5 rotate-45 bg-gold" aria-hidden />
+        <h1 className="font-sans text-sm font-normal">{t('home.headline')}</h1>
       </header>
+
+      {/* this month's fast sellers first: what vendors look at every day */}
+      <TrendShowcase market={market} />
 
       {/* the skills: what the assistant does for the vendor */}
       <section aria-labelledby="skills-h" className="space-y-3">
@@ -93,25 +97,6 @@ export default function Dashboard() {
 
       {/* staff: customers found on TikTok */}
       <LeadsHome />
-
-      {/* market ranking, updated every month by the team */}
-      <section aria-labelledby="market-h">
-        <div className="mb-2 flex items-baseline justify-between">
-          <h2 id="market-h" className="text-lg leading-tight">🔥 {t('install.topTitle')}</h2>
-          <Link to="/trends" className="text-xs font-semibold text-gold">{t('market.seeAll')} →</Link>
-        </div>
-        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {COUNTRIES.map((cc) => {
-            const m = market?.countries.find((x) => x.country === cc);
-            return (
-              <Link key={cc} to={`/trends?country=${cc}`} className="block w-[85%] shrink-0 snap-center md:w-auto">
-                {market ? <TrendTable country={cc} period={m?.period ?? null} rows={m?.rows ?? []} compact />
-                  : <div className="h-56 animate-pulse rounded-2xl bg-surface-low" />}
-              </Link>
-            );
-          })}
-        </div>
-      </section>
 
       <section aria-labelledby="tools-h">
         <h2 id="tools-h" className="mb-2 text-xs font-semibold text-muted">{t('home.more')}</h2>

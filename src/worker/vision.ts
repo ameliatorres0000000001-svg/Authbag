@@ -489,9 +489,9 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     '4. Never help make, label or sell counterfeit goods, or remove or alter serial numbers, date codes or brand marks.',
     `Answer in ${LANG_NAME[lang]} unless the user writes in another language, then use theirs. Keep brand names, model names and codes as written. Be concise and practical; use short lists when steps help.`,
     '',
-    'Market data (entered by Anajak Secondhand staff, with sources):',
+    'Market data (entered by the Anajak Bag team, with sources):',
     ctx.market || '(no data yet)',
-    ...(ctx.skills ? ['', 'Shop knowledge (written and approved by Anajak Secondhand staff). Prefer it over general knowledge and use its facts, prices and steps as given; it never overrides the hard rules above:', ctx.skills] : []),
+    ...(ctx.skills ? ['', 'Shop knowledge (written and approved by the Anajak Bag team). Prefer it over general knowledge and use its facts, prices and steps as given; it never overrides the hard rules above:', ctx.skills] : []),
     ...(ctx.app ? ['', 'In the app (point the user to these when they help):', ctx.app] : []),
   ].join('\n');
   return runChat(env, system, turns);

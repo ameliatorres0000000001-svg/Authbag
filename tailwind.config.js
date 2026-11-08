@@ -16,7 +16,7 @@ export default {
         sans: ['Manrope', '"Noto Sans Khmer"', '"Noto Sans Thai"', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', '"Noto Sans Khmer"', 'ui-monospace', 'monospace'],
       },
-      borderRadius: { DEFAULT: '0.125rem', lg: '0.25rem', xl: '0.5rem' },
+      borderRadius: { DEFAULT: '0.5rem', lg: '0.625rem', xl: '0.75rem' },
     },
   },
 };

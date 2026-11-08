@@ -112,7 +112,7 @@ export default function App() {
       <div className="min-h-screen md:flex">
         <aside className="hidden w-60 shrink-0 border-r border-hairline bg-surface-low md:block">
           <div className="px-5 py-5">
-            <Link to="/" onClick={logoTap} className="flex select-none items-center gap-2 font-serif text-xl tracking-wide"><img src="/icons/icon-192.png" alt="" width={28} height={28} className="rounded-md" />Anajak <span className="text-gold">Secondhand</span></Link>
+            <Link to="/" onClick={logoTap} className="flex select-none items-center gap-2 font-serif text-xl tracking-wide"><img src="/icons/icon-192.png" alt="" width={28} height={28} className="rounded-md" />Anajak <span className="text-gold">Bag</span></Link>
             <div className="mt-2"><AccountButton me={me} onSignOut={signOut} /></div>
           </div>
           <nav className="flex flex-col px-2 pb-6">
@@ -137,8 +137,8 @@ export default function App() {
             </div>
           </div>
         </aside>
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-hairline bg-surface/95 px-4 py-3 backdrop-blur md:hidden">
-          <Link to="/" onClick={logoTap} className="flex select-none items-center gap-2 font-serif text-lg tracking-wide"><img src="/icons/icon-192.png" alt="" width={26} height={26} className="rounded-md" />Anajak <span className="text-gold">Secondhand</span></Link>
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-gold/15 bg-surface/80 px-4 py-3 backdrop-blur-md md:hidden">
+          <Link to="/" onClick={logoTap} className="flex select-none items-center gap-2 font-serif text-lg tracking-wide"><img src="/icons/icon-192.png" alt="" width={26} height={26} className="rounded-md" />Anajak <span className="text-gold">Bag</span></Link>
           <div className="flex items-center gap-1.5">
             {!isStandalone() && <Link to="/install" aria-label={t('install.open')} className="btn-ghost !px-2 !py-0.5 text-xs">⤓</Link>}
             <AccountButton me={me} onSignOut={signOut} />
@@ -184,15 +184,15 @@ export default function App() {
           </Routes>
           )}
         </main>
-        <nav className={`fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-end border-t border-hairline bg-surface/95 px-1 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-1.5 backdrop-blur md:hidden`}>
+        <nav className={`fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-end border-t border-gold/15 bg-surface/85 px-1 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-1.5 backdrop-blur md:hidden`}>
           {TABS.map(([to, key, icon]) => to === '/check' ? (
             <NavLink key={to} to={to} className="flex flex-col items-center gap-0.5 text-[10px] font-semibold text-ink">
               <span className="-mt-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-surface bg-gold text-charcoal shadow-lg"><TabIcon d={icon} /></span>{t(key)}
             </NavLink>
           ) : (
             <NavLink key={to} to={to} end={to === '/'}
-              className={({ isActive }) => `flex flex-col items-center gap-0.5 py-0.5 text-[10px] ${on(to, isActive) ? 'font-bold text-ink' : 'text-muted'}`}>
-              {({ isActive }) => <><span className={`flex h-7 w-12 items-center justify-center rounded-full ${on(to, isActive) ? 'bg-gold-light text-ink' : ''}`}><TabIcon d={icon} /></span>{t(key)}</>}
+              className={({ isActive }) => `flex flex-col items-center gap-0.5 py-0.5 text-[10px] ${on(to, isActive) ? 'font-bold text-gold' : 'text-muted'}`}>
+              {({ isActive }) => <><span className={`flex h-7 w-12 items-center justify-center rounded-full ${on(to, isActive) ? 'bg-gold-light text-gold' : ''}`}><TabIcon d={icon} /></span>{t(key)}</>}
             </NavLink>
           ))}
         </nav>

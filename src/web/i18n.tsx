@@ -10,7 +10,7 @@ export const LOCALES: { code: Locale; short: string; name: string }[] = [
 ];
 
 const D: Record<string, { km: string; en: string }> = {
-  appName: { km: 'Anajak Secondhand', en: 'Anajak Secondhand' },
+  appName: { km: 'Anajak Bag', en: 'Anajak Bag' },
   dashboard: { km: 'ផ្ទាំងដើម', en: 'Dashboard' },
   newInspection: { km: 'ការត្រួតពិនិត្យថ្មី', en: 'New inspection' },
   inspections: { km: 'ការត្រួតពិនិត្យ', en: 'Inspections' },
@@ -358,7 +358,7 @@ const D: Record<string, { km: string; en: string }> = {
   'install.sub': { km: 'លាបពណ៌ · ជួសជុល · ស្គាល់ម៉ាក — AI ជួយការងាររបស់អ្នក', en: 'Paint · repair · identify — the AI helps with your work' },
   'install.topTitle': { km: 'ម៉ូដែលលក់ដាច់ប្រចាំខែ', en: 'Fast sellers this month' },
   'install.installTitle': { km: 'ដំឡើងកម្មវិធីលើទូរស័ព្ទ', en: 'Install the app on your phone' },
-  'install.go': { km: 'ចូលទៅកាន់ ANAJAK SECONDHAND', en: 'Continue to ANAJAK SECONDHAND' },
+  'install.go': { km: 'ចូលទៅកាន់ ANAJAK BAG', en: 'Continue to ANAJAK BAG' },
   'market.topBrand': { km: 'ម៉ាកកំពូល', en: 'Top brand' },
   'mb.title': { km: 'សមាជិកភាព', en: 'Membership' },
   'mb.sub': { km: 'សាកប្រើឥតគិតថ្លៃ 7 ថ្ងៃ បន្ទាប់មកបង់ប្រចាំខែ តាម KHQR ឬ K Bank។', en: '7-day free trial, then monthly by KHQR or K Bank.' },
@@ -426,6 +426,7 @@ const D: Record<string, { km: string; en: string }> = {
   'home.sub': { km: 'ជ្រើស Skill — AI ជួយការងាររបស់អ្នកភ្លាមៗ', en: 'Pick a skill — the AI helps with your work right away' },
   'home.datecode': { km: 'អាន Date code', en: 'Read a date code' },
   'tab.repair': { km: 'ជួសជុល', en: 'Repair' },
+  'market.thisMonth': { km: 'ខែនេះ', en: 'This month' },
   'skill.title': { km: 'Skill របស់អ្នក', en: 'Your skills' },
   'skill.paint': { km: 'លាបពណ៌', en: 'Paint & recolour' },
   'skill.paintSub': { km: 'ជ្រើសស្បែក + ពណ៌ → របៀបលាយ និងវិធីលាបតាមប្រភេទស្បែក', en: 'Pick leather + colour → how to mix and paint for that leather' },
@@ -1250,7 +1251,7 @@ const D: Record<string, { km: string; en: string }> = {
   'need.authentic_assets': { km: 'រូបភាព reference ពិតដែលបានអនុម័ត', en: 'Approved authentic reference photos' },
   'need.counterfeit_assets': { km: 'រូបភាព reference ក្លែងដែលបានអនុម័ត', en: 'Approved counterfeit reference photos' },
   // ───── Anajak Secondhand: market trends, home hub, repair, learn & verify, AI chat ─────
-  'brand.name': { km: 'Anajak Secondhand', en: 'Anajak Secondhand' },
+  'brand.name': { km: 'Anajak Bag', en: 'Anajak Bag' },
   'install.trending': { km: 'ម៉ូដែលកំពុង Viral', en: 'Trending now' },
   'install.trendingSub': { km: 'កាបូបជជុះម៉ាកល្បីដែលកំពុងពេញនិយម តាមប្រទេស', en: 'Second-hand designer bags in demand, by country' },
   'market.country.TH': { km: 'ថៃ', en: 'Thailand' },

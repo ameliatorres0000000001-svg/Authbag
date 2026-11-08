@@ -3016,7 +3016,7 @@ app.post('/api/admin/payments/:id/review', need(ADMINS), async (c) => {
     c.env.DB.prepare("UPDATE memberships SET paid_until = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?").bind(until, p.user_id),
   ]);
   await audit(c.env, me.id, 'payment.approve', 'payments', p.id, { until });
-  c.executionCtx.waitUntil(notifyUser(c.env, p.user_id, { title: '✅ Anajak Secondhand', body: `Membership active until ${until.slice(0, 10)}`, url: '/subscribe', tag: p.id }, new URL(c.req.url).origin).catch(() => 0));
+  c.executionCtx.waitUntil(notifyUser(c.env, p.user_id, { title: '✅ Anajak Bag', body: `Membership active until ${until.slice(0, 10)}`, url: '/subscribe', tag: p.id }, new URL(c.req.url).origin).catch(() => 0));
   return c.json({ ok: true, paidUntil: until });
 });
 
