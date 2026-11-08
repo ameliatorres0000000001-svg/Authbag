@@ -45,7 +45,7 @@ export default function AnnotatedPhoto({ src, points, active, onPick, tone = 'ne
               key: p.id, ...(onPick ? { type: 'button', onClick: () => onPick(i), 'aria-label': `${i + 1}. ${localizePoint(p, locale).label}` } : { 'aria-hidden': true }),
               className: `absolute rounded-sm border-2 transition ${onPick ? '' : 'pointer-events-none'} ${p.source === 'ai_suggested' ? 'border-dashed' : ''} ${on ? 'border-gold bg-gold/15 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]' : 'border-white/85 hover:border-gold'}`,
               style: { left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: `${p.w * 100}%`, height: `${p.h * 100}%`, zIndex: on ? 2 : 1 },
-            }, <span className={`absolute -left-2.5 -top-2.5 flex h-5 w-5 items-center justify-center rounded-full border font-mono text-[10px] font-semibold ${on ? 'border-gold bg-gold text-charcoal' : 'border-white bg-charcoal text-white'}`}>{i + 1}</span>)
+            }, <span className={`absolute -left-2.5 -top-2.5 flex h-5 w-5 items-center justify-center rounded-full border font-mono text-[10px] font-semibold ${on ? 'border-gold bg-gold text-charcoal' : 'border-white bg-gold text-charcoal'}`}>{i + 1}</span>)
           );
         })}
         </div>
@@ -83,7 +83,7 @@ export function PointCards({ points, active, onPick, empty }: { points: Point[];
           <li key={p.id}>
             <button type="button" onClick={() => onPick?.(i)}
               className={`flex w-full gap-3 rounded-xl border px-3 py-2.5 text-left transition ${on ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card hover:border-strong'}`}>
-              <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold ${on ? 'bg-gold text-charcoal' : 'bg-charcoal text-white'}`}>{i + 1}</span>
+              <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold ${on ? 'bg-gold text-charcoal' : 'bg-gold text-charcoal'}`}>{i + 1}</span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[15px] font-semibold leading-snug">{tx.label}</span>
                 {n.check && (
@@ -93,7 +93,7 @@ export function PointCards({ points, active, onPick, empty }: { points: Point[];
                 )}
                 {n.photo && (
                   <span className="mt-1 flex gap-1.5 rounded-md bg-surface-low px-2 py-1 text-[13px] leading-snug text-muted">
-                    <span aria-hidden>📷</span><span><span className="font-semibold text-charcoal">{t('pt.photo')}</span> {n.photo}</span>
+                    <span aria-hidden>📷</span><span><span className="font-semibold text-ink">{t('pt.photo')}</span> {n.photo}</span>
                   </span>
                 )}
               </span>

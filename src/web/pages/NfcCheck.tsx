@@ -51,7 +51,7 @@ export default function NfcCheck() {
       <div className="grid grid-cols-3 gap-1 rounded-2xl border border-hairline bg-surface-card p-1" role="tablist" aria-label={t('nfc.brand')}>
         {([['lv', 'Louis Vuitton'], ['chanel', 'Chanel'], ['other', t('nfc.otherBrand')]] as const).map(([k, name]) => (
           <button key={k} type="button" role="tab" aria-selected={brand === k} onClick={() => setBrand(k)}
-            className={`rounded-xl px-2 py-2 text-sm font-semibold transition ${brand === k ? 'bg-charcoal text-white' : 'text-muted'}`}>{name}</button>
+            className={`rounded-xl px-2 py-2 text-sm font-semibold transition ${brand === k ? 'bg-gold text-charcoal' : 'text-muted'}`}>{name}</button>
         ))}
       </div>
 
@@ -198,7 +198,7 @@ function ChipMap({ brand }: { brand: Brand }) {
   return (
     <svg viewBox="0 0 100 100" className="h-24 w-24 shrink-0" aria-hidden>
       <path d="M30 34c0-11 9-18 20-18s20 7 20 18" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted" />
-      <rect x="14" y="34" width="72" height="54" rx="8" fill="none" stroke="currentColor" strokeWidth="3" className="text-charcoal" />
+      <rect x="14" y="34" width="72" height="54" rx="8" fill="none" stroke="currentColor" strokeWidth="3" className="text-ink" />
       <rect x="22" y="44" width="56" height="36" rx="4" fill="none" stroke="currentColor" strokeDasharray="3 3" strokeWidth="1.5" className="text-muted" />
       {dot ? (
         <>

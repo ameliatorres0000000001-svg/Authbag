@@ -34,7 +34,7 @@ export default function TrendsPage() {
       <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
         {COUNTRIES.map((c) => (
           <button key={c} type="button" role="tab" aria-selected={c === country} onClick={() => pick(c)}
-            className={`flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm ${c === country ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>
+            className={`flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm ${c === country ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>
             <span aria-hidden>{FLAG[c]}</span>{t(`market.country.${c}`)}
           </button>
         ))}

@@ -5,13 +5,12 @@ import { MeContext } from './App.tsx';
 import { Field, Notice, errText } from './ui.tsx';
 import { ADMIN_ROLES } from './studio.ts';
 
-type Area = 'all' | 'chat' | 'identify' | 'check';
-interface Skill { id: string; area: Area; title: string; body: string; brand: string | null; keywords: string | null; topic: string | null; public: number; status: 'draft' | 'active'; ai_drafted: number; uses: number; last_used_at: string | null; updated_at: string; author: string | null }
-interface Form { id: string | null; area: Area; title: string; body: string; brand: string; keywords: string; topic: string; public: boolean; status: 'draft' | 'active'; aiDrafted: boolean }
-const AREAS: Area[] = ['all', 'chat', 'identify', 'check'];
-const EMPTY: Form = { id: null, area: 'chat', title: '', body: '', brand: '', keywords: '', topic: '', public: false, status: 'draft', aiDrafted: false };
+type Area = 'all' | 'chat' | 'identify' | 'check' | 'paint' | 'repair';
+interface Skill { id: string; area: Area; title: string; body: string; brand: string | null; keywords: string | null; status: 'draft' | 'active'; ai_drafted: number; uses: number; last_used_at: string | null; updated_at: string; author: string | null }
+interface Form { id: string | null; area: Area; title: string; body: string; brand: string; keywords: string; status: 'draft' | 'active'; aiDrafted: boolean }
+const AREAS: Area[] = ['paint', 'repair', 'check', 'identify', 'chat', 'all'];
+const EMPTY: Form = { id: null, area: 'paint', title: '', body: '', brand: '', keywords: '', status: 'draft', aiDrafted: false };
 const IDEAS = ['sk.idea1', 'sk.idea2', 'sk.idea3', 'sk.idea4', 'sk.idea5'];
-export const ARAN_TOPICS = ['market', 'bales', 'grading', 'pricing', 'buyers', 'logistics', 'online', 'care'] as const;
 
 /**
  * AI skills: shop knowledge staff write for the in-app AI (assistant, brand recognition, bag check).
@@ -34,11 +33,11 @@ export default function SkillsAdmin() {
   useEffect(() => { load(); api.get<{ brands: { name: string; slug: string }[] }>('/api/taxonomy').then((r) => setBrands(r.brands.filter((b) => b.slug !== 'other').map((b) => b.name))).catch(() => {}); }, [load]);
 
   const open = (s: Skill | null) => {
-    setF(s ? { id: s.id, area: s.area, title: s.title, body: s.body, brand: s.brand ?? '', keywords: s.keywords ?? '', topic: s.topic ?? '', public: !!s.public, status: s.status, aiDrafted: !!s.ai_drafted } : { ...EMPTY });
+    setF(s ? { id: s.id, area: s.area, title: s.title, body: s.body, brand: s.brand ?? '', keywords: s.keywords ?? '', status: s.status, aiDrafted: !!s.ai_drafted } : { ...EMPTY });
     setNotes(''); setQ(''); setTest(null); setMsg(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-  const payload = (x: Form) => ({ area: x.area, title: x.title, body: x.body, brand: x.brand.trim() || null, keywords: x.keywords.trim() || null, topic: x.topic || null, public: x.public });
+  const payload = (x: Form) => ({ area: x.area, title: x.title, body: x.body, brand: x.brand.trim() || null, keywords: x.keywords.trim() || null });
   const ready = !!f && f.title.trim().length >= 3 && f.body.trim().length >= 10;
 
   const tidy = async () => {
@@ -101,7 +100,7 @@ export default function SkillsAdmin() {
             <div className="flex flex-wrap gap-1.5">
               {AREAS.map((a) => (
                 <button key={a} type="button" onClick={() => setF({ ...f, area: a })} aria-pressed={f.area === a}
-                  className={`rounded-full border px-3 py-1.5 text-xs ${f.area === a ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>{t(`sk.a.${a}`)}</button>
+                  className={`rounded-full border px-3 py-1.5 text-xs ${f.area === a ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>{t(`sk.a.${a}`)}</button>
               ))}
             </div>
             <p className="mt-1 text-xs text-muted">{t(`sk.ah.${f.area}`)}</p>
@@ -131,18 +130,6 @@ export default function SkillsAdmin() {
               </Field>
               <Field label={t('sk.fKeywords')}><input className="input" maxLength={300} placeholder={t('sk.fKeywordsPh')} value={f.keywords} onChange={(e) => setF({ ...f, keywords: e.target.value })} /></Field>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={t('sk.topic')}>
-                <select className="input" value={f.topic} onChange={(e) => setF({ ...f, topic: e.target.value })}>
-                  <option value="">{t('sk.topicNone')}</option>
-                  {ARAN_TOPICS.map((k) => <option key={k} value={k}>{t(`aran.t.${k}`)}</option>)}
-                </select>
-              </Field>
-              <label className="flex items-center gap-2 self-end pb-2 text-sm">
-                <input type="checkbox" checked={f.public} disabled={!admin} onChange={(e) => setF({ ...f, public: e.target.checked })} />📚 {t('sk.public')}
-              </label>
-            </div>
-            {f.public && <p className="text-xs text-muted">{t('sk.publicHelp')}</p>}
             {f.aiDrafted && <p className="text-xs text-review">✨ {t('sk.aiNote')}</p>}
           </div>
 
@@ -180,7 +167,7 @@ export default function SkillsAdmin() {
                 <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${s.status === 'active' ? 'bg-verified-bg text-verified' : 'bg-surface-high text-muted'}`}>{s.status === 'active' ? t('sk.stOn') : t('sk.stDraft')}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{s.title}</span>
-                  <span className="block truncate text-xs text-muted">{s.public ? '📚 ' : ''}{s.topic ? `${t(`aran.t.${s.topic}`)} · ` : ''}{t(`sk.a.${s.area}`)}{s.brand ? ` · ${s.brand}` : ''}{s.keywords ? ` · ${s.keywords}` : ''}</span>
+                  <span className="block truncate text-xs text-muted">{t(`sk.a.${s.area}`)}{s.brand ? ` · ${s.brand}` : ''}{s.keywords ? ` · ${s.keywords}` : ''}</span>
                 </span>
                 <span className="shrink-0 text-right text-xs text-muted">{s.uses}×<span className="block">{t('sk.uses')}</span></span>
               </button>

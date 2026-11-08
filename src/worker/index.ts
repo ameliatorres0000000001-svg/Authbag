@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -3072,13 +3072,13 @@ app.put('/api/admin/usage', need(['owner']), async (c) => {
 // Staff write a skill (or let the AI tidy their rough notes into one), test it in a chat, and an admin turns it on.
 // Only active skills reach the AI. A skill is knowledge: the hard rules in each prompt always win, and skills never
 // change an expert outcome.
-const SKILL_AREAS = ['all', 'chat', 'identify', 'check'] as const;
-const ARAN_TOPICS = ['market', 'bales', 'grading', 'pricing', 'buyers', 'logistics', 'online', 'care'] as const;
+const SKILL_AREAS = ['all', 'chat', 'identify', 'check', 'paint', 'repair'] as const;
 const skillInput = z.object({
   area: z.enum(SKILL_AREAS), title: z.string().trim().min(3).max(120), body: z.string().trim().min(10).max(4000),
   brand: z.string().trim().max(80).nullish().transform((v) => v || null), keywords: z.string().trim().max(300).nullish().transform((v) => v || null),
-  topic: z.enum(ARAN_TOPICS).nullish().transform((v) => v ?? null), public: z.boolean().optional().default(false),
 });
+/** Saved skill answers depend on the knowledge: forget them whenever a skill changes. */
+const clearSkillCache = (env: AppEnv['Bindings']) => env.DB.prepare('DELETE FROM skill_cache').run();
 
 /** The active skills that fit this moment (see src/shared/skills.ts), and a use count for the admin list. */
 async function pickSkills(env: AppEnv['Bindings'], use: SkillUse, ctx: { text?: string; brand?: string | null; extra?: SkillRow | null }, budget: number): Promise<SkillRow[]> {
@@ -3096,7 +3096,7 @@ async function appContext(env: AppEnv['Bindings']): Promise<string> {
   const lessons = (await env.DB.prepare(`SELECT topic, title_km, title_en FROM care_lessons WHERE status = 'published' ORDER BY published_at DESC LIMIT 25`)
     .all<{ topic: string; title_km: string; title_en: string | null }>()).results;
   return [
-    'Pages: Aran market (lessons about the Rong Kluea second-hand market + price board) · Tabs: Home (monthly market ranking per country) · Paint (colour mixer with recipes, painting lessons) · Check (photo of the bag → AI recognises brand/model and compares the details with reference photos) · History · AI assistant.',
+    'Tabs: Home (skills + monthly market ranking per country) · Paint (colour mixer with recipes, painting lessons) · Check (photo of the bag → AI recognises brand/model and compares the details with reference photos) · History · AI assistant.',
     ...lessons.map((l) => `Lesson (${l.topic}): ${l.title_km}${l.title_en ? ` / ${l.title_en}` : ''}`),
   ].join('\n');
 }
@@ -3108,9 +3108,8 @@ app.get('/api/admin/skills', need(STAFF), async (c) => {
 app.post('/api/admin/skills', need(STAFF), async (c) => {
   const b = await parse(c, skillInput.extend({ aiDrafted: z.boolean().optional() }));
   const id = uid('sk_'); const me = c.get('user');
-  // showing a lesson to users is an admin decision (like turning a skill on)
-  await c.env.DB.prepare(`INSERT INTO ai_skills (id, area, title, body, brand, keywords, topic, public, ai_drafted, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, b.area, b.title, b.body, b.brand, b.keywords, b.topic, b.public && ADMINS.includes(me.role) ? 1 : 0, b.aiDrafted ? 1 : 0, me.id, me.id).run();
+  await c.env.DB.prepare(`INSERT INTO ai_skills (id, area, title, body, brand, keywords, ai_drafted, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, b.area, b.title, b.body, b.brand, b.keywords, b.aiDrafted ? 1 : 0, me.id, me.id).run();
   await audit(c.env, me.id, 'skill.create', 'ai_skills', id);
   return c.json({ id });
 });
@@ -3118,16 +3117,18 @@ app.put('/api/admin/skills/:id', need(STAFF), async (c) => {
   const b = await parse(c, skillInput.extend({ status: z.enum(['draft', 'active']) }));
   const me = c.get('user');
   // staff may write and edit; turning a skill on (or editing one that is on) is for admins
-  const cur = await c.env.DB.prepare('SELECT status, public FROM ai_skills WHERE id = ?').bind(c.req.param('id')).first<{ status: string; public: number }>();
+  const cur = await c.env.DB.prepare('SELECT status FROM ai_skills WHERE id = ?').bind(c.req.param('id')).first<{ status: string }>();
   if (!cur) return c.json({ error: 'not_found' }, 404);
-  if ((b.status === 'active' || cur.status === 'active' || b.public || cur.public) && !ADMINS.includes(me.role)) return c.json({ error: 'forbidden' }, 403);
-  await c.env.DB.prepare(`UPDATE ai_skills SET area = ?, title = ?, body = ?, brand = ?, keywords = ?, topic = ?, public = ?, status = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
-    .bind(b.area, b.title, b.body, b.brand, b.keywords, b.topic, b.public ? 1 : 0, b.status, me.id, c.req.param('id')).run();
+  if ((b.status === 'active' || cur.status === 'active') && !ADMINS.includes(me.role)) return c.json({ error: 'forbidden' }, 403);
+  await c.env.DB.prepare(`UPDATE ai_skills SET area = ?, title = ?, body = ?, brand = ?, keywords = ?, status = ?, updated_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.area, b.title, b.body, b.brand, b.keywords, b.status, me.id, c.req.param('id')).run();
+  await clearSkillCache(c.env);
   await audit(c.env, me.id, b.status === 'active' ? 'skill.activate' : 'skill.update', 'ai_skills', c.req.param('id'));
   return c.json({ ok: true });
 });
 app.delete('/api/admin/skills/:id', need(ADMINS), async (c) => {
   await c.env.DB.prepare('DELETE FROM ai_skills WHERE id = ?').bind(c.req.param('id')).run();
+  await clearSkillCache(c.env);
   await audit(c.env, c.get('user').id, 'skill.delete', 'ai_skills', c.req.param('id'));
   return c.json({ ok: true });
 });
@@ -3276,43 +3277,66 @@ app.post('/api/admin/leads/:id/message', need(STAFF), async (c) => {
   } catch (e) { console.error('lead message failed:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
 });
 
-// ───────────────────────── Anajak Secondhand: Aran (Rong Kluea) market — lessons and price board ─────────────────────────
-// Lessons = active AI skills an admin chose to show (public = 1), grouped by topic. Prices = what staff saw at the
-// market (or read in a source) with the date. Both teach users and feed the AI; nothing here is invented.
-type AranPrice = { id: string; category: 'bale' | 'bag' | 'service'; item: string; grade: string | null; price_min: number | null; price_max: number | null; currency: string; unit: string; observed_on: string; source: string; note: string | null };
-const aranPrices = async (env: AppEnv['Bindings'], limit: number, sinceDays?: number) => (await env.DB.prepare(
-  `SELECT id, category, item, grade, price_min, price_max, currency, unit, observed_on, source, note FROM aran_prices
-   ${sinceDays ? `WHERE observed_on >= date('now', '-${Math.round(sinceDays)} days')` : ''} ORDER BY observed_on DESC, created_at DESC LIMIT ?`).bind(limit).all<AranPrice>()).results;
-
-/** The Aran price board as plain text for the AI (last 120 days). */
-async function aranContext(env: AppEnv['Bindings']): Promise<string> {
-  const rows = await aranPrices(env, 40, 120);
-  return rows.map((r) => `${r.observed_on} · ${r.category} · ${r.item}${r.grade ? ` (grade ${r.grade})` : ''}: ${r.price_min ?? '?'}–${r.price_max ?? '?'} ${r.currency}/${r.unit}${r.note ? ` — ${r.note}` : ''} [source: ${r.source}]`).join('\n');
+// ───────────────────────── Anajak Secondhand: vendor skills (🎨 paint · 🧽 clean & repair) ─────────────────────────
+// AI features for members (trial or paid), with a daily cap per person. Shop knowledge = active AI skills of that area.
+async function takeDaily(env: AppEnv['Bindings'], userId: string, kind: string, limit: number): Promise<{ ok: boolean; undo: () => Promise<unknown> }> {
+  const day = `${kind}:${chatDay()}`;
+  const r = await env.DB.prepare(`INSERT INTO ai_chat_usage (user_id, day, n) VALUES (?, ?, 1) ON CONFLICT (user_id, day) DO UPDATE SET n = n + 1 WHERE n < ?`).bind(userId, day, limit).run();
+  return { ok: !!r.meta.changes, undo: () => env.DB.prepare('UPDATE ai_chat_usage SET n = MAX(n - 1, 0) WHERE user_id = ? AND day = ?').bind(userId, day).run() };
 }
+const shopProducts = async (env: AppEnv['Bindings']) => (await env.DB.prepare('SELECT brand, name, kind FROM paint_products WHERE active = 1 ORDER BY brand, name LIMIT 60').all<{ brand: string; name: string; kind: string }>()).results
+  .map((p) => `${p.brand} ${p.name} (${p.kind})`);
 
-app.get('/api/aran', async (c) => {
-  const lessons = (await c.env.DB.prepare(`SELECT id, topic, title, body, brand, updated_at FROM ai_skills WHERE public = 1 AND status = 'active' ORDER BY topic, updated_at DESC`).all()).results;
-  return c.json({ lessons, prices: await aranPrices(c.env, 120), topics: ARAN_TOPICS });
+app.post('/api/skills/paint', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const gate = await memberGate(c); if (gate) return gate;
+  const b = await parse(c, z.object({ surface: z.enum(SURFACES), finish: z.enum(['matte', 'satin', 'gloss']), recipeId: z.string().max(64).nullish() }));
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const recipe = b.recipeId ? (await paintRecipes(c.env, false)).find((r) => r.id === b.recipeId) ?? null : null;
+  if (b.recipeId && !recipe) return c.json({ error: 'not_found' }, 404);
+  const lang = reqLang(c);
+  const key = `paint:${b.surface}:${b.finish}:${recipe ? `${recipe.id}@${recipe.updated_at}` : '-'}:${lang}`;
+  const hit = await c.env.DB.prepare(`SELECT value FROM skill_cache WHERE key = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')`).bind(key).first<{ value: string }>();
+  if (hit) return c.json({ ...JSON.parse(hit.value), cached: true });
+  const quota = await takeDaily(c.env, me.id, 'paint', 30);
+  if (!quota.ok) return c.json({ error: 'too_many' }, 429);
+  try {
+    const skills = skillText(await pickSkills(c.env, 'paint', { text: `${b.surface.replace('_', ' ')} ${b.finish} ${recipe?.name_km ?? ''} ${recipe?.name_en ?? ''}` }, 8000));
+    const r = await asFeature('paint_skill', async () => paintMethod(c.env, {
+      surface: b.surface, finish: b.finish, lang, skills, products: await shopProducts(c.env),
+      recipe: recipe ? { name: recipe.name_en || recipe.name_km, parts: recipe.parts.map((p: any) => ({ brand: p.brand, name: p.name, kind: p.kind, parts: p.parts })) } : null,
+    }));
+    await c.env.DB.prepare('INSERT OR REPLACE INTO skill_cache (key, value) VALUES (?, ?)').bind(key, JSON.stringify(r)).run();
+    return c.json(r);
+  } catch (e) { await quota.undo(); console.error('paint skill:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
 });
-app.get('/api/admin/aran/prices', need(STAFF), async (c) => c.json({ prices: await aranPrices(c.env, 300) }));
-app.post('/api/admin/aran/prices', need(STAFF), async (c) => {
-  const b = await parse(c, z.object({
-    category: z.enum(['bale', 'bag', 'service']), item: z.string().trim().min(2).max(120), grade: z.string().trim().max(20).nullish().transform((v) => v || null),
-    priceMin: z.number().int().min(0).max(10_000_000).nullable(), priceMax: z.number().int().min(0).max(10_000_000).nullable(),
-    currency: z.enum(['THB', 'USD', 'KHR']), unit: z.enum(['bale', 'kg', 'piece', 'job']), observedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    source: z.string().trim().min(2).max(300), note: z.string().trim().max(300).nullish().transform((v) => v || null),
-  }).refine((x) => x.priceMin !== null || x.priceMax !== null).refine((x) => x.priceMin === null || x.priceMax === null || x.priceMax >= x.priceMin)
-    .refine((x) => x.observedOn <= new Date().toISOString().slice(0, 10)));
-  const id = uid('ap_');
-  await c.env.DB.prepare(`INSERT INTO aran_prices (id, category, item, grade, price_min, price_max, currency, unit, observed_on, source, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, b.category, b.item, b.grade, b.priceMin, b.priceMax, b.currency, b.unit, b.observedOn, b.source, b.note, c.get('user').id).run();
-  await audit(c.env, c.get('user').id, 'aran.price', 'aran_prices', id);
-  return c.json({ id });
-});
-app.delete('/api/admin/aran/prices/:id', need(ADMINS), async (c) => {
-  await c.env.DB.prepare('DELETE FROM aran_prices WHERE id = ?').bind(c.req.param('id')).run();
-  await audit(c.env, c.get('user').id, 'aran.price_delete', 'aran_prices', c.req.param('id'));
-  return c.json({ ok: true });
+
+app.post('/api/skills/repair', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const gate = await memberGate(c); if (gate) return gate;
+  const form = await c.req.formData();
+  const surface = String(form.get('surface') ?? '');
+  const problem = String(form.get('problem') ?? '').trim().slice(0, 1000);
+  if (!(SURFACES as readonly string[]).includes(surface)) return c.json({ error: 'invalid_input' }, 400);
+  const file = form.get('file');
+  let image: { data: ArrayBuffer; mime: string } | null = null;
+  if (file instanceof File) {
+    if (file.size > MAX_IMAGE_BYTES) return c.json({ error: 'too_large' }, 413);
+    const data = await file.arrayBuffer(); const mime = sniffImage(new Uint8Array(data));
+    if (!mime) return c.json({ error: 'not_an_image' }, 415);
+    image = { data, mime };
+  }
+  if (!image && problem.length < 5) return c.json({ error: 'invalid_input' }, 400);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const quota = await takeDaily(c.env, me.id, 'repair', 15);
+  if (!quota.ok) return c.json({ error: 'too_many' }, 429);
+  try {
+    const skills = skillText(await pickSkills(c.env, 'repair', { text: `${surface.replace('_', ' ')} ${problem}` }, 8000));
+    const r = await asFeature('repair_skill', async () => repairAdvice(c.env, { surface, problem, image, lang: reqLang(c), skills, products: await shopProducts(c.env) }));
+    return c.json(r);
+  } catch (e) { await quota.undo(); console.error('repair skill:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
 });
 
 // ───────────────────────── Anajak Secondhand: AI assistant chat (signed-in users) ─────────────────────────
@@ -3329,8 +3353,6 @@ async function marketContext(env: AppEnv['Bindings']): Promise<string> {
   }
   const ups = (await env.DB.prepare('SELECT country, title, body, source, created_at FROM market_updates ORDER BY created_at DESC LIMIT 5').all<Record<string, string | null>>()).results;
   for (const u of ups) out.push(`Update ${u.created_at?.slice(0, 10)} ${u.country ?? ''}: ${u.title}${u.body ? ` — ${String(u.body).slice(0, 300)}` : ''} [source: ${u.source}]`);
-  const aran = await aranContext(env);
-  if (aran) out.push(`Aran (Rong Kluea) market prices seen by staff:\n${aran}`);
   return out.join('\n');
 }
 

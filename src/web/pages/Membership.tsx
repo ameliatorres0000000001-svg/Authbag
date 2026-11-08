@@ -82,7 +82,7 @@ export default function Membership() {
           </div>
 
           {/* what members get */}
-          <div className="rounded-2xl bg-charcoal p-5 text-white">
+          <div className="rounded-2xl border border-gold/40 bg-charcoal p-5 text-white">
             <div className="flex items-baseline justify-between gap-2">
               <span className="font-serif text-2xl">Pro</span>
               <span className="font-serif text-2xl text-gold">${m.prices.usd} <span className="text-sm text-white/60">/ {t('mb.month')}</span></span>
@@ -100,7 +100,7 @@ export default function Membership() {
             <h2 className="text-lg">{t('mb.pay')}</h2>
             <div className="grid grid-cols-2 gap-1 rounded-full bg-surface-low p-1 text-sm">
               {(['khqr', 'kbank'] as const).map((k) => (
-                <button key={k} type="button" onClick={() => setMethod(k)} className={`rounded-full px-3 py-2 ${method === k ? 'bg-charcoal text-white' : ''}`}>
+                <button key={k} type="button" onClick={() => setMethod(k)} className={`rounded-full px-3 py-2 ${method === k ? 'bg-gold text-charcoal' : ''}`}>
                   {k === 'khqr' ? `KHQR · $${m.prices.usd}` : `K Bank · ${m.prices.thb} ฿`}
                 </button>
               ))}

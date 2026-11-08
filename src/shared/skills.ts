@@ -3,12 +3,12 @@
  * Pure, so it is unit-tested; the worker loads the active rows and records which ones were used.
  * - brand skills only when that brand is in play (the request's brand, or named in the text);
  *   brand recognition does not know the brand yet, so it reads every recognition tip;
- * - in chat, a skill with keywords is used only when one appears; a skill with no brand and no keywords always;
+ * - in chat, paint and repair, a skill with keywords is used only when one appears; a skill with no brand and no keywords always;
  * - recognition reads its own tips, plus "all" skills only on a keyword hit;
  * - most relevant first, at most 10, within a size budget (characters of body).
  */
 export interface SkillRow { id: string; area: string; title: string; body: string; brand: string | null; keywords: string | null }
-export type SkillUse = 'chat' | 'identify' | 'check';
+export type SkillUse = 'chat' | 'identify' | 'check' | 'paint' | 'repair';
 
 export const skillWords = (k: string | null): string[] =>
   (k ?? '').split(/[,\n;、，]/).map((x) => x.trim().toLowerCase()).filter((x) => x.length >= 2);
@@ -35,7 +35,7 @@ export function chooseSkills(rows: SkillRow[], use: SkillUse, ctx: { text?: stri
       if (brand && (brand === b || brand.includes(b) || b.includes(brand))) score += 3;
       else if (mentions(text, b)) score += 2;
       else if (use !== 'identify') return;
-    } else if (kws.length && !hits && use === 'chat') return;
+    } else if (kws.length && !hits && use !== 'identify' && use !== 'check') return;
     if (use === 'identify' && r.area === 'all' && !hits) return;
     scored.push({ r, score: score + (r.area === use ? 0.5 : 0), i });
   });

@@ -87,7 +87,7 @@ export default function Lesson() {
         <div className="inline-flex rounded-lg border border-hairline bg-surface-card p-0.5">
           {(['look', 'compare'] as const).map((m) => (
             <button key={m} type="button" disabled={m === 'compare' && !canCompare} onClick={() => { setMode(m); setPick(null); }}
-              className={`rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40 ${mode === m ? 'bg-charcoal text-white' : 'text-charcoal'}`}>{t(`lesson.${m}`)}</button>
+              className={`rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40 ${mode === m ? 'bg-gold text-charcoal' : 'text-charcoal'}`}>{t(`lesson.${m}`)}</button>
           ))}
         </div>
         {!canCompare && step.photos.length > 0 && <p className="-mt-3 text-xs text-muted">{t('lesson.compareOff')}</p>}
@@ -190,7 +190,7 @@ function AdminTools({ step, model, ai, onChanged }: { step: Step; model: LessonD
           <div className="grid grid-cols-2 gap-2">
             {(['authentic', 'counterfeit'] as const).map((l) => (
               <button type="button" key={l} onClick={() => set('label', l)}
-                className={`rounded border px-3 py-2 text-left text-xs font-semibold ${f.label === l ? (l === 'authentic' ? 'border-verified bg-verified-bg text-verified' : 'border-counterfeit bg-counterfeit-bg text-counterfeit') : 'border-strong bg-white'}`}>
+                className={`rounded border px-3 py-2 text-left text-xs font-semibold ${f.label === l ? (l === 'authentic' ? 'border-verified bg-verified-bg text-verified' : 'border-counterfeit bg-counterfeit-bg text-counterfeit') : 'border-strong bg-surface-card'}`}>
                 {l === 'authentic' ? t('study.knownGenuine') : t('study.knownCounterfeit')}
               </button>
             ))}

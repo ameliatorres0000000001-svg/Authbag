@@ -38,7 +38,7 @@ import Restore from './pages/Restore.tsx';
 import RestoreLesson from './pages/RestoreLesson.tsx';
 import Paint from './pages/Paint.tsx';
 import Membership, { MembershipLine, type MembershipInfo } from './pages/Membership.tsx';
-import Aran from './pages/Aran.tsx';
+import Repair from './pages/Repair.tsx';
 import Authenticity from './pages/Authenticity.tsx';
 import Chat from './pages/Chat.tsx';
 
@@ -69,7 +69,7 @@ const TABS: [string, string, string][] = [
   ['/', 'home', 'M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z'],
   ['/paint', 'tab.restore', 'M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9 15.6l.8-3zM7 13c-2 0-3 1.5-3 3 0 1.3-.7 2.4-2 3 3.5 1.5 8 .5 8-3a3 3 0 0 0-3-3z'],
   ['/check', 'scan', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8'],
-  ['/verify', 'nav.verify', 'M12 8v4l3 2M3.05 11a9 9 0 1 1 .5 4M3 4v5h5'],
+  ['/repair', 'tab.repair', 'M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z'],
   ['/chat', 'tab.chat', 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12zM8.5 12h.01M12 12h.01M15.5 12h.01'],
 ];
 const TabIcon = ({ d }: { d: string }) => (
@@ -118,14 +118,14 @@ export default function App() {
           <nav className="flex flex-col px-2 pb-6">
             {NAV.map(([to, key]) => (
               <NavLink key={to} to={to} end={to === '/' || to === '/check'}
-                className={({ isActive }) => `rounded px-3 py-2 text-sm ${isActive ? 'bg-charcoal text-white' : 'text-charcoal hover:bg-surface-high'}`}>
+                className={({ isActive }) => `rounded px-3 py-2 text-sm ${isActive ? 'bg-gold text-charcoal' : 'text-charcoal hover:bg-surface-high'}`}>
                 {t(key)}
               </NavLink>
             ))}
             <div className="mt-4 px-3 pb-1 font-mono text-[10px] uppercase tracking-widest text-muted">{t('nav.more')}</div>
             {NAV_MORE.map(([to, key]) => (
               <NavLink key={to} to={to} end
-                className={({ isActive }) => `rounded px-3 py-1.5 text-sm ${isActive ? 'bg-charcoal text-white' : 'text-muted hover:bg-surface-high'}`}>
+                className={({ isActive }) => `rounded px-3 py-1.5 text-sm ${isActive ? 'bg-gold text-charcoal' : 'text-muted hover:bg-surface-high'}`}>
                 {t(key)}
               </NavLink>
             ))}
@@ -152,7 +152,7 @@ export default function App() {
             <Route path="/trends" element={<Trends />} />
             <Route path="/paint" element={<Paint />} />
             <Route path="/subscribe" element={<Membership />} />
-            <Route path="/aran" element={<Aran />} />
+            <Route path="/repair" element={<Repair />} />
             <Route path="/restore" element={<Restore />} />
             <Route path="/restore/:id" element={<RestoreLesson />} />
             <Route path="/authenticity" element={<Authenticity />} />
@@ -186,13 +186,13 @@ export default function App() {
         </main>
         <nav className={`fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-end border-t border-hairline bg-surface/95 px-1 pb-[max(env(safe-area-inset-bottom),0.4rem)] pt-1.5 backdrop-blur md:hidden`}>
           {TABS.map(([to, key, icon]) => to === '/check' ? (
-            <NavLink key={to} to={to} className="flex flex-col items-center gap-0.5 text-[10px] font-semibold text-charcoal">
-              <span className="-mt-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-surface bg-charcoal text-gold shadow-lg"><TabIcon d={icon} /></span>{t(key)}
+            <NavLink key={to} to={to} className="flex flex-col items-center gap-0.5 text-[10px] font-semibold text-ink">
+              <span className="-mt-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-surface bg-gold text-charcoal shadow-lg"><TabIcon d={icon} /></span>{t(key)}
             </NavLink>
           ) : (
             <NavLink key={to} to={to} end={to === '/'}
-              className={({ isActive }) => `flex flex-col items-center gap-0.5 py-0.5 text-[10px] ${on(to, isActive) ? 'font-bold text-charcoal' : 'text-muted'}`}>
-              {({ isActive }) => <><span className={`flex h-7 w-12 items-center justify-center rounded-full ${on(to, isActive) ? 'bg-gold-light text-charcoal' : ''}`}><TabIcon d={icon} /></span>{t(key)}</>}
+              className={({ isActive }) => `flex flex-col items-center gap-0.5 py-0.5 text-[10px] ${on(to, isActive) ? 'font-bold text-ink' : 'text-muted'}`}>
+              {({ isActive }) => <><span className={`flex h-7 w-12 items-center justify-center rounded-full ${on(to, isActive) ? 'bg-gold-light text-ink' : ''}`}><TabIcon d={icon} /></span>{t(key)}</>}
             </NavLink>
           ))}
         </nav>

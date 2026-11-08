@@ -9,6 +9,8 @@ import type { Issue, Measurement } from '../../shared/color.ts';
 import type { StepIcon } from '../../shared/voiceKeys.ts';
 import StepPlayer from '../StepPlayer.tsx';
 import { useUiVoice } from '../voice.ts';
+import LeatherPicker, { StepList, type Leather } from '../LeatherPicker.tsx';
+import { MembershipNeeded, isMembershipError } from './Membership.tsx';
 
 export interface PaintPart { id: string; brand: string; name: string; kind: string; color_hex: string | null; parts: number; has_photo: boolean; updated_at: string }
 export interface PaintRecipe {
@@ -81,69 +83,112 @@ export function RecipeCard({ r, mine, level, dE }: { r: PaintRecipe; mine?: stri
   );
 }
 
+interface Method { prep: string[]; mix: string[]; apply: string[]; dry: string[]; avoid: string[]; tools: string[]; safety: string }
+
 /**
- * Paint mixer: photograph the bag with white paper, tap the paper and the colour, get the mixing recipe.
- * A photo that fails a check gives the reasons and no colour; a colour with no recipe within ΔE 6 gives "no recipe".
+ * 🎨 Paint skill: ① which leather ② which finish ③ which colour (scan with white paper, or pick a recipe) →
+ * the mixing recipe (only real recipes; a colour without one gives "no recipe") + the AI method for that leather.
  */
 export default function Paint() {
   const { t } = useI18n();
   const me = useContext(MeContext);
+  const [leather, setLeather] = useState<Leather | null>(null);
+  const [finish, setFinish] = useState<'matte' | 'satin' | 'gloss'>('satin');
+  const [mode, setMode] = useState<'scan' | 'pick'>('scan');
   const [m, setM] = useState<Measurement | null>(null);
   const [res, setRes] = useState<MatchResult | null>(null);
+  const [chosen, setChosen] = useState<PaintRecipe | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [sent, setSent] = useState(false);
   const [recipes, setRecipes] = useState<PaintRecipe[] | null>(null);
   const [products, setProducts] = useState<PaintProduct[]>([]);
-  const [open, setOpen] = useState<string | null>(null);
-  const [hasLessons, setHasLessons] = useState(false);
+  const [method, setMethod] = useState<Method | null>(null);
+  const [mBusy, setMBusy] = useState(false);
+  const [mErr, setMErr] = useState('');
+  const [member, setMember] = useState(false);
   const voice = useUiVoice();
 
   useEffect(() => {
     api.get<{ recipes: PaintRecipe[] }>('/api/paint/recipes').then((r) => setRecipes(r.recipes)).catch(() => setRecipes([]));
     api.get<{ products: PaintProduct[] }>('/api/paint/products').then((r) => setProducts(r.products)).catch(() => {});
-    api.get<{ lessons: unknown[] }>('/api/care/lessons').then((r) => setHasLessons(r.lessons.length > 0)).catch(() => {});
   }, []);
+  useEffect(() => { setMethod(null); setMErr(''); setMember(false); }, [leather, finish, chosen]);
 
   const onScan = (meas: Measurement | null, issues: Issue[]) => {
-    setRes(null); setErr(''); setSent(false);
+    setRes(null); setErr(''); setSent(false); setChosen(null);
     if (!meas || issues.length) { setM(null); return; }
     setM(meas); setBusy(true);
     api.post<MatchResult>('/api/paint/match', { measurement: meas })
-      .then((r) => { setRes(r); voice.sayKey(r.matches[0]?.level === 'exact' ? 'paint.exact' : r.matches[0] ? 'paint.close' : 'paint.none'); })
+      .then((r) => { setRes(r); setChosen(r.matches[0]?.recipe ?? null); voice.sayKey(r.matches[0]?.level === 'exact' ? 'paint.exact' : r.matches[0] ? 'paint.close' : 'paint.none'); })
       .catch((e) => setErr(e instanceof ApiError && e.status === 422 ? t('paint.cannot') : errText(e)))
       .finally(() => setBusy(false));
   };
-
   const request = async () => {
     try { await api.post('/api/paint/requests', { measurement: m }); setSent(true); } catch (e) { setErr(errText(e)); }
   };
+  const askMethod = async () => {
+    if (!leather) return;
+    setMBusy(true); setMErr(''); setMember(false);
+    try { setMethod(await api.post<Method>('/api/skills/paint', { surface: leather, finish, recipeId: chosen?.id ?? null })); }
+    catch (e) {
+      if (isMembershipError(e)) setMember(true);
+      else setMErr(e instanceof ApiError && e.status === 429 ? t('skill.tooMany') : e instanceof ApiError && e.body?.error === 'ai_not_configured' ? t('chat.notConfigured') : errText(e));
+    } finally { setMBusy(false); }
+  };
+  const match = res?.matches.find((x) => x.recipe.id === chosen?.id);
 
   return (
-    <Page title={t('paint.title')} subtitle={t('paint.sub')}>
+    <Page title={`🎨 ${t('skill.paint')}`} subtitle={t('paint.skillSub')}>
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-4">
-          <div className="rounded-2xl border border-hairline bg-surface-card p-4">
-            <h2 className="mb-2 text-base">{t('paint.howTitle')}</h2>
-            <ol className="grid gap-2 text-sm sm:grid-cols-3">
-              {['paint.how1', 'paint.how2', 'paint.how3'].map((k, i) => (
-                <li key={k} className="flex gap-2 rounded-xl bg-surface-low p-2.5">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-charcoal font-mono text-xs text-gold">{i + 1}</span>{t(k)}
-                </li>
-              ))}
-            </ol>
+        <section className="space-y-5">
+          <div>
+            <h2 className="mb-2 text-base">① {t('skill.leather')}</h2>
+            <LeatherPicker value={leather} onChange={setLeather} />
           </div>
-          <button type="button" onClick={voice.toggle} aria-pressed={voice.on}
-            className={`rounded-full border px-4 py-2 text-sm ${voice.on ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>
-            {voice.on ? '🔊' : '🔇'} {t('voice.guide')}
-          </button>
-          <ColorScanner onChange={onScan} onSay={voice.sayKey} />
+          <div>
+            <h2 className="mb-2 text-base">② {t('paint.finishTitle')}</h2>
+            <div className="grid grid-cols-3 gap-1 rounded-full bg-surface-low p-1 text-sm">
+              {(['matte', 'satin', 'gloss'] as const).map((k) => <button key={k} type="button" onClick={() => setFinish(k)} aria-pressed={finish === k} className={`rounded-full px-3 py-2 ${finish === k ? 'bg-gold text-charcoal' : ''}`}>{t(`paint.finish.${k}`)}</button>)}
+            </div>
+          </div>
+          <div>
+            <h2 className="mb-2 text-base">③ {t('paint.colorTitle')}</h2>
+            <div className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-surface-low p-1 text-sm">
+              <button type="button" onClick={() => setMode('scan')} className={`rounded-full px-3 py-2 ${mode === 'scan' ? 'bg-gold text-charcoal' : ''}`}>📷 {t('paint.modeScan')}</button>
+              <button type="button" onClick={() => setMode('pick')} className={`rounded-full px-3 py-2 ${mode === 'pick' ? 'bg-gold text-charcoal' : ''}`}>🎨 {t('paint.modePick')}</button>
+            </div>
+            {mode === 'scan' ? (
+              <div className="space-y-3">
+                <button type="button" onClick={voice.toggle} aria-pressed={voice.on}
+                  className={`rounded-full border px-4 py-1.5 text-xs ${voice.on ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>{voice.on ? '🔊' : '🔇'} {t('voice.guide')}</button>
+                <ColorScanner onChange={onScan} onSay={voice.sayKey} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                {recipes?.length === 0 && <p className="col-span-full text-sm text-muted">{t('noData')}</p>}
+                {recipes?.map((r) => (
+                  <button key={r.id} type="button" onClick={() => { setChosen(chosen?.id === r.id ? null : r); setRes(null); }} aria-pressed={chosen?.id === r.id}
+                    className={`overflow-hidden rounded-xl border text-left ${chosen?.id === r.id ? 'border-gold ring-2 ring-gold' : 'border-hairline'}`}>
+                    <span className="block h-12" style={{ background: r.hex }} />
+                    <span className="block truncate bg-surface-card px-1.5 py-1 text-[10px]">{r.name_km}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="space-y-3" aria-live="polite">
           {busy && <div className="animate-pulse rounded-2xl bg-surface-low p-6 text-sm text-muted">{t('paint.checking')}</div>}
           {err && <Notice tone="bad">{err}</Notice>}
-          {res && res.matches.length > 0 && res.matches.map((x) => <RecipeCard key={x.recipe.id} r={x.recipe} mine={res.hex} level={x.level} dE={x.dE} />)}
+          {res && res.matches.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              {res.matches.map((x) => <button key={x.recipe.id} type="button" onClick={() => setChosen(x.recipe)} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${chosen?.id === x.recipe.id ? 'border-gold' : 'border-hairline'}`}><span className="h-3 w-3 rounded-full" style={{ background: x.recipe.hex }} />{x.recipe.name_km} · ΔE {x.dE}</button>)}
+            </div>
+          )}
+          {chosen && <RecipeCard r={chosen} mine={res?.hex} level={match?.level} dE={match?.dE} />}
+          {chosen && leather && chosen.surface !== leather && chosen.surface !== 'other' && <Notice tone="warn">{t('paint.otherSurface').replace('{a}', t(`paint.surface.${chosen.surface}`)).replace('{b}', t(`paint.surface.${leather}`))}</Notice>}
           {res && res.matches.length === 0 && (
             <div className="space-y-3 rounded-2xl border border-hairline bg-surface-card p-4">
               <div className="flex items-center gap-3">
@@ -151,34 +196,45 @@ export default function Paint() {
                 <p className="text-sm">{t('paint.none')}</p>
               </div>
               {sent ? <Notice tone="ok">{t('paint.requested')}</Notice>
-                : me?.id ? <button type="button" className="btn-primary" onClick={request}>{t('paint.request')}</button>
+                : me?.id ? <button type="button" className="btn-ghost" onClick={request}>{t('paint.request')}</button>
                   : <Link to="/login" className="btn-ghost inline-block">{t('paint.signInToRequest')}</Link>}
             </div>
           )}
+
+          {/* the AI method for this leather */}
+          <div className="space-y-3 rounded-2xl border border-gold/40 bg-surface-card p-4">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold text-charcoal" aria-hidden>✦</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">{t('paint.methodTitle')}</div>
+                <div className="text-xs text-muted">{leather ? `${t(`paint.surface.${leather}`)} · ${t(`paint.finish.${finish}`)}${chosen ? ` · ${chosen.name_km}` : ''}` : t('skill.pickLeather')}</div>
+              </div>
+            </div>
+            {!method && <button type="button" className="btn-primary w-full !py-3" disabled={!leather || mBusy} onClick={askMethod}>{mBusy ? t('skill.thinking') : t('paint.askMethod')}</button>}
+            {member && <MembershipNeeded />}
+            {mErr && <Notice tone="bad">{mErr}</Notice>}
+            {method && (
+              <div className="space-y-4">
+                <StepList title={t('paint.m.prep')} items={method.prep} />
+                <StepList title={t('paint.m.mix')} items={method.mix} />
+                <StepList title={t('paint.m.apply')} items={method.apply} />
+                <StepList title={t('paint.m.dry')} items={method.dry} />
+                <StepList title={t('skill.avoid')} items={method.avoid} numbered={false} />
+                <StepList title={t('paint.m.tools')} items={method.tools} numbered={false} />
+                {method.safety && <p className="rounded-xl bg-review-bg px-3 py-2 text-xs text-review">⚠️ {method.safety}</p>}
+                <p className="text-[11px] text-muted">{t('skill.aiNote')}</p>
+              </div>
+            )}
+          </div>
         </section>
       </div>
 
-      <section className="mt-10">
-        <h2 className="mb-3 text-xl">{t('paint.recipes')}</h2>
-        {recipes && recipes.length === 0 && <p className="text-sm text-muted">{t('noData')}</p>}
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
-          {recipes?.map((r) => (
-            <button key={r.id} type="button" onClick={() => setOpen(open === r.id ? null : r.id)}
-              className={`overflow-hidden rounded-xl border text-left ${open === r.id ? 'border-charcoal ring-2 ring-gold' : 'border-hairline'}`}>
-              <span className="block h-14" style={{ background: r.hex }} />
-              <span className="block truncate bg-surface-card px-2 py-1 text-[11px]">{r.name_km}</span>
-            </button>
-          ))}
-        </div>
-        {open && recipes?.find((r) => r.id === open) && <div className="mt-3 max-w-xl"><RecipeCard r={recipes.find((r) => r.id === open)!} /></div>}
-      </section>
-
       {products.length > 0 && (
-        <section className="mt-10">
-          <h2 className="mb-3 text-xl">{t('paint.products')}</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <details className="mt-8 rounded-2xl border border-hairline bg-surface-card p-4">
+          <summary className="cursor-pointer text-base font-semibold">{t('paint.products')} · {products.length}</summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((p) => (
-              <details key={p.id} className="rounded-2xl border border-hairline bg-surface-card p-3">
+              <details key={p.id} className="rounded-xl border border-hairline bg-surface-low p-3">
                 <summary className="flex cursor-pointer items-center gap-3">
                   {p.has_photo ? <img src={productPhoto(p)} alt="" className="h-12 w-12 rounded-lg object-cover" />
                     : <span className="h-12 w-12 rounded-lg border border-hairline" style={{ background: p.color_hex ?? 'transparent' }} />}
@@ -186,18 +242,13 @@ export default function Paint() {
                 </summary>
                 {p.info && <p className="mt-2 whitespace-pre-line text-sm">{p.info}</p>}
                 {p.sources.length > 0 && (
-                  <div className="mt-2 text-xs">
-                    <div className="font-semibold text-muted">{t('paint.sources')}</div>
-                    <ul className="mt-1 space-y-0.5">{p.sources.map((s) => <li key={s.url}><a href={s.url} target="_blank" rel="noopener noreferrer" className="break-all text-gold underline">{s.title || s.url}</a></li>)}</ul>
-                  </div>
+                  <ul className="mt-2 space-y-0.5 text-xs">{p.sources.map((x) => <li key={x.url}><a href={x.url} target="_blank" rel="noopener noreferrer" className="break-all text-gold underline">{x.title || x.url}</a></li>)}</ul>
                 )}
               </details>
             ))}
           </div>
-        </section>
+        </details>
       )}
-
-      {hasLessons && <Link to="/restore" className="btn-ghost mt-8 inline-block">{t('paint.lessons')} →</Link>}
     </Page>
   );
 }

@@ -480,10 +480,10 @@ export interface ChatTurn { role: 'user' | 'assistant'; content: string }
  */
 export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, ctx: { market: string; skills: string; app: string }): Promise<string> {
   const system = [
-    'You are the Anajak Secondhand assistant, helping second-hand luxury bag sellers and buyers in Southeast Asia (Cambodia, Thailand, Indonesia, Malaysia).',
-    'You teach and explain: brands and models, materials and hardware, how date codes and serial systems work, how experts inspect a bag, care, cleaning, edge paint and leather restoration, pricing logic and the second-hand market.',
+    'You are Anajak, the AI work assistant of second-hand designer bag vendors at the Cambodia–Thailand border market (Aran / Rong Kluea) who sell to Thai, Malaysian and Indonesian resellers.',
+    'They already know the market. Help them get the work done: repainting and recolouring by leather type, cleaning and repair, recognising brands / models / materials / hardware, date codes, what to photograph to check a bag, and selling. Give direct, practical answers (what to do, with what, in which order), not lectures.',
     'Hard rules:',
-    '1. Never state, imply or estimate whether a specific bag, photo or listing is authentic, genuine, real, fake, counterfeit or a replica, and never give a probability or percentage. If asked, explain which points experts look at and suggest the Check tab of the app, where the photos of the bag are compared with reference photos (and, when expert review is on, a named human expert answers).',
+    '1. Never state, imply or estimate whether a specific bag, photo or listing is authentic, genuine, real, fake, counterfeit or a replica, and never give a probability or percentage. If asked, say which points to look at and suggest the Check skill of the app, where the photos of the bag are compared with reference photos (and, when expert review is on, a named human expert answers).',
     '2. Never invent market numbers, rankings, prices or statistics. For current market facts, use only the "Market data" below; if it has nothing relevant, say there is no data yet and explain general factors instead.',
     '3. For repair and chemical work (dyes, solvents, edge paint), give safety notes and suggest testing on a hidden spot first; say when a professional should do it.',
     '4. Never help make, label or sell counterfeit goods, or remove or alter serial numbers, date codes or brand marks.',
@@ -824,4 +824,73 @@ export async function draftOutreach(env: Env, x: { country: 'TH' | 'MY' | 'ID'; 
   const message = typeof o?.message === 'string' ? o.message.trim().slice(0, 1500) : '';
   if (message.length < 10) throw new Error('ai_empty');
   return { message, meaning: typeof o?.meaning === 'string' ? o.meaning.trim().slice(0, 1500) : '' };
+}
+
+export const SURFACE_NAME: Record<string, string> = {
+  smooth_leather: 'smooth leather (calf, lambskin, box)', grained_leather: 'grained / pebbled leather (e.g. Epi, Saffiano, Togo-type grain)',
+  vachetta: 'vachetta (untreated natural cowhide that darkens)', coated_canvas: 'coated canvas (PVC-coated, e.g. monogram canvas, Coach signature)',
+  suede: 'suede / nubuck', edge: 'edges (edge paint / edge coat)', other: 'other material',
+};
+const steps = (v: unknown, n = 10) => (Array.isArray(v) ? v : []).map((x) => String(x ?? '').trim()).filter(Boolean).slice(0, n).map((x) => x.slice(0, 400));
+const parseObj = (text: string): any => { const a = text.indexOf('{'), b = text.lastIndexOf('}'); try { return a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { return null; } };
+
+export interface PaintMethod { prep: string[]; mix: string[]; apply: string[]; dry: string[]; avoid: string[]; tools: string[]; safety: string }
+
+/**
+ * 🎨 Paint skill: how to prepare, mix and paint for ONE leather type (and finish), as a vendor's workshop checklist.
+ * Mixing ratios come only from the shop's recipe when one is given — the AI never invents ratios; without a recipe it
+ * gives mixing technique only. Shop knowledge (active paint skills) comes first. Never comments on authenticity, and
+ * never explains how to add or change logos, serials or date codes.
+ */
+export async function paintMethod(env: Env, x: { surface: string; finish: string; recipe: { name: string; parts: { brand: string; name: string; kind: string; parts: number }[] } | null; products: string[]; skills: string; lang: OutLang }): Promise<PaintMethod> {
+  const text = await callVision(env,
+    'You are the paint-skill assistant of second-hand bag vendors who repaint and recolour bags for resale (Cambodia–Thailand border market). ' +
+    'Write a practical workshop checklist for the given leather type and finish: preparation (cleaning, deglazing / sanding only where right for that leather, masking, test on a hidden spot), ' +
+    'mixing, application (tool: sponge, brush, airbrush; thin coats; how many), drying times between coats and before use, finishing / sealing, and the mistakes that ruin this leather type. ' +
+    'Rules: use the shop knowledge first and do not contradict it. If a recipe is given, explain how to mix THAT recipe exactly (same products, same parts; measure by drops, ml or grams, stir, swatch test, adjust one drop at a time) — never change the ratio or invent another. ' +
+    'If no recipe is given, give mixing technique only, with NO ratios or product amounts, and say to scan the colour or ask the shop for a recipe. ' +
+    'Name products only from the list given; otherwise use generic product types. ' + NO_VERDICT + ' Never explain how to add, copy or alter logos, serial numbers or date codes. ' +
+    `Write in ${LANG_NAME[x.lang]}, short imperative lines (one action per line). ` +
+    'Reply with JSON only: {"prep":["…"],"mix":["…"],"apply":["…"],"dry":["…"],"avoid":["…"],"tools":["…"],"safety":"one short paragraph"}',
+    [], [
+      `Leather type: ${SURFACE_NAME[x.surface] ?? x.surface}`,
+      `Finish wanted: ${x.finish}`,
+      x.recipe ? `Recipe "${x.recipe.name}": ${x.recipe.parts.map((p) => `${p.parts} part(s) ${p.brand} ${p.name} (${p.kind})`).join(' + ')}` : 'Recipe: none',
+      `Products the shop has: ${x.products.slice(0, 40).join('; ') || '(none listed)'}`,
+      `Shop knowledge:\n${x.skills || '(none yet)'}`,
+    ].join('\n'), 3000, 'medium');
+  const o = parseObj(text);
+  const r = { prep: steps(o?.prep), mix: steps(o?.mix), apply: steps(o?.apply), dry: steps(o?.dry, 6), avoid: steps(o?.avoid, 8), tools: steps(o?.tools, 12), safety: String(o?.safety ?? '').trim().slice(0, 600) };
+  if (!r.prep.length && !r.apply.length) throw new Error('ai_empty');
+  return r;
+}
+
+export interface RepairAdvice { problem: string; unclear: boolean; severity: 'light' | 'medium' | 'heavy' | null; steps: string[]; materials: string[]; avoid: string[]; pro: string; safety: string }
+
+/**
+ * 🧽 Clean & repair skill: from a photo of the problem (and/or a short description) and the leather type, say what
+ * is visible and how to fix it step by step. Says "unclear" instead of guessing when the photo does not show it.
+ * Never comments on authenticity; never explains how to add or change logos, serials or date codes.
+ */
+export async function repairAdvice(env: Env, x: { surface: string; problem: string; image: VisionImage | null; products: string[]; skills: string; lang: OutLang }): Promise<RepairAdvice> {
+  const text = await callVision(env,
+    'You are the repair-skill assistant of second-hand bag vendors who clean and fix bags for resale. ' +
+    'From the photo (if any) and the description, name the visible problem (e.g. stain, ink, mould, water mark, darkened vachetta, peeling or cracked paint, worn corners, cracked edge paint, sticky lining, scratches, loose stitching, tarnished hardware, odour) ' +
+    'and give a step-by-step fix for THIS leather type, gentlest method first, with a test on a hidden spot. ' +
+    'If the photo does not clearly show the problem, set "unclear": true, say what photo is needed, and give no steps for things you cannot see. ' +
+    'Use the shop knowledge first and do not contradict it. Name products only from the list given; otherwise use generic product types. ' + NO_VERDICT + ' Never explain how to add, copy or alter logos, serial numbers or date codes. ' +
+    `Write in ${LANG_NAME[x.lang]}, short imperative lines. ` +
+    'Reply with JSON only: {"problem":"what is visible, one sentence","unclear":false,"severity":"light|medium|heavy","steps":["…"],"materials":["…"],"avoid":["…"],"pro":"when a professional should do it, or empty","safety":"one short line"}',
+    x.image ? [x.image] : [], [
+      `Leather type: ${SURFACE_NAME[x.surface] ?? x.surface}`,
+      `Vendor's description: ${x.problem || '(none)'}`,
+      `Products the shop has: ${x.products.slice(0, 40).join('; ') || '(none listed)'}`,
+      `Shop knowledge:\n${x.skills || '(none yet)'}`,
+    ].join('\n'), 2500, 'medium');
+  const o = parseObj(text);
+  const sev = (['light', 'medium', 'heavy'] as const).find((k) => k === o?.severity) ?? null;
+  const r: RepairAdvice = { problem: String(o?.problem ?? '').trim().slice(0, 400), unclear: !!o?.unclear, severity: sev, steps: steps(o?.steps, 12), materials: steps(o?.materials, 12),
+    avoid: steps(o?.avoid, 8), pro: String(o?.pro ?? '').trim().slice(0, 400), safety: String(o?.safety ?? '').trim().slice(0, 400) };
+  if (!r.problem && !r.steps.length) throw new Error('ai_empty');
+  return r;
 }

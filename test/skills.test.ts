@@ -43,3 +43,10 @@ test('whole-word match for Latin words, inside-text match for Khmer and Thai', (
   assert.equal(mentions('ទិញតោនពីចិន', 'តោន'), true);
   assert.equal(mentions('ซื้อกระสอบจากจีน', 'กระสอบ'), true);
 });
+
+test('paint and repair: their own skills plus "all"; keyword skills only on a hit', () => {
+  const rows = [row('suede', { area: 'paint', keywords: 'suede, ស្បែកកក់' }), row('gen', { area: 'paint' }), row('rep', { area: 'repair' }), row('chat', { area: 'chat' })];
+  assert.deepEqual(ids(chooseSkills(rows, 'paint', { text: 'surface: suede' }, 9999)), ['suede', 'gen']);
+  assert.deepEqual(ids(chooseSkills(rows, 'paint', { text: 'surface: smooth leather' }, 9999)), ['gen']);
+  assert.deepEqual(ids(chooseSkills(rows, 'repair', { text: 'mould' }, 9999)), ['rep']);
+});

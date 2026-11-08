@@ -59,8 +59,8 @@ export default function Login({ onDone, onClose }: { onDone: () => void; onClose
           </p>
         )}
         <div className="flex justify-center gap-3 text-xs text-muted">
-          <button type="button" className={locale === 'km' ? 'font-bold text-charcoal' : ''} onClick={() => setLocale('km')}>ខ្មែរ</button>
-          <button type="button" className={locale === 'en' ? 'font-bold text-charcoal' : ''} onClick={() => setLocale('en')}>English</button>
+          <button type="button" className={locale === 'km' ? 'font-bold text-ink' : ''} onClick={() => setLocale('km')}>ខ្មែរ</button>
+          <button type="button" className={locale === 'en' ? 'font-bold text-ink' : ''} onClick={() => setLocale('en')}>English</button>
         </div>
       </form>
     </div>

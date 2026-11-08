@@ -79,7 +79,7 @@ export function TrendTable({ country, period, rows, dark, showSource = true, com
                 {!compact && r.note && <div className={`truncate text-[11px] ${sub}`}>{r.note}</div>}
               </div>
               <div className="shrink-0 text-right">
-                <div className={`font-mono text-[11px] ${dark ? 'text-[#cfc6dc]' : 'text-charcoal'}`}>{priceText(r)}</div>
+                <div className={`font-mono text-[11px] ${dark ? 'text-[#cfc6dc]' : 'text-ink'}`}>{priceText(r)}</div>
                 <Movement m={r.movement} dark={dark} />
               </div>
             </li>
