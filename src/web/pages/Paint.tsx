@@ -11,6 +11,7 @@ import StepPlayer from '../StepPlayer.tsx';
 import { useUiVoice } from '../voice.ts';
 import LeatherPicker, { StepList, type Leather } from '../LeatherPicker.tsx';
 import { MembershipNeeded, isMembershipError } from './Membership.tsx';
+import AiWorkspace from '../AiWorkspace.tsx';
 
 export interface PaintPart { id: string; brand: string; name: string; kind: string; color_hex: string | null; parts: number; has_photo: boolean; updated_at: string }
 export interface PaintRecipe {
@@ -113,6 +114,7 @@ export default function Paint() {
   const [gBusy, setGBusy] = useState(false);
   const [gNote, setGNote] = useState<'member' | 'failed' | null>(null);
   const picked = useRef({ leather: false, finish: false });
+  const [showPicker, setShowPicker] = useState(true);
   const voice = useUiVoice();
 
   /** AI looks at the same photo: which leather and finish (pre-selects them unless the person already chose). */
@@ -122,7 +124,7 @@ export default function Paint() {
       const fd = new FormData(); fd.append('file', f);
       const g = await api.post<LeatherGuess>('/api/skills/paint/leather', fd);
       setGuess(g);
-      if (g.surface && g.confidence >= 0.5 && !picked.current.leather) setLeather(g.surface);
+      if (g.surface && g.confidence >= 0.5 && !picked.current.leather) { setLeather(g.surface); setShowPicker(false); }
       if (g.finish && g.confidence >= 0.5 && !picked.current.finish) setFinish(g.finish);
     } catch (e) { setGNote(isMembershipError(e) ? 'member' : 'failed'); } finally { setGBusy(false); }
   };
@@ -197,7 +199,12 @@ export default function Paint() {
               </div>
             )}
             {gNote === 'member' && <p className="mb-2 text-xs text-muted">🤖 {t('paint.aiMember')}</p>}
-            <LeatherPicker value={leather} onChange={(v) => { picked.current.leather = true; setLeather(v); }} />
+            {leather && !showPicker ? (
+              <div className="flex items-center gap-2 rounded-xl border border-gold bg-surface-card px-3 py-2 text-sm">
+                <span className="flex-1"><b>{t(`paint.surface.${leather}`)}</b> <span className="text-xs text-muted">· {t(`skill.leatherSub.${leather}`)}</span></span>
+                <button type="button" className="text-xs font-semibold text-gold" onClick={() => setShowPicker(true)}>{t('paint.change')}</button>
+              </div>
+            ) : <LeatherPicker value={leather} onChange={(v) => { picked.current.leather = true; setLeather(v); setShowPicker(false); }} />}
           </div>
           <div>
             <h2 className="mb-1.5 text-sm font-semibold">③ {t('paint.finishTitle')}</h2>
@@ -254,6 +261,11 @@ export default function Paint() {
               </div>
             )}
           </div>
+
+          {/* the bench: ask the AI when the colour does not match or something goes wrong (text / voice / photo) */}
+          <AiWorkspace skill="paint" title={t('ws.paintTitle')} sub={t('ws.paintSub')}
+            context={{ surface: leather, finish, recipeId: chosen?.id ?? null, lab: res?.lab ?? null, guess, method }}
+            chips={['ws.pq1', 'ws.pq2', 'ws.pq3', 'ws.pq4', 'ws.pq5', 'ws.pq6'].map((k) => t(k))} />
         </section>
       </div>
 

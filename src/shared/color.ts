@@ -155,3 +155,11 @@ export const measuredLab = (m: Measurement): Lab => rgbToLab(m.sample.mean, m.wh
 /** ΔE2000 bands: same colour, close (adjust slightly, test first), or no recipe (we do not guess). */
 export const MATCH = { exact: 3, close: 6 } as const;
 export const matchLevel = (dE: number): 'exact' | 'close' | 'none' => (dE <= MATCH.exact ? 'exact' : dE <= MATCH.close ? 'close' : 'none');
+
+/** Lighter / darker, redder / greener, yellower / bluer: how the bag (measured) differs from the recipe colour, for the AI. */
+export function colourDiff(measured: Lab, recipe: Lab): string {
+  const [dL, da, db] = [measured[0] - recipe[0], measured[1] - recipe[1], measured[2] - recipe[2]];
+  const part = (d: number, plus: string, minus: string) => (Math.abs(d) < 1.5 ? '' : `${d > 0 ? plus : minus} by ${Math.abs(d).toFixed(1)}`);
+  const words = [part(dL, 'bag is lighter', 'bag is darker'), part(da, 'bag is redder', 'bag is greener'), part(db, 'bag is yellower', 'bag is bluer')].filter(Boolean);
+  return `ΔE2000 ${deltaE2000(measured, recipe).toFixed(1)} (${words.length ? words.join(', ') : 'practically the same'}) — so the mix must move the same way to match the bag`;
+}

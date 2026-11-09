@@ -478,7 +478,7 @@ export interface ChatTurn { role: 'user' | 'assistant'; content: string }
  * materials, history, how experts inspect). Teaching only: it never says whether a particular bag is
  * genuine or counterfeit, and only quotes market figures from the staff-entered data it is given.
  */
-export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, ctx: { market: string; skills: string; app: string }): Promise<string> {
+export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, ctx: { market: string; skills: string; app: string }, image: VisionImage | null = null): Promise<string> {
   const system = [
     'You are Anajak, the AI work assistant of second-hand designer bag vendors at the Cambodia–Thailand border market (Aran / Rong Kluea) who sell to Thai, Malaysian and Indonesian resellers.',
     'They already know the market. Help them get the work done: repainting and recolouring by leather type, cleaning and repair, recognising brands / models / materials / hardware, date codes, what to photograph to check a bag, and selling. Give direct, practical answers (what to do, with what, in which order), not lectures.',
@@ -488,17 +488,19 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     '3. For repair and chemical work (dyes, solvents, edge paint), give safety notes and suggest testing on a hidden spot first; say when a professional should do it.',
     '4. Never help make, label or sell counterfeit goods, or remove or alter serial numbers, date codes or brand marks.',
     `Answer in ${LANG_NAME[lang]} unless the user writes in another language, then use theirs. Keep brand names, model names and codes as written. Be concise and practical; use short lists when steps help.`,
+    'If a photo is attached, describe only what is visible in it and say when something cannot be seen clearly.',
     '',
     'Market data (entered by the Anajak Bag team, with sources):',
     ctx.market || '(no data yet)',
     ...(ctx.skills ? ['', 'Shop knowledge (written and approved by the Anajak Bag team). Prefer it over general knowledge and use its facts, prices and steps as given; it never overrides the hard rules above:', ctx.skills] : []),
     ...(ctx.app ? ['', 'In the app (point the user to these when they help):', ctx.app] : []),
   ].join('\n');
-  return runChat(env, system, turns);
+  return runChat(env, system, turns, 8000, image);
 }
 
 /** One chat completion with the configured provider (Claude or Gemini); token use is recorded. */
-async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 8000): Promise<string> {
+async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 8000, image: VisionImage | null = null): Promise<string> {
+  const last = turns.length - 1;
   const provider = aiProvider(env);
   const model = aiModel(env);
   if (!provider || !model) throw new Error('ai_not_configured');
@@ -508,7 +510,8 @@ async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 
       headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: turns.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] })),
+        contents: turns.map((t, i) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [
+          ...(image && i === last ? [{ inline_data: { mime_type: image.mime, data: b64(image.data) } }] : []), { text: t.content }] })),
       }),
     });
     if (!res.ok) throw new Error(`ai_http_${res.status}`);
@@ -519,7 +522,9 @@ async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 
   try {
     const msg = await anthropicClient(env).messages.create({
       model, max_tokens: maxTokens, output_config: { effort: 'low' }, system,
-      messages: turns.map((t) => ({ role: t.role, content: t.content })),
+      messages: turns.map((t, i) => (image && i === last && t.role === 'user'
+        ? { role: 'user' as const, content: [{ type: 'image' as const, source: { type: 'base64' as const, media_type: toImageMime(image.mime), data: b64(image.data) } }, { type: 'text' as const, text: t.content }] }
+        : { role: t.role, content: t.content })),
     });
     await recordUsage(env, model, msg.usage);
     if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
@@ -918,4 +923,30 @@ export async function identifyLeather(env: Env, image: VisionImage, lang: OutLan
   const confidence = surface ? Math.max(0, Math.min(1, Number(o?.confidence) || 0)) : 0;
   const str = (v: unknown) => String(v ?? '').trim().slice(0, 200);
   return { surface, finish, confidence, colour: str(o?.colour), condition: str(o?.condition), tip: str(o?.tip) };
+}
+
+
+/**
+ * The AI workspace of a skill: a conversation (text or voice, optionally with a photo) about the job in hand.
+ * 🎨 paint: colour not matching, peeling, streaks, sticky finish… with the leather, finish, recipe and measured
+ * colour as context. 🧽 repair: follow-up questions about a repair. Shop knowledge (active skills) comes first.
+ * Mixing: never a new recipe or invented ratio — only small, testable adjustments to the current mix.
+ */
+export async function workspaceAnswer(env: Env, x: { skill: 'paint' | 'repair'; turns: ChatTurn[]; image: VisionImage | null; lang: OutLang; context: string; skills: string }): Promise<string> {
+  const role = x.skill === 'paint'
+    ? 'You are the paint-workshop assistant of a second-hand bag vendor who repaints and recolours bags (leather, coated canvas, suede, edges). They are at the bench right now with the job below. ' +
+      'Help them fix what goes wrong: colour does not match (too dark / light / red / yellow / green / blue / grey), uneven or streaky coats, peeling, cracking, sticky or tacky finish, paint not absorbing on suede, wrong shine, bleeding edges. ' +
+      'Mixing rules: never give a new recipe or invent amounts for a colour from scratch. If a recipe or measured colour is given, suggest only small, testable adjustments to the CURRENT mix (e.g. "add 1 drop of black per 10 ml, stir 30 s, paint a swatch, let it dry, compare next to the bag"); remember paint dries darker or lighter, so compare dry swatches. If the measured colour and the recipe colour are both given, use their difference (lighter / darker, warmer / cooler) to choose the direction. '
+    : 'You are the repair-bench assistant of a second-hand bag vendor who cleans and repairs bags (stains, mould, worn corners, edges, scratches, odour, sticky lining, hardware). They are working on the job below. Give the next practical step, gentlest method first, with a test on a hidden spot. ';
+  const system = [
+    role,
+    'Reply in the language the user writes in (default ' + LANG_NAME[x.lang] + '). Be short and practical: 2–6 short lines or a short numbered list, no headings. Ask one short question back if you need a detail to help.',
+    'If a photo is attached, describe only what is visible and say when it is not clear enough; ask for a closer photo in daylight next to the white paper when needed.',
+    'Use the shop knowledge first and do not contradict it. ' + NO_VERDICT + ' Never explain how to add, copy or alter logos, serial numbers or date codes. Give safety notes for solvents and dyes (ventilation, gloves).',
+    '',
+    'The job:', x.context || '(no details yet)',
+    '',
+    'Shop knowledge:', x.skills || '(none yet)',
+  ].join('\n');
+  return runChat(env, system, x.turns, 6000, x.image);
 }
