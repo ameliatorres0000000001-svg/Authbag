@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
@@ -83,11 +83,13 @@ export function RecipeCard({ r, mine, level, dE }: { r: PaintRecipe; mine?: stri
   );
 }
 
+interface LeatherGuess { surface: Leather | null; finish: 'matte' | 'satin' | 'gloss' | null; confidence: number; colour: string; condition: string; tip: string }
 interface Method { prep: string[]; mix: string[]; apply: string[]; dry: string[]; avoid: string[]; tools: string[]; safety: string }
 
 /**
- * 🎨 Paint skill: ① which leather ② which finish ③ which colour (scan with white paper, or pick a recipe) →
- * the mixing recipe (only real recipes; a colour without one gives "no recipe") + the AI method for that leather.
+ * 🎨 Paint skill: ① one photo with a white paper (smart camera; paper and colour found automatically) or a recipe,
+ * ② leather and ③ finish (pre-selected by the AI from the same photo, the person can change them) → the mixing
+ * recipe (only real recipes; a colour without one gives "no recipe") + the AI method for that leather.
  */
 export default function Paint() {
   const { t } = useI18n();
@@ -107,7 +109,23 @@ export default function Paint() {
   const [mBusy, setMBusy] = useState(false);
   const [mErr, setMErr] = useState('');
   const [member, setMember] = useState(false);
+  const [guess, setGuess] = useState<LeatherGuess | null>(null);
+  const [gBusy, setGBusy] = useState(false);
+  const [gNote, setGNote] = useState<'member' | 'failed' | null>(null);
+  const picked = useRef({ leather: false, finish: false });
   const voice = useUiVoice();
+
+  /** AI looks at the same photo: which leather and finish (pre-selects them unless the person already chose). */
+  const onPhoto = async (f: File) => {
+    setGuess(null); setGNote(null); setGBusy(true);
+    try {
+      const fd = new FormData(); fd.append('file', f);
+      const g = await api.post<LeatherGuess>('/api/skills/paint/leather', fd);
+      setGuess(g);
+      if (g.surface && g.confidence >= 0.5 && !picked.current.leather) setLeather(g.surface);
+      if (g.finish && g.confidence >= 0.5 && !picked.current.finish) setFinish(g.finish);
+    } catch (e) { setGNote(isMembershipError(e) ? 'member' : 'failed'); } finally { setGBusy(false); }
+  };
 
   useEffect(() => {
     api.get<{ recipes: PaintRecipe[] }>('/api/paint/recipes').then((r) => setRecipes(r.recipes)).catch(() => setRecipes([]));
@@ -143,26 +161,16 @@ export default function Paint() {
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="space-y-4">
           <div>
-            <h2 className="mb-1.5 text-sm font-semibold">① {t('skill.leather')}</h2>
-            <LeatherPicker value={leather} onChange={setLeather} />
-          </div>
-          <div>
-            <h2 className="mb-1.5 text-sm font-semibold">② {t('paint.finishTitle')}</h2>
-            <div className="grid grid-cols-3 gap-1 rounded-full bg-surface-low p-1 text-sm">
-              {(['matte', 'satin', 'gloss'] as const).map((k) => <button key={k} type="button" onClick={() => setFinish(k)} aria-pressed={finish === k} className={`rounded-full px-3 py-1.5 ${finish === k ? 'bg-gold text-charcoal' : ''}`}>{t(`paint.finish.${k}`)}</button>)}
-            </div>
-          </div>
-          <div>
-            <h2 className="mb-1.5 text-sm font-semibold">③ {t('paint.colorTitle')}</h2>
-            <div className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-surface-low p-1 text-sm">
+            <h2 className="mb-1.5 text-sm font-semibold">① {t('paint.colorTitle')}</h2>
+            <div className="mb-2 grid grid-cols-2 gap-1 rounded-full bg-surface-low p-1 text-[13px]">
               <button type="button" onClick={() => setMode('scan')} className={`rounded-full px-3 py-1.5 ${mode === 'scan' ? 'bg-gold text-charcoal' : ''}`}>📷 {t('paint.modeScan')}</button>
               <button type="button" onClick={() => setMode('pick')} className={`rounded-full px-3 py-1.5 ${mode === 'pick' ? 'bg-gold text-charcoal' : ''}`}>🎨 {t('paint.modePick')}</button>
             </div>
             {mode === 'scan' ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <button type="button" onClick={voice.toggle} aria-pressed={voice.on}
-                  className={`rounded-full border px-4 py-1.5 text-xs ${voice.on ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>{voice.on ? '🔊' : '🔇'} {t('voice.guide')}</button>
-                <ColorScanner onChange={onScan} onSay={voice.sayKey} />
+                  className={`rounded-full border px-3 py-1 text-xs ${voice.on ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>{voice.on ? '🔊' : '🔇'} {t('voice.guide')}</button>
+                <ColorScanner onChange={onScan} onSay={voice.sayKey} onPhoto={onPhoto} />
               </div>
             ) : (
               <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
@@ -176,6 +184,26 @@ export default function Paint() {
                 ))}
               </div>
             )}
+          </div>
+          <div>
+            <h2 className="mb-1.5 text-sm font-semibold">② {t('skill.leather')}</h2>
+            {gBusy && <p className="mb-2 animate-pulse text-xs text-muted">🤖 {t('paint.aiLooking')}</p>}
+            {guess && (
+              <div className="mb-2 rounded-xl border border-gold/40 bg-gold-light px-3 py-2 text-xs">
+                <div className="font-semibold">🤖 {guess.surface ? `${t('paint.aiSees')}: ${t(`paint.surface.${guess.surface}`)}${guess.finish ? ` · ${t(`paint.finish.${guess.finish}`)}` : ''} · ${Math.round(guess.confidence * 100)}%` : t('paint.aiUnsure')}</div>
+                {guess.colour && <div className="text-muted">🎨 {guess.colour}</div>}
+                {guess.condition && <div className="text-muted">⚠️ {guess.condition}</div>}
+                {guess.tip && <div className="text-muted">💡 {guess.tip}</div>}
+              </div>
+            )}
+            {gNote === 'member' && <p className="mb-2 text-xs text-muted">🤖 {t('paint.aiMember')}</p>}
+            <LeatherPicker value={leather} onChange={(v) => { picked.current.leather = true; setLeather(v); }} />
+          </div>
+          <div>
+            <h2 className="mb-1.5 text-sm font-semibold">③ {t('paint.finishTitle')}</h2>
+            <div className="grid grid-cols-3 gap-1 rounded-full bg-surface-low p-1 text-[13px]">
+              {(['matte', 'satin', 'gloss'] as const).map((k) => <button key={k} type="button" onClick={() => { picked.current.finish = true; setFinish(k); }} aria-pressed={finish === k} className={`rounded-full px-3 py-1.5 ${finish === k ? 'bg-gold text-charcoal' : ''}`}>{t(`paint.finish.${k}`)}</button>)}
+            </div>
           </div>
         </section>
 

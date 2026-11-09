@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -3310,6 +3310,23 @@ app.post('/api/skills/paint', async (c) => {
     await c.env.DB.prepare('INSERT OR REPLACE INTO skill_cache (key, value) VALUES (?, ?)').bind(key, JSON.stringify(r)).run();
     return c.json(r);
   } catch (e) { await quota.undo(); console.error('paint skill:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
+});
+
+/** 🎨 Paint skill: which leather and finish the photo shows (the person can change it). */
+app.post('/api/skills/paint/leather', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const gate = await memberGate(c); if (gate) return gate;
+  const file = (await c.req.formData()).get('file');
+  if (!(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_IMAGE_BYTES) return c.json({ error: 'too_large' }, 413);
+  const data = await file.arrayBuffer(); const mime = sniffImage(new Uint8Array(data));
+  if (!mime) return c.json({ error: 'not_an_image' }, 415);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const quota = await takeDaily(c.env, me.id, 'leather', 40);
+  if (!quota.ok) return c.json({ error: 'too_many' }, 429);
+  try { return c.json(await asFeature('paint_skill', () => identifyLeather(c.env, { data, mime }, reqLang(c)))); }
+  catch (e) { await quota.undo(); console.error('leather id:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
 });
 
 app.post('/api/skills/repair', async (c) => {

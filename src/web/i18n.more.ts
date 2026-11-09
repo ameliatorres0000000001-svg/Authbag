@@ -212,4 +212,9 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'skill.checkShort': { vi: 'Kiểm tra', th: 'ตรวจ', id: 'Periksa' },
   'skill.repairShort': { vi: 'Sửa', th: 'ซ่อม', id: 'Perbaiki' },
   'skill.chatShort': { vi: 'Hỏi AI', th: 'ถาม AI', id: 'Tanya AI' },
+  'paint.paperTip': { vi: 'Đặt một tờ giấy A4 trắng cạnh túi, dưới ánh sáng tự nhiên — ứng dụng tự tìm giấy và màu, AI nhận loại da.', th: 'วางกระดาษ A4 สีขาวข้างกระเป๋า ในแสงธรรมชาติ — แอปหากระดาษและสีเอง และ AI บอกชนิดหนัง', id: 'Letakkan kertas A4 putih di samping tas, di cahaya alami — aplikasi menemukan kertas dan warna sendiri, AI mengenali jenis kulit.' },
+  'paint.autoFound': { vi: 'Đã tự tìm giấy trắng (W) và màu túi (●) — chạm ảnh để dời điểm màu.', th: 'พบกระดาษขาว (W) และสีกระเป๋า (●) อัตโนมัติ — แตะรูปเพื่อย้ายจุดสี', id: 'Kertas putih (W) dan warna tas (●) ditemukan otomatis — ketuk foto untuk memindah titik warna.' },
+  'paint.autoNone': { vi: 'Không thấy giấy trắng — chạm vào giấy rồi chạm vào màu túi.', th: 'ไม่พบกระดาษขาว — แตะที่กระดาษ แล้วแตะที่สีกระเป๋า', id: 'Kertas putih tidak ditemukan — ketuk kertas, lalu warna tas.' },
+  'paint.aiSees': { vi: 'AI thấy', th: 'AI เห็นว่า', id: 'AI melihat' },
+  'paint.aiLooking': { vi: 'AI đang xem loại da…', th: 'AI กำลังดูชนิดหนัง…', id: 'AI sedang melihat jenis kulit…' },
 };
