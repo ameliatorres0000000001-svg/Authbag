@@ -88,22 +88,22 @@ export function LeadsHome() {
   if (!staff || !d) return null;
   return (
     <section aria-labelledby="leads-h">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h2 id="leads-h" className="text-lg leading-tight">🎯 {t('ld.homeTitle')}</h2>
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <h2 id="leads-h" className="text-base leading-tight">🎯 {t('ld.homeTitle')}</h2>
         <Link to="/admin?tab=leads" className="text-xs font-semibold text-gold">{t('market.seeAll')} →</Link>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {CC.map((cc) => (
-          <Link key={cc} to={`/admin?tab=leads&country=${cc}`} className="rounded-2xl border border-hairline bg-surface-card p-3">
-            <div className="text-xs text-muted">{FLAG[cc]} {t(`market.country.${cc}`)}</div>
-            <div className="font-serif text-2xl">{count(d, cc)}</div>
-            <div className="text-[11px] text-muted">{count(d, cc, 'new')} {t('ld.st.new')} · {count(d, cc, 'customer')} {t('ld.st.customer')}</div>
+          <Link key={cc} to={`/admin?tab=leads&country=${cc}`} className="rounded-xl border border-hairline bg-surface-card px-2.5 py-2">
+            <div className="text-[11px] text-muted">{t(`market.country.${cc}`)}</div>
+            <div className="font-serif text-lg leading-tight">{count(d, cc)}</div>
+            <div className="truncate text-[10px] text-muted">{count(d, cc, 'new')} {t('ld.st.new')} · {count(d, cc, 'customer')} {t('ld.st.customer')}</div>
           </Link>
         ))}
       </div>
-      <div className="mt-2 rounded-2xl border border-hairline bg-surface-card px-4">
-        {d.latest.length ? <ul className="divide-y divide-hairline">{d.latest.map((l) => <LeadRow key={l.id} l={l} compact />)}</ul>
-          : <p className="py-3 text-sm text-muted">{t('noData')}{d.auto && d.webSearch ? ` — ${t('ld.autoSoon')}` : ''}</p>}
+      <div className="mt-1.5 rounded-xl border border-hairline bg-surface-card px-3">
+        {d.latest.length ? <ul className="divide-y divide-hairline">{d.latest.slice(0, 3).map((l) => <LeadRow key={l.id} l={l} compact />)}</ul>
+          : <p className="py-2 text-xs text-muted">{t('noData')}{d.auto && d.webSearch ? ` — ${t('ld.autoSoon')}` : ''}</p>}
       </div>
     </section>
   );

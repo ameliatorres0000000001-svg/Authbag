@@ -6,12 +6,12 @@ import { COUNTRIES, Movement, modelImageUrl, monthLabel, priceText, type Country
 /** A model photo on a soft gold glow (cut-out photos float on it); the brand initial when there is no photo. */
 function Shot({ r, size }: { r: TrendRow; size: 'lg' | 'sm' }) {
   const url = modelImageUrl(r);
-  const box = size === 'lg' ? 'h-32 w-32 rounded-2xl' : 'h-12 w-12 rounded-xl';
+  const box = size === 'lg' ? 'h-[72px] w-[72px] rounded-xl' : 'h-9 w-9 rounded-lg';
   return (
     <span className={`relative flex shrink-0 items-center justify-center overflow-hidden ${box}`}
       style={{ background: 'radial-gradient(circle at 50% 40%, rgba(212,175,95,0.35), rgba(212,175,95,0.06) 60%, transparent 75%), #121215' }}>
       {url ? <img src={url} alt="" loading="lazy" className={`h-full w-full ${r.image_cutout ? 'object-contain p-1.5 drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]' : 'object-cover'}`} />
-        : <span className={`font-serif text-gold ${size === 'lg' ? 'text-5xl' : 'text-xl'}`} aria-hidden>{r.brand.slice(0, 1)}</span>}
+        : <span className={`font-serif text-gold ${size === 'lg' ? 'text-3xl' : 'text-base'}`} aria-hidden>{r.brand.slice(0, 1)}</span>}
     </span>
   );
 }
@@ -28,60 +28,50 @@ export default function TrendShowcase({ market }: { market: Overview | null }) {
   const [first, ...rest] = rows;
 
   return (
-    <section aria-labelledby="trend-h" className="space-y-3">
-      <div className="flex items-end justify-between gap-2">
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-widest text-gold">{m?.period ? monthLabel(m.period, locale) : t('market.thisMonth')}</div>
-          <h2 id="trend-h" className="text-xl leading-tight">🔥 {t('install.topTitle')}</h2>
+    <section aria-labelledby="trend-h" className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="trend-h" className="text-base leading-tight">🔥 {t('install.topTitle')}
+          <span className="ml-1.5 font-sans text-[11px] font-normal text-muted">{m?.period ? monthLabel(m.period, locale) : ''}</span></h2>
+        <Link to={`/trends?country=${cc}`} className="shrink-0 text-[11px] font-semibold text-gold">{t('market.seeAll')} →</Link>
+      </div>
+      <div className="overflow-hidden rounded-2xl border border-gold/30 bg-gradient-to-b from-surface-card to-surface">
+        <div className="grid grid-cols-3 gap-1 border-b border-hairline p-1 text-xs" role="tablist">
+          {COUNTRIES.map((k) => (
+            <button key={k} type="button" role="tab" aria-selected={cc === k} onClick={() => setCc(k)}
+              className={`rounded-lg px-2 py-1 transition ${cc === k ? 'bg-gold font-semibold text-charcoal' : 'text-muted'}`}>{t(`market.country.${k}`)}</button>
+          ))}
         </div>
-        <Link to={`/trends?country=${cc}`} className="shrink-0 text-xs font-semibold text-gold">{t('market.seeAll')} →</Link>
-      </div>
-      <div className="grid grid-cols-3 gap-1 rounded-full border border-hairline bg-surface-card p-1 text-sm" role="tablist">
-        {COUNTRIES.map((k) => (
-          <button key={k} type="button" role="tab" aria-selected={cc === k} onClick={() => setCc(k)}
-            className={`rounded-full px-2 py-1.5 transition ${cc === k ? 'bg-gold font-semibold text-charcoal' : 'text-muted'}`}>{t(`market.country.${k}`)}</button>
-        ))}
-      </div>
-
-      <div className="overflow-hidden rounded-3xl border border-gold/30 bg-gradient-to-b from-surface-card to-surface">
-        {!market && <div className="h-64 animate-pulse" />}
-        {market && !first && <p className="p-5 text-sm text-muted">{t('noData')}</p>}
+        {!market && <div className="h-40 animate-pulse" />}
+        {market && !first && <p className="p-4 text-sm text-muted">{t('noData')}</p>}
         {first && (
-          <Link to={`/trends?country=${cc}`} className="flex gap-4 p-4">
+          <Link to={`/trends?country=${cc}`} className="flex items-center gap-3 px-3 py-2.5">
             <Shot r={first} size="lg" />
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-serif text-4xl leading-none text-gold">1</span>
-                <Movement m={first.movement} />
+              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted">
+                <span className="rounded bg-gold px-1.5 font-mono text-[10px] font-bold leading-4 text-charcoal">#1</span>
+                <span className="truncate">{first.brand}</span><Movement m={first.movement} />
               </div>
-              <div className="mt-1.5 truncate text-[11px] uppercase tracking-wider text-muted">{first.brand}</div>
-              <div className="font-serif text-xl leading-tight">{first.model}</div>
-              <div className="mt-1 text-sm font-semibold text-gold">{priceText(first)}</div>
-              {first.note && <p className="mt-1 line-clamp-2 text-xs leading-snug text-muted">{first.note}</p>}
+              <div className="truncate font-serif text-lg leading-tight">{first.model}</div>
+              <div className="text-xs font-semibold text-gold">{priceText(first)}</div>
+              {first.note && <p className="line-clamp-1 text-[11px] leading-snug text-muted">{first.note}</p>}
             </div>
           </Link>
         )}
         {rest.length > 0 && (
           <ol className="divide-y divide-hairline border-t border-hairline">
-            {rest.map((r) => (
+            {rest.slice(0, 4).map((r) => (
               <li key={r.id}>
-                <Link to={`/trends?country=${cc}`} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="w-5 shrink-0 text-center font-serif text-lg text-gold">{r.rank}</span>
+                <Link to={`/trends?country=${cc}`} className="flex items-center gap-2.5 px-3 py-1.5">
+                  <span className="w-4 shrink-0 text-center font-serif text-sm text-gold">{r.rank}</span>
                   <Shot r={r} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[10px] uppercase tracking-wider text-muted">{r.brand}</span>
-                    <span className="block truncate text-sm font-semibold">{r.model}</span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block text-xs">{priceText(r)}</span>
-                    <Movement m={r.movement} />
-                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13px]"><span className="text-[10px] uppercase tracking-wider text-muted">{r.brand}</span> {r.model}</span>
+                  <span className="shrink-0 text-[11px] text-muted">{priceText(r)}</span>
+                  <Movement m={r.movement} />
                 </Link>
               </li>
             ))}
           </ol>
         )}
-        {first?.source && <div className="border-t border-hairline px-4 py-2 text-[10px] text-muted">{t('market.source')}: {first.source}</div>}
       </div>
     </section>
   );

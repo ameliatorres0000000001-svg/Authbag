@@ -208,4 +208,8 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'mb.f2': { vi: 'Kỹ năng sửa — chụp vấn đề, AI chỉ cách sửa', th: 'สกิลซ่อม — ถ่ายปัญหา AI บอกวิธีซ่อม', id: 'Skill perbaikan — foto masalah, AI memberi solusi' },
   'mb.f3': { vi: 'Kỹ năng kiểm tra — AI nhận thương hiệu và mẫu', th: 'สกิลตรวจ — AI บอกแบรนด์และรุ่น', id: 'Skill periksa — AI mengenali merek dan model' },
   'mb.f4': { vi: 'Trợ lý AI cho mọi câu hỏi công việc', th: 'ผู้ช่วย AI ตอบทุกคำถามเรื่องงานกระเป๋า', id: 'Asisten AI untuk semua pertanyaan pekerjaan tas' },
+  'skill.paintShort': { vi: 'Sơn', th: 'ทำสี', id: 'Cat' },
+  'skill.checkShort': { vi: 'Kiểm tra', th: 'ตรวจ', id: 'Periksa' },
+  'skill.repairShort': { vi: 'Sửa', th: 'ซ่อม', id: 'Perbaiki' },
+  'skill.chatShort': { vi: 'Hỏi AI', th: 'ถาม AI', id: 'Tanya AI' },
 };

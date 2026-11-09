@@ -137,7 +137,7 @@ export default function App() {
             </div>
           </div>
         </aside>
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-gold/15 bg-surface/80 px-4 py-3 backdrop-blur-md md:hidden">
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-gold/15 bg-surface/80 px-4 py-2 backdrop-blur-md md:hidden">
           <Link to="/" onClick={logoTap} className="flex select-none items-center gap-2 font-serif text-lg tracking-wide"><img src="/icons/icon-192.png" alt="" width={26} height={26} className="rounded-md" />Anajak <span className="text-gold">Bag</span></Link>
           <div className="flex items-center gap-1.5">
             {!isStandalone() && <Link to="/install" aria-label={t('install.open')} className="btn-ghost !px-2 !py-0.5 text-xs">⤓</Link>}

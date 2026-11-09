@@ -45,13 +45,9 @@ export default function Dashboard() {
     api.get<Stats>('/api/stats/public').then((r) => on && setStats(r)).catch(() => {});
     return () => { on = false; };
   }, []);
-  const skills: [string, string, string, string][] = [
-    ['/check', 'skill.check', 'skill.checkSub', ICON.scan],
-    ['/repair', 'skill.repair', 'skill.repairSub', ICON.wrench],
-  ];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 pb-8 pt-4 md:px-8">
+    <div className="mx-auto max-w-5xl space-y-5 px-4 pb-6 pt-3 md:px-8">
       <header className="flex items-center gap-2 text-sm text-muted">
         <span className="h-1.5 w-1.5 rotate-45 bg-gold" aria-hidden />
         <h1 className="font-sans text-sm font-normal">{t('home.headline')}</h1>
@@ -60,50 +56,29 @@ export default function Dashboard() {
       {/* this month's fast sellers first: what vendors look at every day */}
       <TrendShowcase market={market} />
 
-      {/* the skills: what the assistant does for the vendor */}
-      <section aria-labelledby="skills-h" className="space-y-3">
-        <h2 id="skills-h" className="text-xs font-semibold uppercase tracking-widest text-gold">{t('skill.title')}</h2>
-        <Link to="/paint" className="group relative block overflow-hidden rounded-3xl border border-gold/40 bg-surface-card p-5 transition hover:border-gold">
-          <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full" style={{ background: 'radial-gradient(circle, rgba(212,175,95,0.35), transparent 70%)' }} />
-          <div className="relative flex items-start justify-between gap-3">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gold text-charcoal"><Svg d={ICON.brush} className="h-7 w-7" /></span>
-            {stats?.paintRecipes ? <span className="text-right"><span className="block font-serif text-3xl leading-none text-gold">{stats.paintRecipes}</span><span className="text-[11px] text-muted">{t('skill.recipes')}</span></span> : null}
-          </div>
-          <div className="relative mt-4">
-            <div className="text-xl font-semibold">{t('skill.paint')}</div>
-            <div className="mt-1 text-sm text-muted">{t('skill.paintSub')}</div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {['smooth_leather', 'grained_leather', 'vachetta', 'coated_canvas', 'suede', 'edge'].map((k) => <span key={k} className="rounded-full border border-hairline px-2.5 py-0.5 text-[11px] text-muted">{t(`paint.surface.${k}`)}</span>)}
-            </div>
-          </div>
-        </Link>
-        <div className="grid grid-cols-2 gap-3">
-          {skills.map(([to, title, sub, icon]) => (
-            <Link key={to} to={to} className="flex min-h-[150px] flex-col justify-between rounded-3xl border border-hairline bg-surface-card p-4 transition hover:border-gold">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold-light text-gold"><Svg d={icon} className="h-6 w-6" /></span>
-              <span className="mt-3 block">
-                <span className="block font-semibold leading-snug">{t(title)}</span>
-                <span className="mt-0.5 block text-xs text-muted">{t(sub)}</span>
-              </span>
+      {/* the skills: four tiles in one row, paint first */}
+      <section aria-labelledby="skills-h" className="space-y-2">
+        <h2 id="skills-h" className="text-base leading-tight">✦ {t('skill.title')}</h2>
+        <div className="grid grid-cols-4 gap-2">
+          {([['/paint', 'skill.paint', ICON.brush], ['/check', 'skill.check', ICON.scan], ['/repair', 'skill.repair', ICON.wrench], ['/chat', 'skill.chat', ICON.chat]] as const).map(([to, title, icon], i) => (
+            <Link key={to} to={to} className={`flex flex-col items-center gap-1.5 rounded-2xl border px-1 py-2.5 text-center transition ${i === 0 ? 'border-gold/50 bg-gold-light' : 'border-hairline bg-surface-card hover:border-gold/50'}`}>
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${i === 0 ? 'bg-gold text-charcoal' : 'bg-surface-low text-gold'}`}><Svg d={icon} className="h-5 w-5" /></span>
+              <span className="line-clamp-2 text-[11px] font-semibold leading-tight">{t(`${title}Short`)}</span>
             </Link>
           ))}
         </div>
-        <Link to="/chat" className="flex items-center gap-3 rounded-2xl border border-hairline bg-surface-card p-4 transition hover:border-gold">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-light text-gold"><Svg d={ICON.chat} className="h-6 w-6" /></span>
-          <span className="min-w-0 flex-1"><span className="block font-semibold">{t('skill.chat')}</span><span className="block truncate text-xs text-muted">{t('skill.chatSub')}</span></span>
-          <span className="text-gold" aria-hidden>→</span>
-        </Link>
+        <p className="text-[11px] text-muted">{t('skill.hint')}</p>
       </section>
 
       {/* staff: customers found on TikTok */}
       <LeadsHome />
 
       <section aria-labelledby="tools-h">
-        <h2 id="tools-h" className="mb-2 text-xs font-semibold text-muted">{t('home.more')}</h2>
+        <h2 id="tools-h" className="mb-1.5 text-xs font-semibold text-muted">{t('home.more')}</h2>
         <div className="grid grid-cols-2 gap-2">
           {([['/datecode', 'home.datecode', ICON.shield], ['/verify', 'nav.verify', ICON.trend]] as const).map(([to, title, icon]) => (
-            <Link key={to} to={to} className="flex items-center gap-2.5 rounded-2xl border border-hairline bg-surface-card p-3 text-sm font-semibold transition hover:border-gold">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-light text-gold"><Svg d={icon} /></span>{t(title)}
+            <Link key={to} to={to} className="flex items-center gap-2 rounded-xl border border-hairline bg-surface-card px-3 py-2 text-xs font-semibold transition hover:border-gold">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-light text-gold"><Svg d={icon} className="h-4 w-4" /></span>{t(title)}
             </Link>
           ))}
         </div>

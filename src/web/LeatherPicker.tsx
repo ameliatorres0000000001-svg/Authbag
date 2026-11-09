@@ -9,14 +9,14 @@ const MARK: Record<Leather, string> = { smooth_leather: '◐', grained_leather: 
 export default function LeatherPicker({ value, onChange }: { value: Leather | null; onChange: (v: Leather) => void }) {
   const { t } = useI18n();
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label={t('skill.leather')}>
+    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="radiogroup" aria-label={t('skill.leather')}>
       {LEATHERS.map((k) => (
         <button key={k} type="button" role="radio" aria-checked={value === k} onClick={() => onChange(k)}
-          className={`flex items-start gap-2.5 rounded-2xl border p-3 text-left transition ${value === k ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card hover:border-strong'}`}>
-          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-mono text-lg ${value === k ? 'bg-gold text-charcoal' : 'bg-surface-low text-gold'}`} aria-hidden>{MARK[k]}</span>
+          className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${value === k ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card hover:border-strong'}`}>
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-base ${value === k ? 'bg-gold text-charcoal' : 'bg-surface-low text-gold'}`} aria-hidden>{MARK[k]}</span>
           <span className="min-w-0">
-            <span className="block text-sm font-semibold leading-snug">{t(`paint.surface.${k}`)}</span>
-            <span className="block text-[11px] leading-snug text-muted">{t(`skill.leatherSub.${k}`)}</span>
+            <span className="block truncate text-[13px] font-semibold leading-tight">{t(`paint.surface.${k}`)}</span>
+            <span className="block truncate text-[10px] leading-tight text-muted">{t(`skill.leatherSub.${k}`)}</span>
           </span>
         </button>
       ))}

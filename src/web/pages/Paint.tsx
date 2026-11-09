@@ -140,23 +140,23 @@ export default function Paint() {
 
   return (
     <Page title={`🎨 ${t('skill.paint')}`} subtitle={t('paint.skillSub')}>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-5">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="space-y-4">
           <div>
-            <h2 className="mb-2 text-base">① {t('skill.leather')}</h2>
+            <h2 className="mb-1.5 text-sm font-semibold">① {t('skill.leather')}</h2>
             <LeatherPicker value={leather} onChange={setLeather} />
           </div>
           <div>
-            <h2 className="mb-2 text-base">② {t('paint.finishTitle')}</h2>
+            <h2 className="mb-1.5 text-sm font-semibold">② {t('paint.finishTitle')}</h2>
             <div className="grid grid-cols-3 gap-1 rounded-full bg-surface-low p-1 text-sm">
-              {(['matte', 'satin', 'gloss'] as const).map((k) => <button key={k} type="button" onClick={() => setFinish(k)} aria-pressed={finish === k} className={`rounded-full px-3 py-2 ${finish === k ? 'bg-gold text-charcoal' : ''}`}>{t(`paint.finish.${k}`)}</button>)}
+              {(['matte', 'satin', 'gloss'] as const).map((k) => <button key={k} type="button" onClick={() => setFinish(k)} aria-pressed={finish === k} className={`rounded-full px-3 py-1.5 ${finish === k ? 'bg-gold text-charcoal' : ''}`}>{t(`paint.finish.${k}`)}</button>)}
             </div>
           </div>
           <div>
-            <h2 className="mb-2 text-base">③ {t('paint.colorTitle')}</h2>
+            <h2 className="mb-1.5 text-sm font-semibold">③ {t('paint.colorTitle')}</h2>
             <div className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-surface-low p-1 text-sm">
-              <button type="button" onClick={() => setMode('scan')} className={`rounded-full px-3 py-2 ${mode === 'scan' ? 'bg-gold text-charcoal' : ''}`}>📷 {t('paint.modeScan')}</button>
-              <button type="button" onClick={() => setMode('pick')} className={`rounded-full px-3 py-2 ${mode === 'pick' ? 'bg-gold text-charcoal' : ''}`}>🎨 {t('paint.modePick')}</button>
+              <button type="button" onClick={() => setMode('scan')} className={`rounded-full px-3 py-1.5 ${mode === 'scan' ? 'bg-gold text-charcoal' : ''}`}>📷 {t('paint.modeScan')}</button>
+              <button type="button" onClick={() => setMode('pick')} className={`rounded-full px-3 py-1.5 ${mode === 'pick' ? 'bg-gold text-charcoal' : ''}`}>🎨 {t('paint.modePick')}</button>
             </div>
             {mode === 'scan' ? (
               <div className="space-y-3">

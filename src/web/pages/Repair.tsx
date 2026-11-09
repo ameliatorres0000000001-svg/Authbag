@@ -41,14 +41,14 @@ export default function Repair() {
 
   return (
     <Page title={`🧽 ${t('skill.repair')}`} subtitle={t('repair.sub')}>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-5">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="space-y-4">
           <div>
-            <h2 className="mb-2 text-base">① {t('skill.leather')}</h2>
+            <h2 className="mb-1.5 text-sm font-semibold">① {t('skill.leather')}</h2>
             <LeatherPicker value={leather} onChange={(v) => { setLeather(v); setRes(null); }} />
           </div>
           <div>
-            <h2 className="mb-2 text-base">② {t('repair.photo')}</h2>
+            <h2 className="mb-1.5 text-sm font-semibold">② {t('repair.photo')}</h2>
             <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-strong bg-surface-card p-3">
               {preview ? <img src={preview} alt="" className="h-20 w-20 rounded-xl object-cover" /> : <span className="flex h-20 w-20 items-center justify-center rounded-xl bg-surface-low text-3xl" aria-hidden>📷</span>}
               <span className="min-w-0 flex-1 text-sm">{file ? file.name : t('repair.photoHelp')}</span>
@@ -56,7 +56,7 @@ export default function Repair() {
             </label>
           </div>
           <div>
-            <h2 className="mb-2 text-base">③ {t('repair.what')}</h2>
+            <h2 className="mb-1.5 text-sm font-semibold">③ {t('repair.what')}</h2>
             <div className="mb-2 flex flex-wrap gap-1.5">
               {PROBLEMS.map((k) => <button key={k} type="button" onClick={() => addChip(k)} className="rounded-full border border-hairline bg-surface-card px-3 py-1 text-xs hover:border-gold">{t(`repair.p.${k}`)}</button>)}
             </div>
