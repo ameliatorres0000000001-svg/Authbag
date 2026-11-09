@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, testAi, testWebSearch, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2002,7 +2002,18 @@ app.put('/api/admin/verify/plans/:id', need(ADMINS), async (c) => {
 app.get('/api/admin/ai/test', need(ADMINS), async (c) => {
   const results = aiConfigured(c.env) ? await testAi(c.env) : [];
   const left = (await c.env.DB.prepare('SELECT COUNT(*) AS n FROM reference_points WHERE i18n_json IS NULL').first<{ n: number }>())?.n ?? 0;
-  return c.json({ configured: aiConfigured(c.env), results, untranslated: left });
+  // every part of the app that needs a service, so the owner can see at a glance what works
+  const web = c.req.query('web') === '1' ? await asFeature('other', () => testWebSearch(c.env)) : null;
+  let tts: { ok: boolean; error?: string } = { ok: false, error: 'AZURE_SPEECH_KEY not set (the phone voice is used instead)' };
+  if (ttsConfigured(c.env)) { try { await synthesize(c.env, 'សួស្តី'); tts = { ok: true }; } catch (e) { tts = { ok: false, error: String((e as Error).message).slice(0, 200) }; } }
+  const ai = results.length > 0 && results[0].ok;
+  const parts = [
+    { key: 'paint', ok: ai, path: '/paint' }, { key: 'tube', ok: ai, path: '/paint' }, { key: 'repair', ok: ai, path: '/repair' },
+    { key: 'check', ok: ai, path: '/check' }, { key: 'chat', ok: ai, path: '/chat' }, { key: 'skills', ok: ai, path: '/admin?tab=skills' },
+    { key: 'leads', ok: web ? web.ok : null, path: '/admin?tab=leads' }, { key: 'market', ok: web ? web.ok : null, path: '/admin?tab=market' },
+    { key: 'voice', ok: tts.ok, path: '/chat' },
+  ];
+  return c.json({ configured: aiConfigured(c.env), results, untranslated: left, web, tts, parts });
 });
 
 app.get('/api/admin/telegram/status', need(ADMINS), async (c) => {

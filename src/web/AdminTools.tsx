@@ -78,20 +78,29 @@ export function VerifyQueue() {
 }
 
 /** Admin: test the AI keys and models now, with the provider's own error message when something fails. */
+type AiTest = {
+  configured: boolean; results: { name: string; model: string; ok: boolean; ms: number; error?: string }[]; untranslated: number;
+  web: { ok: boolean; ms: number; error?: string } | null; tts: { ok: boolean; error?: string };
+  parts: { key: string; ok: boolean | null; path: string }[];
+};
+/** 🧪 Is the AI working in every part of the app? One button: models, web search, Khmer voice, then each skill with a "try it" link. */
 export function AiCheck() {
   const { t } = useI18n();
-  const [r, setR] = useState<{ configured: boolean; results: { name: string; model: string; ok: boolean; ms: number; error?: string }[]; untranslated: number } | null>(null);
+  const [r, setR] = useState<AiTest | null>(null);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
-  async function run() {
+  async function run(web: boolean) {
     setBusy(true); setErr(null);
-    try { setR(await api.get('/api/admin/ai/test')); } catch (e) { setErr(String((e as Error).message)); }
+    try { setR(await api.get(`/api/admin/ai/test${web ? '?web=1' : ''}`)); } catch (e) { setErr(String((e as Error).message)); }
     setBusy(false);
   }
+  const mark = (ok: boolean | null) => (ok === null ? '⚪' : ok ? '✅' : '❌');
   return (
     <div className="card space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="font-semibold">🤖 {t('ai.check')}</div>
-        <button type="button" className="btn-primary !py-1 text-xs" disabled={busy} onClick={run}>{busy ? '…' : `🔎 ${t('ai.test')}`}</button>
+      <div className="font-semibold">🧪 {t('ai.check')}</div>
+      <p className="text-xs text-muted">{t('ai.checkHelp')}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className="btn-primary !py-2 text-xs" disabled={busy} onClick={() => run(false)}>{busy ? '…' : `🔎 ${t('ai.test')}`}</button>
+        <button type="button" className="btn-ghost !py-2 text-xs" disabled={busy} onClick={() => run(true)}>{busy ? '…' : `🌐 ${t('ai.testWeb')}`}</button>
       </div>
       {r && !r.configured && <p className="text-xs text-counterfeit">{t('ai.noKey')}</p>}
       {r?.results.map((x) => (
@@ -101,6 +110,30 @@ export function AiCheck() {
           {x.error && <div className="mt-1 break-words font-mono text-[11px] text-counterfeit">{x.error}</div>}
         </div>
       ))}
+      {r?.web && (
+        <div className={`rounded-lg p-2 text-xs ${r.web.ok ? 'bg-verified/10' : 'bg-counterfeit/10'}`}>
+          <div className="font-semibold">{mark(r.web.ok)} {t('ai.web')} <span className="font-mono text-[10px] text-muted">· {r.web.ms} ms</span></div>
+          {r.web.error && <div className="mt-1 break-words font-mono text-[11px] text-counterfeit">{r.web.error}</div>}
+        </div>
+      )}
+      {r && (
+        <div className={`rounded-lg p-2 text-xs ${r.tts.ok ? 'bg-verified/10' : 'bg-review-bg'}`}>
+          <div className="font-semibold">{r.tts.ok ? '✅' : '⚠️'} {t('ai.tts')}</div>
+          {r.tts.error && <div className="mt-1 break-words text-[11px] text-muted">{r.tts.error}</div>}
+        </div>
+      )}
+      {r && (
+        <ul className="divide-y divide-hairline rounded-lg border border-hairline">
+          {r.parts.map((p) => (
+            <li key={p.key} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+              <span aria-hidden>{mark(p.ok)}</span>
+              <span className="flex-1">{t(`ai.part.${p.key}`)}</span>
+              <a href={p.path} className="font-semibold text-gold">{t('ai.try')} →</a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {r && r.parts.some((p) => p.ok === null) && <p className="text-[11px] text-muted">⚪ {t('ai.notTested')}</p>}
       {r && <p className="text-xs text-muted">{t('ai.untranslated')}: {r.untranslated}</p>}
       {err && <p className="text-xs text-counterfeit">{err}</p>}
     </div>
