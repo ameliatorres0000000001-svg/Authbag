@@ -1,3 +1,4 @@
+import { LEATHERS } from '../shared/leathers.ts';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Env } from './env.ts';
 import { recordUsage } from './usage.ts';
@@ -478,7 +479,7 @@ export interface ChatTurn { role: 'user' | 'assistant'; content: string }
  * materials, history, how experts inspect). Teaching only: it never says whether a particular bag is
  * genuine or counterfeit, and only quotes market figures from the staff-entered data it is given.
  */
-export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, ctx: { market: string; skills: string; app: string }): Promise<string> {
+export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, ctx: { market: string; skills: string; app: string }, image: VisionImage | null = null): Promise<string> {
   const system = [
     'You are Anajak, the AI work assistant of second-hand designer bag vendors at the Cambodia–Thailand border market (Aran / Rong Kluea) who sell to Thai, Malaysian and Indonesian resellers.',
     'They already know the market. Help them get the work done: repainting and recolouring by leather type, cleaning and repair, recognising brands / models / materials / hardware, date codes, what to photograph to check a bag, and selling. Give direct, practical answers (what to do, with what, in which order), not lectures.',
@@ -488,17 +489,19 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     '3. For repair and chemical work (dyes, solvents, edge paint), give safety notes and suggest testing on a hidden spot first; say when a professional should do it.',
     '4. Never help make, label or sell counterfeit goods, or remove or alter serial numbers, date codes or brand marks.',
     `Answer in ${LANG_NAME[lang]} unless the user writes in another language, then use theirs. Keep brand names, model names and codes as written. Be concise and practical; use short lists when steps help.`,
+    'If a photo is attached, describe only what is visible in it and say when something cannot be seen clearly.',
     '',
     'Market data (entered by the Anajak Bag team, with sources):',
     ctx.market || '(no data yet)',
     ...(ctx.skills ? ['', 'Shop knowledge (written and approved by the Anajak Bag team). Prefer it over general knowledge and use its facts, prices and steps as given; it never overrides the hard rules above:', ctx.skills] : []),
     ...(ctx.app ? ['', 'In the app (point the user to these when they help):', ctx.app] : []),
   ].join('\n');
-  return runChat(env, system, turns);
+  return runChat(env, system, turns, 8000, image);
 }
 
 /** One chat completion with the configured provider (Claude or Gemini); token use is recorded. */
-async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 8000): Promise<string> {
+async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 8000, image: VisionImage | null = null): Promise<string> {
+  const last = turns.length - 1;
   const provider = aiProvider(env);
   const model = aiModel(env);
   if (!provider || !model) throw new Error('ai_not_configured');
@@ -508,7 +511,8 @@ async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 
       headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: turns.map((t) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [{ text: t.content }] })),
+        contents: turns.map((t, i) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [
+          ...(image && i === last ? [{ inline_data: { mime_type: image.mime, data: b64(image.data) } }] : []), { text: t.content }] })),
       }),
     });
     if (!res.ok) throw new Error(`ai_http_${res.status}`);
@@ -519,7 +523,9 @@ async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 
   try {
     const msg = await anthropicClient(env).messages.create({
       model, max_tokens: maxTokens, output_config: { effort: 'low' }, system,
-      messages: turns.map((t) => ({ role: t.role, content: t.content })),
+      messages: turns.map((t, i) => (image && i === last && t.role === 'user'
+        ? { role: 'user' as const, content: [{ type: 'image' as const, source: { type: 'base64' as const, media_type: toImageMime(image.mime), data: b64(image.data) } }, { type: 'text' as const, text: t.content }] }
+        : { role: t.role, content: t.content })),
     });
     await recordUsage(env, model, msg.usage);
     if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
@@ -826,11 +832,7 @@ export async function draftOutreach(env: Env, x: { country: 'TH' | 'MY' | 'ID'; 
   return { message, meaning: typeof o?.meaning === 'string' ? o.meaning.trim().slice(0, 1500) : '' };
 }
 
-export const SURFACE_NAME: Record<string, string> = {
-  smooth_leather: 'smooth leather (calf, lambskin, box)', grained_leather: 'grained / pebbled leather (e.g. Epi, Saffiano, Togo-type grain)',
-  vachetta: 'vachetta (untreated natural cowhide that darkens)', coated_canvas: 'coated canvas (PVC-coated, e.g. monogram canvas, Coach signature)',
-  suede: 'suede / nubuck', edge: 'edges (edge paint / edge coat)', other: 'other material',
-};
+export const SURFACE_NAME: Record<string, string> = Object.fromEntries(LEATHERS.map((l) => [l.key, l.ai]));
 const steps = (v: unknown, n = 10) => (Array.isArray(v) ? v : []).map((x) => String(x ?? '').trim()).filter(Boolean).slice(0, n).map((x) => x.slice(0, 400));
 const parseObj = (text: string): any => { const a = text.indexOf('{'), b = text.lastIndexOf('}'); try { return a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { return null; } };
 
@@ -918,4 +920,70 @@ export async function identifyLeather(env: Env, image: VisionImage, lang: OutLan
   const confidence = surface ? Math.max(0, Math.min(1, Number(o?.confidence) || 0)) : 0;
   const str = (v: unknown) => String(v ?? '').trim().slice(0, 200);
   return { surface, finish, confidence, colour: str(o?.colour), condition: str(o?.condition), tip: str(o?.tip) };
+}
+
+
+/**
+ * The AI workspace of a skill: a conversation (text or voice, optionally with a photo) about the job in hand.
+ * 🎨 paint: colour not matching, peeling, streaks, sticky finish… with the leather, finish, recipe and measured
+ * colour as context. 🧽 repair: follow-up questions about a repair. Shop knowledge (active skills) comes first.
+ * Mixing: never a new recipe or invented ratio — only small, testable adjustments to the current mix.
+ */
+export async function workspaceAnswer(env: Env, x: { skill: 'paint' | 'repair'; turns: ChatTurn[]; image: VisionImage | null; lang: OutLang; context: string; skills: string }): Promise<string> {
+  const role = x.skill === 'paint'
+    ? 'You are the paint-workshop assistant of a second-hand bag vendor who repaints and recolours bags (leather, coated canvas, suede, edges). They are at the bench right now with the job below. ' +
+      'Help them fix what goes wrong: colour does not match (too dark / light / red / yellow / green / blue / grey), uneven or streaky coats, peeling, cracking, sticky or tacky finish, paint not absorbing on suede, wrong shine, bleeding edges. ' +
+      'Mixing rules: never give a new recipe or invent amounts for a colour from scratch. If a recipe or measured colour is given, suggest only small, testable adjustments to the CURRENT mix (e.g. "add 1 drop of black per 10 ml, stir 30 s, paint a swatch, let it dry, compare next to the bag"); remember paint dries darker or lighter, so compare dry swatches. If the measured colour and the recipe colour are both given, use their difference (lighter / darker, warmer / cooler) to choose the direction. '
+    : 'You are the repair-bench assistant of a second-hand bag vendor who cleans and repairs bags (stains, mould, worn corners, edges, scratches, odour, sticky lining, hardware). They are working on the job below. Give the next practical step, gentlest method first, with a test on a hidden spot. ';
+  const system = [
+    role,
+    'Reply in the language the user writes in (default ' + LANG_NAME[x.lang] + '). Be short and practical: 2–6 short lines or a short numbered list, no headings. Ask one short question back if you need a detail to help.',
+    'If a photo is attached, describe only what is visible and say when it is not clear enough; ask for a closer photo in daylight next to the white paper when needed.',
+    'Use the shop knowledge first and do not contradict it. ' + NO_VERDICT + ' Never explain how to add, copy or alter logos, serial numbers or date codes. Give safety notes for solvents and dyes (ventilation, gloves).',
+    '',
+    'The job:', x.context || '(no details yet)',
+    '',
+    'Shop knowledge:', x.skills || '(none yet)',
+  ].join('\n');
+  return runChat(env, system, x.turns, 6000, x.image);
+}
+
+
+export interface PaintTube {
+  brand: string | null; code: string | null; name: string | null; volume_ml: number | null; base: string | null; kind: string | null;
+  colour: string; hex: string | null; transparent: boolean | null; confidence: number; label: string;
+  uses: string[]; mixes: { with: string; makes: string }[]; leather_tip: string;
+}
+const TUBE_BASES = ['acrylic', 'leather_acrylic', 'water_dye', 'solvent_dye', 'oil', 'wax', 'other'];
+const TUBE_KINDS = ['leather_paint', 'edge_paint', 'dye', 'finisher', 'preparer', 'cleaner', 'other'];
+
+/**
+ * 🧴 Read a paint tube / bottle from a photo: brand, colour code and name exactly as printed, volume, what the paint
+ * is made on, and an approximate swatch colour (display only — never used to measure a bag). Then, for bag work:
+ * what the colour is good for, what to mix it with (shop paints first; directions only, no ratios), and one tip
+ * for using it on the chosen leather. Unreadable label → nulls, low confidence.
+ */
+export async function readPaintTube(env: Env, image: VisionImage, x: { lang: OutLang; surface: string | null; products: string[]; skills: string }): Promise<PaintTube> {
+  const text = await callVision(env,
+    'You read paint tubes and bottles for a bag-repainting workshop. From the photo, copy the label EXACTLY as printed: brand (e.g. "ST Professional Acrylic", "Sakura Acrylic Color", "Angelus"), the colour code (e.g. "#107", "100-1"), the colour name (e.g. "Sap Green (Transparent)", "Unbleached Titanium"), and the volume in ml. ' +
+    'Ignore paint smeared on the tube when reading text; if a field is not readable, use null — never guess codes or names. ' +
+    `base: one of ${TUBE_BASES.join(', ')} ("acrylic" = artist acrylic colour; "leather_acrylic" = acrylic made for leather such as Angelus). kind: one of ${TUBE_KINDS.join(', ')} (artist acrylic tubes → "other"). ` +
+    'hex: an approximate colour of the paint itself as "#rrggbb" (from the cap / colour band / paint on the nozzle) for a swatch, or null. transparent: true if the label says transparent, false if opaque, else null. ' +
+    `Then, for bag work, in ${LANG_NAME[x.lang]}: "uses" = 2–4 short lines on what bag colours / jobs this paint helps with; "mixes" = up to 4 items {"with": a paint (prefer the shop list), "makes": the colour or effect}, directions only, never amounts or ratios; ` +
+    `"leather_tip" = one short line on using this paint on ${x.surface ? SURFACE_NAME[x.surface] ?? x.surface : 'bag leather'} (e.g. artist acrylic needs a leather / flex medium and thin coats to stay flexible); "colour" = the colour in a few words. ` +
+    'Use the shop knowledge first. ' + NO_VERDICT + ' ' +
+    'Reply with JSON only: {"brand":…,"code":…,"name":…,"volume_ml":number|null,"base":…,"kind":…,"hex":…,"transparent":…,"confidence":0..1,"label":"the label text you read","colour":"…","uses":["…"],"mixes":[{"with":"…","makes":"…"}],"leather_tip":"…"}',
+    [image], [`Shop paints: ${x.products.slice(0, 60).join('; ') || '(none listed)'}`, `Shop knowledge:\n${x.skills || '(none yet)'}`].join('\n'), 1500, 'low');
+  const o = parseObj(text) ?? {};
+  const str = (v: unknown, n: number) => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? v.trim().slice(0, n) : null);
+  const vol = Number(o.volume_ml);
+  const hex = typeof o.hex === 'string' && /^#[0-9a-f]{6}$/i.test(o.hex.trim()) ? o.hex.trim().toLowerCase() : null;
+  const mixes = (Array.isArray(o.mixes) ? o.mixes : []).map((m: any) => ({ with: str(m?.with, 80) ?? '', makes: str(m?.makes, 120) ?? '' })).filter((m: { with: string; makes: string }) => m.with && m.makes).slice(0, 4);
+  return {
+    brand: str(o.brand, 80), code: str(o.code, 40), name: str(o.name, 120), volume_ml: Number.isFinite(vol) && vol >= 1 && vol <= 20000 ? Math.round(vol) : null,
+    base: TUBE_BASES.includes(o.base) ? o.base : null, kind: TUBE_KINDS.includes(o.kind) ? o.kind : null,
+    colour: str(o.colour, 80) ?? '', hex, transparent: typeof o.transparent === 'boolean' ? o.transparent : null,
+    confidence: Math.max(0, Math.min(1, Number(o.confidence) || 0)), label: str(o.label, 300) ?? '',
+    uses: steps(o.uses, 4), mixes, leather_tip: str(o.leather_tip, 300) ?? '',
+  };
 }

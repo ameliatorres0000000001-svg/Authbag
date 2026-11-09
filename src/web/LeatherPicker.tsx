@@ -1,9 +1,11 @@
 import React from 'react';
 import { useI18n } from './i18n.tsx';
 
-export const LEATHERS = ['smooth_leather', 'grained_leather', 'vachetta', 'coated_canvas', 'suede', 'edge', 'other'] as const;
-export type Leather = typeof LEATHERS[number];
-const MARK: Record<Leather, string> = { smooth_leather: '◐', grained_leather: '▦', vachetta: '◒', coated_canvas: '▤', suede: '≋', edge: '▭', other: '…' };
+import { LEATHERS as LIST, type LeatherKey } from '../shared/leathers.ts';
+
+export const LEATHERS = LIST.map((l) => l.key);
+export type Leather = LeatherKey;
+const MARK = Object.fromEntries(LIST.map((l) => [l.key, l.mark])) as Record<Leather, string>;
 
 /** Step "which leather?": the method of every skill depends on it. */
 export default function LeatherPicker({ value, onChange }: { value: Leather | null; onChange: (v: Leather) => void }) {

@@ -73,3 +73,12 @@ test('bad photos give no result, with the reason', () => {
   assert.ok(checkMeasurement({ ...good, sample: { ...good.sample, mean: [2, 2, 2] } }).includes('sample_too_dark'));
   assert.ok(checkMeasurement({ ...good, distance: 10 }).includes('too_close'));
 });
+
+test('colour difference for the AI: direction words, small differences ignored', async () => {
+  const { colourDiff } = await import('../src/shared/color.ts');
+  const t1 = colourDiff([50, 20, 30], [40, 20, 31]);
+  assert.match(t1, /bag is lighter by 10\.0/);
+  assert.doesNotMatch(t1, /yellower|bluer|redder|greener/);
+  assert.match(colourDiff([40, 25, 20], [40, 10, 20]), /bag is redder by 15\.0/);
+  assert.match(colourDiff([40, 10, 20], [40.5, 10.5, 20.4]), /practically the same/);
+});

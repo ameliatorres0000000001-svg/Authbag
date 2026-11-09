@@ -8,14 +8,15 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
-import { checkMeasurement, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
+import { assessVerification, pointsModel, testAi, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { checkMeasurement, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { removeBackground } from './cutout.ts';
 import { sniffAudio, synthesize, ttsConfigured, ttsHash } from './tts.ts';
 import { chooseSkills, type SkillRow, type SkillUse } from '../shared/skills.ts';
 import { asFeature } from './usage.ts';
+import { LEATHERS, LEATHER_KEYS, isLeather } from '../shared/leathers.ts';
 import { evidenceFor, handleFromInput, profileUrl } from '../shared/leads.ts';
 import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview.ts';
@@ -2445,8 +2446,9 @@ app.get('/api/stats/public', async (c) => {
 
 // ───────────────────────── Anajak Secondhand: paint mixer (colour recipes measured with a white reference) ─────────────────────────
 const PAINT_KINDS = ['leather_paint', 'edge_paint', 'dye', 'finisher', 'preparer', 'cleaner', 'other'] as const;
-const SURFACES = ['smooth_leather', 'grained_leather', 'vachetta', 'coated_canvas', 'suede', 'edge', 'other'] as const;
+const SURFACES = LEATHER_KEYS;
 const FINISHES = ['matte', 'satin', 'gloss'] as const;
+const PAINT_BASES = ['acrylic', 'leather_acrylic', 'water_dye', 'solvent_dye', 'oil', 'wax', 'other'] as const;
 const patchSchema = z.object({ mean: z.tuple([z.number(), z.number(), z.number()]), sd: z.number(), clipped: z.number(), n: z.number().int() });
 const measurementSchema = z.object({ sample: patchSchema, white: patchSchema, blur: z.number(), minSide: z.number(), distance: z.number(), r: z.number() });
 
@@ -2542,10 +2544,13 @@ const productFields = z.object({
   brand: z.string().trim().min(1).max(80), name: z.string().trim().min(1).max(120), kind: z.enum(PAINT_KINDS),
   color_hex: z.string().regex(/^#[0-9a-f]{6}$/).nullable().optional(), info: z.string().trim().max(3000).nullable().optional(),
   sources: z.array(z.object({ title: z.string().max(200), url: z.string().url().max(500) })).max(10).optional(), active: z.boolean().optional(),
+  code: z.string().trim().max(40).nullable().optional(), volume_ml: z.number().int().min(1).max(20000).nullable().optional(),
+  base: z.enum(PAINT_BASES).nullable().optional(),
 });
 const productFromForm = (f: Record<string, string>) => productFields.parse({
   brand: f.brand, name: f.name, kind: f.kind, color_hex: f.color_hex || null, info: f.info || null,
   sources: f.sources ? JSON.parse(f.sources) : [], active: f.active === undefined ? undefined : f.active === '1',
+  code: f.code?.trim() || null, volume_ml: f.volume_ml ? Number(f.volume_ml) : null, base: f.base || null,
 });
 
 app.post('/api/admin/paint/products', need(ADMINS), async (c) => {
@@ -2553,8 +2558,8 @@ app.post('/api/admin/paint/products', need(ADMINS), async (c) => {
   const b = productFromForm(r.fields);
   const id = uid('pp_');
   const key = r.photo ? await putPhoto(c.env, `paint/products/${id}`, r.photo) : null;
-  await c.env.DB.prepare(`INSERT INTO paint_products (id, brand, name, kind, color_hex, info, sources_json, photo_key, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, b.brand, b.name, b.kind, b.color_hex ?? null, b.info ?? null, JSON.stringify(b.sources ?? []), key, c.get('user').id).run();
+  await c.env.DB.prepare(`INSERT INTO paint_products (id, brand, name, kind, color_hex, info, sources_json, photo_key, created_by, code, volume_ml, base) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, b.brand, b.name, b.kind, b.color_hex ?? null, b.info ?? null, JSON.stringify(b.sources ?? []), key, c.get('user').id, b.code ?? null, b.volume_ml ?? null, b.base ?? null).run();
   await audit(c.env, c.get('user').id, 'paint.product_created', 'paint_products', id);
   return c.json({ ok: true, id });
 });
@@ -2566,8 +2571,9 @@ app.put('/api/admin/paint/products/:id', need(ADMINS), async (c) => {
   const b = productFromForm(r.fields);
   const key = r.photo ? await putPhoto(c.env, `paint/products/${c.req.param('id')}`, r.photo) : old.photo_key;
   await c.env.DB.prepare(`UPDATE paint_products SET brand = ?, name = ?, kind = ?, color_hex = ?, info = ?, sources_json = ?, photo_key = ?, active = ?,
-    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
-    .bind(b.brand, b.name, b.kind, b.color_hex ?? null, b.info ?? null, JSON.stringify(b.sources ?? []), key, b.active === false ? 0 : 1, c.req.param('id')).run();
+    code = ?, volume_ml = ?, base = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.brand, b.name, b.kind, b.color_hex ?? null, b.info ?? null, JSON.stringify(b.sources ?? []), key, b.active === false ? 0 : 1,
+      b.code ?? null, b.volume_ml ?? null, b.base ?? null, c.req.param('id')).run();
   if (r.photo && old.photo_key) await c.env.VAULT.delete(old.photo_key);
   return c.json({ ok: true });
 });
@@ -3284,8 +3290,8 @@ async function takeDaily(env: AppEnv['Bindings'], userId: string, kind: string, 
   const r = await env.DB.prepare(`INSERT INTO ai_chat_usage (user_id, day, n) VALUES (?, ?, 1) ON CONFLICT (user_id, day) DO UPDATE SET n = n + 1 WHERE n < ?`).bind(userId, day, limit).run();
   return { ok: !!r.meta.changes, undo: () => env.DB.prepare('UPDATE ai_chat_usage SET n = MAX(n - 1, 0) WHERE user_id = ? AND day = ?').bind(userId, day).run() };
 }
-const shopProducts = async (env: AppEnv['Bindings']) => (await env.DB.prepare('SELECT brand, name, kind FROM paint_products WHERE active = 1 ORDER BY brand, name LIMIT 60').all<{ brand: string; name: string; kind: string }>()).results
-  .map((p) => `${p.brand} ${p.name} (${p.kind})`);
+const shopProducts = async (env: AppEnv['Bindings']) => (await env.DB.prepare('SELECT brand, code, name, kind, base FROM paint_products WHERE active = 1 ORDER BY brand, name LIMIT 80').all<{ brand: string; code: string | null; name: string; kind: string; base: string | null }>()).results
+  .map((p) => `${p.brand}${p.code ? ` ${p.code}` : ''} ${p.name} (${p.kind}${p.base ? `, ${p.base}` : ''})`);
 
 app.post('/api/skills/paint', async (c) => {
   const me = c.get('user');
@@ -3312,6 +3318,35 @@ app.post('/api/skills/paint', async (c) => {
   } catch (e) { await quota.undo(); console.error('paint skill:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
 });
 
+/**
+ * 🎨 Paint skill: read a paint tube / bottle from a photo (brand, code, colour name, volume, base) and say what it is
+ * good for on bags and what to mix it with — preferring the shop's own paints. Members; staff use it to add paints.
+ * The shop list is matched by brand + code (or name), so "already in the shop" is shown.
+ */
+app.post('/api/paint/tube', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const gate = await memberGate(c); if (gate) return gate;
+  const form = await c.req.formData();
+  const file = form.get('file');
+  const surface = String(form.get('surface') ?? '');
+  if (!(file instanceof File)) return c.json({ error: 'invalid_input' }, 400);
+  if (file.size > MAX_IMAGE_BYTES) return c.json({ error: 'too_large' }, 413);
+  const data = await file.arrayBuffer(); const mime = sniffImage(new Uint8Array(data));
+  if (!mime) return c.json({ error: 'not_an_image' }, 415);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const quota = await takeDaily(c.env, me.id, 'tube', 40);
+  if (!quota.ok) return c.json({ error: 'too_many' }, 429);
+  try {
+    const skills = skillText(await pickSkills(c.env, 'paint', { text: `paint tube ${surface}` }, 6000));
+    const r = await asFeature('paint_skill', async () => readPaintTube(c.env, { data, mime }, { lang: reqLang(c), surface: isLeather(surface) ? surface : null, products: await shopProducts(c.env), skills }));
+    const norm = (v: string | null | undefined) => (v ?? '').toLowerCase().replace(/[^a-z0-9ក-៿]/g, '');
+    const rows = (await c.env.DB.prepare('SELECT id, brand, code, name FROM paint_products').all<{ id: string; brand: string; code: string | null; name: string }>()).results;
+    const match = r.brand ? rows.find((p) => norm(p.brand) === norm(r.brand) && ((r.code && norm(p.code) === norm(r.code)) || norm(p.name) === norm(r.name))) ?? null : null;
+    return c.json({ ...r, inShop: match ? { id: match.id } : null });
+  } catch (e) { await quota.undo(); console.error('tube:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
+});
+
 /** 🎨 Paint skill: which leather and finish the photo shows (the person can change it). */
 app.post('/api/skills/paint/leather', async (c) => {
   const me = c.get('user');
@@ -3327,6 +3362,116 @@ app.post('/api/skills/paint/leather', async (c) => {
   if (!quota.ok) return c.json({ error: 'too_many' }, 429);
   try { return c.json(await asFeature('paint_skill', () => identifyLeather(c.env, { data, mime }, reqLang(c)))); }
   catch (e) { await quota.undo(); console.error('leather id:', (e as Error).message); return c.json({ error: 'ai_failed' }, 502); }
+});
+
+// ── AI workspace: ask by text or voice (optionally with a photo) about the job in hand, in every skill ──
+type ChatTurnIn = { role: 'user' | 'assistant'; content: string };
+const SURFACE_LABEL: Record<string, string> = Object.fromEntries(LEATHERS.map((l) => [l.key, l.ai]));
+const clip = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+
+async function paintContext(env: AppEnv['Bindings'], ctx: any): Promise<string> {
+  const out: string[] = [];
+  if (ctx?.surface && SURFACE_LABEL[ctx.surface]) out.push(`Leather: ${SURFACE_LABEL[ctx.surface]}`);
+  if (['matte', 'satin', 'gloss'].includes(ctx?.finish)) out.push(`Finish wanted: ${ctx.finish}`);
+  const lab = Array.isArray(ctx?.lab) && ctx.lab.length === 3 && ctx.lab.every((n: unknown) => typeof n === 'number' && Number.isFinite(n)) ? ctx.lab as [number, number, number] : null;
+  if (lab) out.push(`Bag colour measured with the white paper: ${labToHex(lab)} (L* ${lab[0].toFixed(1)}, a* ${lab[1].toFixed(1)}, b* ${lab[2].toFixed(1)})`);
+  if (typeof ctx?.recipeId === 'string') {
+    const r = (await paintRecipes(env, false)).find((x) => x.id === ctx.recipeId);
+    if (r) {
+      out.push(`Recipe in use "${r.name_en || r.name_km}" (${r.surface}, ${r.finish}): ${r.parts.map((p: any) => `${p.parts} part(s) ${p.brand} ${p.name} (${p.kind})`).join(' + ')}`);
+      if (lab) out.push(`Measured bag vs recipe colour: ${colourDiff(lab, [r.lab_l, r.lab_a, r.lab_b])}`);
+    }
+  }
+  const tb = ctx?.tube;
+  if (tb && typeof tb === 'object') out.push(`Paint in hand (read from the tube): ${[clip(tb.brand, 80), clip(tb.code, 40), clip(tb.name, 120)].filter(Boolean).join(' ')}${clip(tb.base, 30) ? ` — base: ${clip(tb.base, 30)}` : ''}`);
+  const g = ctx?.guess;
+  if (g && typeof g === 'object') out.push(`AI look at the photo: ${[clip(g.colour, 80), clip(g.condition, 160)].filter(Boolean).join(' · ')}`);
+  if (ctx?.method && typeof ctx.method === 'object') out.push(`Method already given: prep ${clip((ctx.method.prep ?? []).slice(0, 3).join('; '), 300)}; apply ${clip((ctx.method.apply ?? []).slice(0, 3).join('; '), 300)}`);
+  return out.join('\n');
+}
+function repairContext(ctx: any): string {
+  const out: string[] = [];
+  if (ctx?.surface && SURFACE_LABEL[ctx.surface]) out.push(`Leather: ${SURFACE_LABEL[ctx.surface]}`);
+  if (clip(ctx?.problem, 500)) out.push(`Problem described: ${clip(ctx.problem, 500)}`);
+  const a = ctx?.advice;
+  if (a && typeof a === 'object') out.push(`Advice already given: ${clip(a.problem, 200)} — steps: ${clip((Array.isArray(a.steps) ? a.steps : []).slice(0, 5).join('; '), 600)}`);
+  return out.join('\n');
+}
+
+app.post('/api/skills/ask', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const gate = await memberGate(c); if (gate) return gate;
+  const form = await c.req.formData();
+  const skill = String(form.get('skill') ?? '');
+  if (!['paint', 'repair', 'chat'].includes(skill)) return c.json({ error: 'invalid_input' }, 400);
+  let turns: ChatTurnIn[] = [], ctx: any = null;
+  try {
+    turns = z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(4000) })).min(1).max(30).parse(JSON.parse(String(form.get('messages') ?? '[]')));
+    ctx = JSON.parse(String(form.get('context') ?? 'null'));
+  } catch { return c.json({ error: 'invalid_input' }, 400); }
+  turns = turns.slice(-12);
+  while (turns.length && turns[0].role !== 'user') turns.shift();
+  if (!turns.length || turns[turns.length - 1].role !== 'user') return c.json({ error: 'invalid_input' }, 400);
+  const file = form.get('file');
+  let image: { data: ArrayBuffer; mime: string } | null = null;
+  if (file instanceof File) {
+    if (file.size > MAX_IMAGE_BYTES) return c.json({ error: 'too_large' }, 413);
+    const data = await file.arrayBuffer(); const mime = sniffImage(new Uint8Array(data));
+    if (!mime) return c.json({ error: 'not_an_image' }, 415);
+    image = { data, mime };
+  }
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  // the assistant shares its daily count with /api/chat; the bench workspaces have their own
+  let undo: () => Promise<unknown>;
+  if (skill === 'chat') {
+    const limit = await getSettingNumber(c.env, 'ai_chat_daily_limit', 30);
+    const day = chatDay();
+    const res = await c.env.DB.prepare(`INSERT INTO ai_chat_usage (user_id, day, n) VALUES (?, ?, 1) ON CONFLICT (user_id, day) DO UPDATE SET n = n + 1 WHERE n < ?`).bind(me.id, day, limit).run();
+    if (!res.meta.changes) return c.json({ error: 'chat_limit', limit }, 429);
+    undo = () => c.env.DB.prepare('UPDATE ai_chat_usage SET n = MAX(n - 1, 0) WHERE user_id = ? AND day = ?').bind(me.id, day).run();
+  } else {
+    const q = await takeDaily(c.env, me.id, 'ask', 60);
+    if (!q.ok) return c.json({ error: 'too_many' }, 429);
+    undo = q.undo;
+  }
+  const recent = turns.filter((t) => t.role === 'user').slice(-3).map((t) => t.content).join('\n');
+  try {
+    let reply: string;
+    if (skill === 'chat') {
+      reply = await asFeature('chat', async () => chatAssistant(c.env, turns, reqLang(c),
+        { market: await marketContext(c.env), skills: skillText(await pickSkills(c.env, 'chat', { text: recent }, 12000)), app: await appContext(c.env) }, image));
+    } else {
+      const context = skill === 'paint' ? await paintContext(c.env, ctx) : repairContext(ctx);
+      const skills = skillText(await pickSkills(c.env, skill as 'paint' | 'repair', { text: `${context}\n${recent}` }, 8000));
+      reply = await asFeature(skill === 'paint' ? 'paint_skill' : 'repair_skill', () => workspaceAnswer(c.env, { skill: skill as 'paint' | 'repair', turns, image, lang: reqLang(c), context, skills }));
+    }
+    return c.json({ reply: reply.trim() });
+  } catch (e) {
+    await undo();
+    console.error('ask:', (e as Error).message);
+    return c.json({ error: String((e as Error).message) === 'ai_refused' ? 'ai_refused' : 'ai_failed' }, 502);
+  }
+});
+
+/** Read an AI answer aloud with the Khmer / English neural voice (cached); without Azure the phone's own voice is used. */
+app.post('/api/skills/speak', async (c) => {
+  const me = c.get('user');
+  if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
+  const gate = await memberGate(c); if (gate) return gate;
+  const b = await parse(c, z.object({ text: z.string().trim().min(1).max(1200) }));
+  if (!ttsConfigured(c.env)) return c.json({ error: 'tts_not_configured' }, 501);
+  const text = b.text.replace(/[*#_`>]/g, '').replace(/\s+/g, ' ').trim();
+  const key = `tts/ask/${await ttsHash(c.env, text)}.mp3`;
+  const hit = await c.env.VAULT.get(key);
+  if (hit) return new Response(hit.body, { headers: { 'content-type': 'audio/mpeg', 'cache-control': 'private, max-age=86400' } });
+  const q = await takeDaily(c.env, me.id, 'speak', 100);
+  if (!q.ok) return c.json({ error: 'too_many' }, 429);
+  try {
+    const mp3 = await synthesize(c.env, text);
+    await c.env.VAULT.put(key, mp3, { httpMetadata: { contentType: 'audio/mpeg' } });
+    return new Response(mp3, { headers: { 'content-type': 'audio/mpeg', 'cache-control': 'private, max-age=86400' } });
+  } catch (e) { await q.undo(); console.error('speak:', (e as Error).message); return c.json({ error: 'tts_failed' }, 502); }
 });
 
 app.post('/api/skills/repair', async (c) => {

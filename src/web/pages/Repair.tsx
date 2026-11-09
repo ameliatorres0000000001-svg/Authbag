@@ -4,6 +4,7 @@ import { useI18n } from '../i18n.tsx';
 import { Notice, Page, errText } from '../ui.tsx';
 import LeatherPicker, { StepList, type Leather } from '../LeatherPicker.tsx';
 import { MembershipNeeded, isMembershipError } from './Membership.tsx';
+import AiWorkspace from '../AiWorkspace.tsx';
 
 interface Advice { problem: string; unclear: boolean; severity: 'light' | 'medium' | 'heavy' | null; steps: string[]; materials: string[]; avoid: string[]; pro: string; safety: string }
 const PROBLEMS = ['stain', 'mould', 'peeling', 'edge', 'corners', 'scratch', 'odour', 'sticky', 'hardware', 'darkened'];
@@ -88,6 +89,10 @@ export default function Repair() {
           {!res && !busy && !err && !member && (
             <div className="rounded-2xl border border-hairline bg-surface-card p-5 text-sm text-muted">{t('repair.empty')}</div>
           )}
+          {/* ask follow-up questions about this repair, by text / voice / photo */}
+          <AiWorkspace skill="repair" title={t('ws.repairTitle')} sub={t('ws.repairSub')}
+            context={{ surface: leather, problem, advice: res }}
+            chips={['ws.rq1', 'ws.rq2', 'ws.rq3', 'ws.rq4'].map((k) => t(k))} />
         </section>
       </div>
     </Page>

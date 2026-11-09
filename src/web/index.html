@@ -5,7 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Anajak Bag</title>
   <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="theme-color" content="#131315" />
+  <meta name="theme-color" content="#0E0E10" />
+  <script>
+    /* Auto-Skin: apply the saved theme before the first paint (dark by default; "auto" follows the phone). */
+    (function () { try {
+      var m = localStorage.getItem('hz_theme') || 'dark';
+      var light = m === 'light' || (m === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches);
+      if (light) document.documentElement.setAttribute('data-theme', 'light');
+      document.querySelector('meta[name=theme-color]').setAttribute('content', light ? '#FAF9F6' : '#0E0E10');
+    } catch (e) {} })();
+  </script>
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
