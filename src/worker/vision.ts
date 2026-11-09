@@ -894,3 +894,28 @@ export async function repairAdvice(env: Env, x: { surface: string; problem: stri
   if (!r.problem && !r.steps.length) throw new Error('ai_empty');
   return r;
 }
+
+
+export interface LeatherGuess { surface: string | null; finish: 'matte' | 'satin' | 'gloss' | null; confidence: number; colour: string; condition: string; tip: string }
+
+/**
+ * 🎨 Paint skill, step 1: from the bag photo, which material the painted area is (leather type) and its finish,
+ * plus a short condition note and a prep tip. Identification of the material only — never authenticity.
+ * Low confidence → nulls, and the person picks.
+ */
+export async function identifyLeather(env: Env, image: VisionImage, lang: OutLang): Promise<LeatherGuess> {
+  const text = await callVision(env,
+    'You help a bag repainter. From one photo of a bag (a white paper may lie next to it for colour), say which material the main surface is and its finish. ' +
+    `Materials: ${Object.entries(SURFACE_NAME).map(([k, v]) => `"${k}" = ${v}`).join('; ')}. ` +
+    'Finish: "matte", "satin" or "gloss" (how shiny the surface looks). ' + NO_VERDICT + ' ' +
+    'If the photo is unclear or the material cannot be told, use null and a low confidence. ' +
+    `In ${LANG_NAME[lang]}: "colour" = the colour name in a few words, "condition" = one short line on visible wear that matters for painting (scuffs, cracks, peeling, stains) or empty, "tip" = one short preparation tip for this material. ` +
+    'Reply with JSON only: {"surface":"…"|null,"finish":"matte|satin|gloss"|null,"confidence":0..1,"colour":"…","condition":"…","tip":"…"}',
+    [image], 'Which material and finish?', 600, 'low');
+  const o = parseObj(text);
+  const surface = typeof o?.surface === 'string' && o.surface in SURFACE_NAME ? o.surface : null;
+  const finish = (['matte', 'satin', 'gloss'] as const).find((k) => k === o?.finish) ?? null;
+  const confidence = surface ? Math.max(0, Math.min(1, Number(o?.confidence) || 0)) : 0;
+  const str = (v: unknown) => String(v ?? '').trim().slice(0, 200);
+  return { surface, finish, confidence, colour: str(o?.colour), condition: str(o?.condition), tip: str(o?.tip) };
+}

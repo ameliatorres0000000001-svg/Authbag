@@ -1,18 +1,23 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from './i18n.tsx';
 import { checkMeasurement, laplacianVariance, labToHex, measuredLab, patchStats, type Issue, type Measurement } from '../shared/color.ts';
+import { autoSpots } from '../shared/autoscan.ts';
+import CameraCapture from './CameraCapture.tsx';
 
 const MAX_SIDE = 1600;
 type Pt = { x: number; y: number };
 const rgbCss = (m: [number, number, number]) => `rgb(${m.map(Math.round).join(',')})`;
 
 /**
- * Photo → two taps (white paper, then the bag colour) → a Measurement with its quality checks.
- * The checks are the same ones the server applies; `onChange` gets `issues` and the parent must show
- * no colour result while there is any issue.
+ * Smart camera (sharpness / light / steadiness checks, torch) or a chosen photo → the white paper and the bag colour
+ * are found automatically (autoSpots) → a Measurement with its quality checks. The person can tap to move either spot;
+ * when no paper is found they tap both. The checks are the same ones the server applies; `onChange` gets `issues`
+ * and the parent must show no colour result while there is any issue. `onPhoto` gets each new photo (e.g. for the AI
+ * leather check).
  */
-export default function ColorScanner({ onChange, onSay }: { onChange: (m: Measurement | null, issues: Issue[], file: File | null) => void; onSay?: (key: string) => void }) {
-  const { t } = useI18n();
+export default function ColorScanner({ onChange, onSay, onPhoto }: { onChange: (m: Measurement | null, issues: Issue[], file: File | null) => void; onSay?: (key: string) => void; onPhoto?: (f: File) => void }) {
+  const { t, locale } = useI18n();
+  const [auto, setAuto] = useState<'found' | 'none' | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const img = useRef<{ data: ImageData; bmp: HTMLCanvasElement; blur: number } | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -80,8 +85,12 @@ export default function ColorScanner({ onChange, onSay }: { onChange: (m: Measur
       const gray = new Float32Array(sw * sh);
       for (let i = 0; i < gray.length; i++) gray[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
       img.current = { data, bmp: cv, blur: laplacianVariance(gray, sw, sh) };
-      setFile(f); setWhite(null); setSpot(null); setMode('white'); setVer((v) => v + 1);
-      onSay?.('paint.tapWhite');
+      const rr = Math.max(8, Math.round(Math.min(cv.width, cv.height) * 0.02));
+      const found = autoSpots(data.data, cv.width, cv.height, rr);
+      setFile(f); setVer((v) => v + 1);
+      if (found) { setWhite(found.white); setSpot(found.spot); setMode('spot'); setAuto('found'); }
+      else { setWhite(null); setSpot(null); setMode('white'); setAuto('none'); onSay?.('paint.tapWhite'); }
+      onPhoto?.(f);
     } finally { setLoading(false); }
   };
 
@@ -96,11 +105,14 @@ export default function ColorScanner({ onChange, onSay }: { onChange: (m: Measur
 
   return (
     <div className="space-y-3">
-      <label className={`btn-primary flex w-full cursor-pointer items-center justify-center gap-2 !py-4 text-base ${loading ? 'pointer-events-none opacity-60' : ''}`}>
-        {file ? t('paint.retake') : t('paint.take')}
-        <input type="file" accept="image/*" capture="environment" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) load(f); }} />
-      </label>
+      {!file ? (
+        <>
+          <p className="rounded-xl border border-hairline bg-surface-low px-3 py-2 text-xs text-muted">📄 {t('paint.paperTip')}</p>
+          <CameraCapture onCapture={load} locale={locale === 'km' ? 'km' : 'en'} disabled={loading} />
+        </>
+      ) : (
+        <button type="button" className="btn-ghost w-full !py-2 text-sm" onClick={() => { setFile(null); img.current = null; setWhite(null); setSpot(null); setAuto(null); }}>↺ {t('paint.retake')}</button>
+      )}
 
       {file && (
         <>
@@ -113,6 +125,8 @@ export default function ColorScanner({ onChange, onSay }: { onChange: (m: Measur
             ))}
             {(white || spot) && <button type="button" className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => { setWhite(null); setSpot(null); setMode('white'); }}>{t('paint.redo')}</button>}
           </div>
+          {auto === 'found' && <p className="text-xs text-verified">✨ {t('paint.autoFound')}</p>}
+          {auto === 'none' && <p className="text-xs text-review">{t('paint.autoNone')}</p>}
           <canvas ref={canvas} onPointerDown={tap} className="block h-auto w-full touch-none rounded-xl border border-hairline" style={{ cursor: 'crosshair' }} />
 
           {m && (
