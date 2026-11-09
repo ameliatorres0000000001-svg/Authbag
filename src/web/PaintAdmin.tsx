@@ -61,12 +61,14 @@ function VoiceTools() {
   );
 }
 
-type PForm = { brand: string; name: string; kind: string; color_hex: string; info: string; sources: { title: string; url: string }[]; active: boolean };
-const emptyP: PForm = { brand: '', name: '', kind: 'leather_paint', color_hex: '', info: '', sources: [], active: true };
+type PForm = { brand: string; name: string; kind: string; color_hex: string; info: string; sources: { title: string; url: string }[]; active: boolean; code: string; volume_ml: string; base: string };
+const emptyP: PForm = { brand: '', name: '', kind: 'leather_paint', color_hex: '', info: '', sources: [], active: true, code: '', volume_ml: '', base: '' };
+const BASES = ['acrylic', 'leather_acrylic', 'water_dye', 'solvent_dye', 'oil', 'wax', 'other'];
 const toFd = (f: PForm, photo: File | null) => {
   const fd = new FormData();
   fd.append('brand', f.brand); fd.append('name', f.name); fd.append('kind', f.kind); fd.append('color_hex', f.color_hex);
   fd.append('info', f.info); fd.append('sources', JSON.stringify(f.sources)); fd.append('active', f.active ? '1' : '0');
+  fd.append('code', f.code); fd.append('volume_ml', f.volume_ml); fd.append('base', f.base);
   if (photo) fd.append('file', photo);
   return fd;
 };
@@ -83,7 +85,7 @@ function Products({ products, reload }: { products: PaintProduct[]; reload: () =
   const open = (p: PaintProduct | null) => {
     setMsg(null); setDraft(null); setPhoto(null);
     if (!p) { setEdit('new'); setF(emptyP); return; }
-    setEdit(p.id); setF({ brand: p.brand, name: p.name, kind: p.kind, color_hex: p.color_hex ?? '', info: p.info ?? '', sources: p.sources, active: !!p.active });
+    setEdit(p.id); setF({ brand: p.brand, name: p.name, kind: p.kind, color_hex: p.color_hex ?? '', info: p.info ?? '', sources: p.sources, active: !!p.active, code: p.code ?? '', volume_ml: p.volume_ml ? String(p.volume_ml) : '', base: p.base ?? '' });
   };
   const save = async () => {
     setBusy('save'); setMsg(null);
@@ -91,6 +93,18 @@ function Products({ products, reload }: { products: PaintProduct[]; reload: () =
       if (edit === 'new') { const r = await api.post<{ id: string }>('/api/admin/paint/products', toFd(f, photo)); setEdit(r.id); }
       else await api.put(`/api/admin/paint/products/${edit}`, toFd(f, photo));
       setPhoto(null); reload(); setMsg({ tone: 'ok', text: t('madm.saved') });
+    } catch (e) { setMsg({ tone: 'bad', text: errText(e) }); } finally { setBusy(''); }
+  };
+  /** Photo of the tube → the AI reads brand / code / name / volume / base; the photo becomes the product photo. */
+  const scanTube = async (file: File) => {
+    setBusy('scan'); setMsg(null);
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const r = await api.post<{ brand: string | null; code: string | null; name: string | null; volume_ml: number | null; base: string | null; kind: string | null; hex: string | null; colour: string; uses: string[]; leather_tip: string }>('/api/paint/tube', fd);
+      setF((x) => ({ ...x, brand: r.brand ?? x.brand, code: r.code ?? x.code, name: r.name ?? x.name, volume_ml: r.volume_ml ? String(r.volume_ml) : x.volume_ml,
+        base: r.base ?? x.base, kind: r.kind ?? x.kind, color_hex: r.hex ?? x.color_hex,
+        info: x.info || [r.colour, ...r.uses, r.leather_tip].filter(Boolean).join('\n') }));
+      setPhoto(file); setMsg({ tone: 'ok', text: t('padm.scanned') });
     } catch (e) { setMsg({ tone: 'bad', text: errText(e) }); } finally { setBusy(''); }
   };
   const research = async () => {
@@ -112,16 +126,25 @@ function Products({ products, reload }: { products: PaintProduct[]; reload: () =
         {products.map((p) => (
           <li key={p.id} className="flex items-center gap-2 py-1.5 text-sm">
             {p.has_photo ? <img src={productPhoto(p)} alt="" className="h-8 w-8 rounded object-cover" /> : <span className="h-8 w-8 rounded border border-hairline" style={{ background: p.color_hex ?? 'transparent' }} />}
-            <span className={`min-w-0 flex-1 truncate ${p.active ? '' : 'text-muted line-through'}`}><b>{p.brand}</b> {p.name} <span className="text-xs text-muted">· {t(`paint.kind.${p.kind}`)}</span></span>
+            <span className={`min-w-0 flex-1 truncate ${p.active ? '' : 'text-muted line-through'}`}><b>{p.brand}</b> {p.code && <span className="font-mono text-xs text-gold">{p.code}</span>} {p.name} <span className="text-xs text-muted">· {t(`paint.kind.${p.kind}`)}</span></span>
             <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" onClick={() => (edit === p.id ? setEdit(null) : open(p))}>{edit === p.id ? t('cadm.close') : t('cadm.edit')}</button>
           </li>
         ))}
       </ul>
       {edit && (
         <div className="space-y-2 rounded-lg border border-hairline p-3">
+          <label className={`btn-ghost w-full cursor-pointer text-sm ${busy === 'scan' ? 'pointer-events-none opacity-60' : ''}`}>
+            {busy === 'scan' ? '…' : t('padm.scanTube')}
+            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ''; if (x) scanTube(x); }} />
+          </label>
           <div className="grid grid-cols-2 gap-2">
             <Field label={t('padm.brand')}><input className="input" maxLength={80} value={f.brand} onChange={(e) => setF({ ...f, brand: e.target.value })} /></Field>
             <Field label={t('padm.name')}><input className="input" maxLength={120} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+            <Field label={t('padm.code')}><input className="input font-mono" maxLength={40} placeholder="#107 / 100-1" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} /></Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label={t('padm.volume')}><input className="input" type="number" min={1} max={20000} value={f.volume_ml} onChange={(e) => setF({ ...f, volume_ml: e.target.value })} /></Field>
+              <Field label={t('padm.base')}><select className="input" value={f.base} onChange={(e) => setF({ ...f, base: e.target.value })}><option value="">—</option>{BASES.map((b) => <option key={b} value={b}>{t(`tube.base.${b}`)}</option>)}</select></Field>
+            </div>
             <Field label={t('padm.kind')}><select className="input" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>{KINDS.map((k) => <option key={k} value={k}>{t(`paint.kind.${k}`)}</option>)}</select></Field>
             <Field label={t('padm.color')}>
               <div className="flex items-center gap-2">

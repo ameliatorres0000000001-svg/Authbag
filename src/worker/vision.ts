@@ -1,3 +1,4 @@
+import { LEATHERS } from '../shared/leathers.ts';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Env } from './env.ts';
 import { recordUsage } from './usage.ts';
@@ -831,11 +832,7 @@ export async function draftOutreach(env: Env, x: { country: 'TH' | 'MY' | 'ID'; 
   return { message, meaning: typeof o?.meaning === 'string' ? o.meaning.trim().slice(0, 1500) : '' };
 }
 
-export const SURFACE_NAME: Record<string, string> = {
-  smooth_leather: 'smooth leather (calf, lambskin, box)', grained_leather: 'grained / pebbled leather (e.g. Epi, Saffiano, Togo-type grain)',
-  vachetta: 'vachetta (untreated natural cowhide that darkens)', coated_canvas: 'coated canvas (PVC-coated, e.g. monogram canvas, Coach signature)',
-  suede: 'suede / nubuck', edge: 'edges (edge paint / edge coat)', other: 'other material',
-};
+export const SURFACE_NAME: Record<string, string> = Object.fromEntries(LEATHERS.map((l) => [l.key, l.ai]));
 const steps = (v: unknown, n = 10) => (Array.isArray(v) ? v : []).map((x) => String(x ?? '').trim()).filter(Boolean).slice(0, n).map((x) => x.slice(0, 400));
 const parseObj = (text: string): any => { const a = text.indexOf('{'), b = text.lastIndexOf('}'); try { return a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { return null; } };
 
@@ -949,4 +946,44 @@ export async function workspaceAnswer(env: Env, x: { skill: 'paint' | 'repair'; 
     'Shop knowledge:', x.skills || '(none yet)',
   ].join('\n');
   return runChat(env, system, x.turns, 6000, x.image);
+}
+
+
+export interface PaintTube {
+  brand: string | null; code: string | null; name: string | null; volume_ml: number | null; base: string | null; kind: string | null;
+  colour: string; hex: string | null; transparent: boolean | null; confidence: number; label: string;
+  uses: string[]; mixes: { with: string; makes: string }[]; leather_tip: string;
+}
+const TUBE_BASES = ['acrylic', 'leather_acrylic', 'water_dye', 'solvent_dye', 'oil', 'wax', 'other'];
+const TUBE_KINDS = ['leather_paint', 'edge_paint', 'dye', 'finisher', 'preparer', 'cleaner', 'other'];
+
+/**
+ * 🧴 Read a paint tube / bottle from a photo: brand, colour code and name exactly as printed, volume, what the paint
+ * is made on, and an approximate swatch colour (display only — never used to measure a bag). Then, for bag work:
+ * what the colour is good for, what to mix it with (shop paints first; directions only, no ratios), and one tip
+ * for using it on the chosen leather. Unreadable label → nulls, low confidence.
+ */
+export async function readPaintTube(env: Env, image: VisionImage, x: { lang: OutLang; surface: string | null; products: string[]; skills: string }): Promise<PaintTube> {
+  const text = await callVision(env,
+    'You read paint tubes and bottles for a bag-repainting workshop. From the photo, copy the label EXACTLY as printed: brand (e.g. "ST Professional Acrylic", "Sakura Acrylic Color", "Angelus"), the colour code (e.g. "#107", "100-1"), the colour name (e.g. "Sap Green (Transparent)", "Unbleached Titanium"), and the volume in ml. ' +
+    'Ignore paint smeared on the tube when reading text; if a field is not readable, use null — never guess codes or names. ' +
+    `base: one of ${TUBE_BASES.join(', ')} ("acrylic" = artist acrylic colour; "leather_acrylic" = acrylic made for leather such as Angelus). kind: one of ${TUBE_KINDS.join(', ')} (artist acrylic tubes → "other"). ` +
+    'hex: an approximate colour of the paint itself as "#rrggbb" (from the cap / colour band / paint on the nozzle) for a swatch, or null. transparent: true if the label says transparent, false if opaque, else null. ' +
+    `Then, for bag work, in ${LANG_NAME[x.lang]}: "uses" = 2–4 short lines on what bag colours / jobs this paint helps with; "mixes" = up to 4 items {"with": a paint (prefer the shop list), "makes": the colour or effect}, directions only, never amounts or ratios; ` +
+    `"leather_tip" = one short line on using this paint on ${x.surface ? SURFACE_NAME[x.surface] ?? x.surface : 'bag leather'} (e.g. artist acrylic needs a leather / flex medium and thin coats to stay flexible); "colour" = the colour in a few words. ` +
+    'Use the shop knowledge first. ' + NO_VERDICT + ' ' +
+    'Reply with JSON only: {"brand":…,"code":…,"name":…,"volume_ml":number|null,"base":…,"kind":…,"hex":…,"transparent":…,"confidence":0..1,"label":"the label text you read","colour":"…","uses":["…"],"mixes":[{"with":"…","makes":"…"}],"leather_tip":"…"}',
+    [image], [`Shop paints: ${x.products.slice(0, 60).join('; ') || '(none listed)'}`, `Shop knowledge:\n${x.skills || '(none yet)'}`].join('\n'), 1500, 'low');
+  const o = parseObj(text) ?? {};
+  const str = (v: unknown, n: number) => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? v.trim().slice(0, n) : null);
+  const vol = Number(o.volume_ml);
+  const hex = typeof o.hex === 'string' && /^#[0-9a-f]{6}$/i.test(o.hex.trim()) ? o.hex.trim().toLowerCase() : null;
+  const mixes = (Array.isArray(o.mixes) ? o.mixes : []).map((m: any) => ({ with: str(m?.with, 80) ?? '', makes: str(m?.makes, 120) ?? '' })).filter((m: { with: string; makes: string }) => m.with && m.makes).slice(0, 4);
+  return {
+    brand: str(o.brand, 80), code: str(o.code, 40), name: str(o.name, 120), volume_ml: Number.isFinite(vol) && vol >= 1 && vol <= 20000 ? Math.round(vol) : null,
+    base: TUBE_BASES.includes(o.base) ? o.base : null, kind: TUBE_KINDS.includes(o.kind) ? o.kind : null,
+    colour: str(o.colour, 80) ?? '', hex, transparent: typeof o.transparent === 'boolean' ? o.transparent : null,
+    confidence: Math.max(0, Math.min(1, Number(o.confidence) || 0)), label: str(o.label, 300) ?? '',
+    uses: steps(o.uses, 4), mixes, leather_tip: str(o.leather_tip, 300) ?? '',
+  };
 }

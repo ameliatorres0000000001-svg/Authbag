@@ -39,6 +39,7 @@ import RestoreLesson from './pages/RestoreLesson.tsx';
 import Paint from './pages/Paint.tsx';
 import Membership, { MembershipLine, type MembershipInfo } from './pages/Membership.tsx';
 import Repair from './pages/Repair.tsx';
+import { useTheme } from './theme.ts';
 import Authenticity from './pages/Authenticity.tsx';
 import Chat from './pages/Chat.tsx';
 
@@ -202,6 +203,23 @@ export default function App() {
 }
 
 /** Top-right account button: "Sign in" for guests; the person's initial with a small menu once signed in. */
+/** Auto-Skin: dark (default) · light · follow the phone. */
+function ThemeSwitch() {
+  const { t } = useI18n();
+  const [mode, setMode] = useTheme();
+  return (
+    <div className="mt-2">
+      <div className="mb-1 text-[11px] text-muted">{t('theme.title')}</div>
+      <div className="grid grid-cols-3 gap-1 rounded-lg bg-surface-low p-0.5 text-xs">
+        {(['dark', 'light', 'auto'] as const).map((m) => (
+          <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m}
+            className={`rounded-md px-1 py-1 ${mode === m ? 'bg-gold font-semibold text-charcoal' : 'text-muted'}`}>{t(`theme.${m}`)}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AccountButton({ me, onSignOut }: { me: Me | null; onSignOut: () => void }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -220,6 +238,7 @@ function AccountButton({ me, onSignOut }: { me: Me | null; onSignOut: () => void
             <div className="truncate text-xs text-muted">{me.email}</div>
             {mb && mb.status !== 'staff' && <Link to="/subscribe" onClick={() => setOpen(false)} className="mt-2 block"><MembershipLine m={mb} /></Link>}
             {mb && mb.status !== 'staff' && <Link to="/subscribe" onClick={() => setOpen(false)} className="mt-1 block rounded-lg px-2 py-1.5 hover:bg-surface-low">⭐ {t('mb.title')}</Link>}
+            <ThemeSwitch />
             <Link to="/verify" onClick={() => setOpen(false)} className="mt-2 block rounded-lg px-2 py-1.5 hover:bg-surface-low">🏅 {t('nav.verify')}</Link>
             {STAFF_ROLES.includes(me.role) && <Link to="/admin" onClick={() => setOpen(false)} className="block rounded-lg px-2 py-1.5 hover:bg-surface-low">🛠 {t('acct.admin')}</Link>}
             <button type="button" onClick={() => { setOpen(false); onSignOut(); }} className="block w-full rounded-lg px-2 py-1.5 text-left text-counterfeit hover:bg-surface-low">{t('signOut')}</button>

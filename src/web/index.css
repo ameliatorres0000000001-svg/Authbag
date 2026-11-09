@@ -3,10 +3,57 @@
 @tailwind utilities;
 
 @layer base {
-  html { color-scheme: dark; }
-  body { background: radial-gradient(900px 420px at 50% -160px, rgba(212,175,95,0.11), transparent 70%), #0E0E10; }
+  /* Auto-Skin: dark (default) — workshop black & gold */
+  :root {
+    --c-surface: 14 14 16;
+    --c-surface-card: 23 23 26;
+    --c-surface-canvas: 18 18 21;
+    --c-surface-low: 31 31 36;
+    --c-surface-high: 43 43 49;
+    --c-charcoal: 5 5 6;
+    --c-ink: 243 238 228;
+    --c-muted: 161 156 146;
+    --c-hairline: 44 43 40;
+    --c-strong: 74 70 63;
+    --c-gold: 212 175 95;
+    --c-gold-light: 45 38 24;
+    --c-verified: 62 155 99;
+    --c-verified-bg: 19 38 26;
+    --c-counterfeit: 211 84 84;
+    --c-counterfeit-bg: 58 24 24;
+    --c-review: 217 167 59;
+    --c-review-bg: 46 38 20;
+    --c-telemetry: 184 192 204;
+    --c-telemetry-bg: 29 33 40;
+    color-scheme: dark;
+  }
+  /* light — ivory & gold; chosen in the account menu, or "auto" follows the phone (data-theme is set by index.html) */
+  :root[data-theme='light'] {
+    --c-surface: 250 249 246;
+    --c-surface-card: 255 255 255;
+    --c-surface-canvas: 244 241 234;
+    --c-surface-low: 244 243 240;
+    --c-surface-high: 233 232 229;
+    --c-charcoal: 26 26 26;
+    --c-ink: 26 26 26;
+    --c-muted: 110 107 100;
+    --c-hairline: 229 224 216;
+    --c-strong: 200 194 183;
+    --c-gold: 180 138 58;
+    --c-gold-light: 239 230 210;
+    --c-verified: 44 76 56;
+    --c-verified-bg: 235 242 237;
+    --c-counterfeit: 138 35 35;
+    --c-counterfeit-bg: 249 235 235;
+    --c-review: 140 106 26;
+    --c-review-bg: 253 248 232;
+    --c-telemetry: 55 65 81;
+    --c-telemetry-bg: 238 240 242;
+    color-scheme: light;
+  }
+  body { background: radial-gradient(900px 420px at 50% -160px, rgb(var(--c-gold) / 0.11), transparent 70%), rgb(var(--c-surface)); }
   ::selection { background: rgba(212,175,95,0.35); }
-  html, body { margin: 0; background-color: #0E0E10; color: #F3EEE4; font-family: Manrope, 'Noto Sans Khmer', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
+  html, body { margin: 0; background-color: rgb(var(--c-surface)); color: rgb(var(--c-ink)); font-family: Manrope, 'Noto Sans Khmer', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
   h1, h2, h3 { font-family: 'EB Garamond', 'Noto Serif Khmer', serif; font-weight: 500; }
   select, input, textarea { font: inherit; }
   /* Wide letter-spacing tears Khmer clusters apart; keep the tracked mono look for Latin text only. */
@@ -20,5 +67,5 @@
   /* min-w-0: a select with a long option must not widen its grid cell past the phone screen */
   .input { @apply w-full min-w-0 max-w-full rounded-xl border border-strong bg-surface-low px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-gold; }
   .label { @apply mb-1 block font-mono text-[10px] uppercase tracking-widest text-muted; }
-  .card { @apply rounded-2xl border border-hairline bg-gradient-to-b from-surface-card to-[#141417] p-4; }
+  .card { @apply rounded-2xl border border-hairline bg-gradient-to-b from-surface-card to-surface-canvas p-4; }
 }

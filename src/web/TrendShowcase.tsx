@@ -9,7 +9,7 @@ function Shot({ r, size }: { r: TrendRow; size: 'lg' | 'sm' }) {
   const box = size === 'lg' ? 'h-[72px] w-[72px] rounded-xl' : 'h-9 w-9 rounded-lg';
   return (
     <span className={`relative flex shrink-0 items-center justify-center overflow-hidden ${box}`}
-      style={{ background: 'radial-gradient(circle at 50% 40%, rgba(212,175,95,0.35), rgba(212,175,95,0.06) 60%, transparent 75%), #121215' }}>
+      style={{ background: 'radial-gradient(circle at 50% 40%, rgba(212,175,95,0.35), rgba(212,175,95,0.06) 60%, transparent 75%), rgb(var(--c-surface-canvas))' }}>
       {url ? <img src={url} alt="" loading="lazy" className={`h-full w-full ${r.image_cutout ? 'object-contain p-1.5 drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]' : 'object-cover'}`} />
         : <span className={`font-serif text-gold ${size === 'lg' ? 'text-3xl' : 'text-base'}`} aria-hidden>{r.brand.slice(0, 1)}</span>}
     </span>
