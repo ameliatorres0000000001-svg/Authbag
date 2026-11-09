@@ -67,7 +67,7 @@ export default function AdminPanel() {
       </nav>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-5">
         <div className={`min-w-0 space-y-4 ${tab === 'library' ? 'lg:col-span-2' : 'lg:col-span-5 lg:mx-auto lg:w-full lg:max-w-2xl'}`}>
-          {tab === 'today' && <>{admin && <><PaymentsCard /><UsageCard owner={me.role === 'owner'} /></>}<NotifyCard /><VerifyQueue /><AiTrackCard /></>}
+          {tab === 'today' && <>{admin && <><AiCheck /><PaymentsCard /><UsageCard owner={me.role === 'owner'} /></>}<NotifyCard /><VerifyQueue /><AiTrackCard /></>}
           {tab === 'library' && (
             <>
               <Notice><b>{t('admin.teachTitle')}</b><br />{t('admin.teachBody')}</Notice>
@@ -80,7 +80,7 @@ export default function AdminPanel() {
           {tab === 'market' && <MarketAdmin />}
           {tab === 'skills' && <SkillsAdmin />}
           {tab === 'leads' && <LeadsAdmin initialCountry={sp.get('country')} />}
-          {tab === 'settings' && <>{admin && <><ExpertReviewCard owner={me.role === 'owner'} /><MembershipSettingsCard /><ExpertsCard /><ContactAdmin /><AiCheck /><VerifyAdmin /></>}<AdminTools /></>}
+          {tab === 'settings' && <>{admin && <><ExpertReviewCard owner={me.role === 'owner'} /><MembershipSettingsCard /><ExpertsCard /><ContactAdmin /><VerifyAdmin /></>}<AdminTools /></>}
         </div>
         {tab === 'library' && (
         <div className="min-w-0 space-y-4 lg:col-span-3">

@@ -987,3 +987,23 @@ export async function readPaintTube(env: Env, image: VisionImage, x: { lang: Out
     uses: steps(o.uses, 4), mixes, leather_tip: str(o.leather_tip, 300) ?? '',
   };
 }
+
+
+/** Admin check: one tiny Claude web search (1 search) — used by the TikTok customer finder, market and paint research. */
+export async function testWebSearch(env: Env): Promise<{ ok: boolean; ms: number; error?: string }> {
+  const t = Date.now();
+  if (aiProvider(env) !== 'anthropic') return { ok: false, ms: 0, error: 'needs ANTHROPIC_API_KEY' };
+  try {
+    const r = await anthropicClient(env).beta.messages.create({
+      model: aiModel(env)!, max_tokens: 2000, output_config: { effort: 'low' },
+      betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 1 }],
+      messages: [{ role: 'user', content: 'Search the web once for "leather paint" and reply with the single word: ok' }],
+    });
+    await recordUsage(env, r.model, r.usage);
+    const searched = r.content.some((b) => b.type === 'web_search_tool_result');
+    return { ok: searched, ms: Date.now() - t, ...(searched ? {} : { error: 'no search happened' }) };
+  } catch (e) {
+    return { ok: false, ms: Date.now() - t, error: (e instanceof Anthropic.APIError ? `ai_http_${e.status ?? 0}: ${apiErrorText(e)}` : String((e as Error).message)).slice(0, 240) };
+  }
+}
