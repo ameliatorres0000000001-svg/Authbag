@@ -52,9 +52,9 @@ export default function LensViewer({ src, rect, title }: { src: string; rect: Re
       </div>
       <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1">
         {LENS_MODES.map((m) => (
-          <button key={m} onClick={() => setMode(m)} className={`shrink-0 rounded border px-2.5 py-1 text-xs ${mode === m ? 'border-charcoal bg-charcoal text-white' : 'border-strong bg-white'}`}>{t(`lens.${m}`)}</button>
+          <button key={m} onClick={() => setMode(m)} className={`shrink-0 rounded border px-2.5 py-1 text-xs ${mode === m ? 'border-gold bg-gold text-charcoal' : 'border-strong bg-surface-card'}`}>{t(`lens.${m}`)}</button>
         ))}
-        <button onClick={() => setGrid(!grid)} className={`shrink-0 rounded border px-2.5 py-1 text-xs ${grid ? 'border-gold bg-gold-light' : 'border-strong bg-white'}`}>{t('lens.grid')}</button>
+        <button onClick={() => setGrid(!grid)} className={`shrink-0 rounded border px-2.5 py-1 text-xs ${grid ? 'border-gold bg-gold-light' : 'border-strong bg-surface-card'}`}>{t('lens.grid')}</button>
       </div>
       <p className="text-[11px] text-muted">{t(`lens.help.${mode}`)}</p>
       <p className="text-[11px] text-muted">{t('lens.honest')}</p>

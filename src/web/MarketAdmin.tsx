@@ -102,7 +102,7 @@ export default function MarketAdmin() {
       <div className="flex gap-2">
         {COUNTRIES.map((c) => (
           <button key={c} type="button" onClick={() => pickCountry(c)}
-            className={`rounded-full border px-3 py-1 text-sm ${c === country ? 'border-charcoal bg-charcoal text-white' : 'border-hairline'}`}>{FLAG[c]} {t(`market.country.${c}`)}</button>
+            className={`rounded-full border px-3 py-1 text-sm ${c === country ? 'border-gold bg-gold text-charcoal' : 'border-hairline'}`}>{FLAG[c]} {t(`market.country.${c}`)}</button>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2">

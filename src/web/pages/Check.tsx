@@ -81,7 +81,7 @@ export default function Check() {
       {meta && !ai && !meta.telegram && STAFF_ROLES.includes(me.role) && <p className="text-xs text-counterfeit">⚠ {t('vr.noTelegram')}</p>}
 
       {/* how it works: one dark card, four steps joined by a gold line */}
-      <div className="rounded-2xl bg-charcoal px-2 pb-4 pt-5 text-white shadow-sm">
+      <div className="rounded-2xl border border-hairline bg-charcoal px-2 pb-4 pt-5 text-white shadow-sm">
         <ol className="relative grid grid-cols-4">
           <span className="absolute left-[12.5%] right-[12.5%] top-[15px] h-px bg-gradient-to-r from-gold/30 via-gold to-gold/30" aria-hidden />
           {(ai ? ['check.s1', 'check.s2', 'check.s3ai', 'check.s4ai'] : ['check.s1', 'check.s2', 'check.s3', 'check.s4']).map((k, i) => (
@@ -106,7 +106,7 @@ export default function Check() {
         </div>
         <div className="grid grid-cols-2 gap-2">
           {(['camera', 'file'] as const).map((k) => (
-            <label key={k} className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold ${k === 'camera' ? 'bg-charcoal text-white' : 'border border-hairline'} ${idBusy ? 'pointer-events-none opacity-60' : ''}`}>
+            <label key={k} className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold ${k === 'camera' ? 'bg-gold text-charcoal' : 'border border-hairline'} ${idBusy ? 'pointer-events-none opacity-60' : ''}`}>
               <Svg d={ICON[k === 'camera' ? 'photo' : 'upload']} />{t(k === 'camera' ? 'ck.shoot' : 'ck.upload')}
               <input type="file" accept="image/*" {...(k === 'camera' ? { capture: 'environment' as const } : {})} className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) identify(f); }} />
@@ -176,7 +176,7 @@ const Svg = ({ d }: { d: string }) => (
 
 function Tile({ id, title, help, to, onClick, active, primary, dim }: { id: string; title: string; help: string; to?: string; onClick?: () => void; active?: boolean; primary?: boolean; dim?: boolean }) {
   const cls = `flex min-h-[9.5rem] flex-col justify-between rounded-2xl border p-4 text-left transition ${
-    primary ? 'border-charcoal bg-charcoal text-white' : active ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card hover:border-strong'} ${active && primary ? 'ring-2 ring-gold' : ''} ${dim ? 'opacity-50' : ''}`;
+    primary ? 'border-gold bg-gold text-charcoal' : active ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card hover:border-strong'} ${active && primary ? 'ring-2 ring-gold' : ''} ${dim ? 'opacity-50' : ''}`;
   const body = (
     <>
       <span className={`flex h-11 w-11 items-center justify-center rounded-full ${primary ? 'bg-gold text-charcoal' : 'bg-charcoal text-gold'}`}><Svg d={ICON[id]} /></span>

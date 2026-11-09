@@ -45,7 +45,7 @@ export default function DateCodes() {
           <div className="-mx-4 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {brands.map((b) => (
               <button key={b.id} type="button" onClick={() => setPick(b.id)}
-                className={`shrink-0 snap-start rounded-full border px-4 py-1.5 text-sm ${brandId === b.id ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>{b.name}</button>
+                className={`shrink-0 snap-start rounded-full border px-4 py-1.5 text-sm ${brandId === b.id ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>{b.name}</button>
             ))}
           </div>
 

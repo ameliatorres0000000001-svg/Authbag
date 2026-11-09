@@ -187,7 +187,7 @@ export default function Verify() {
 const ICON: Record<Step, string> = { model: '👜', logo: '®', serial: '#', material: '▦', hardware: '⚙', zipper: '⇕', extra: '+' };
 
 export const STATUS_TONE: Record<string, string> = {
-  submitted: 'bg-gold-light text-charcoal', in_review: 'bg-gold-light text-charcoal', more_photos: 'bg-counterfeit/10 text-counterfeit',
+  submitted: 'bg-gold-light text-ink', in_review: 'bg-gold-light text-ink', more_photos: 'bg-counterfeit/10 text-counterfeit',
   answered: 'bg-verified/10 text-verified', cancelled: 'bg-surface-high text-muted',
 };
 
@@ -241,7 +241,7 @@ function MyChecks() {
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       {r.cert_code && <span className="rounded-full bg-gold px-2 py-0.5 text-[10px] font-semibold text-charcoal">🏅 Certificate</span>}
                       {r.offer_status && (
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.offer_status === 'accepted' ? 'bg-verified text-white' : r.offer_status === 'open' ? 'bg-gold-light text-charcoal' : 'bg-surface-high text-muted'}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${r.offer_status === 'accepted' ? 'bg-verified text-white' : r.offer_status === 'open' ? 'bg-gold-light text-ink' : 'bg-surface-high text-muted'}`}>
                           💰 {r.offer_status === 'accepted' ? t('bb.st.accepted') : r.offer_status === 'open' ? (r.offer_from === 'hengz' ? t('mc.newOffer') : t('bb.st.open')) : t(`bb.st.${r.offer_status}`)}
                           {r.offer_cents ? ` · ${(r.offer_cents / 100).toLocaleString()} ${r.offer_currency}` : ''}
                         </span>

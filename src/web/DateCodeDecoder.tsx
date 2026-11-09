@@ -7,7 +7,7 @@ import { dateCodeSegments, type DateCodeRole } from '../shared/datecode.ts';
 import { lookupCode, readDateCode, useDateTables } from './datecodeTables.ts';
 
 const ROLE_STYLE: Record<DateCodeRole, string> = {
-  factory: 'bg-gold-light text-charcoal border-gold',
+  factory: 'bg-gold-light text-ink border-gold',
   period: 'bg-telemetry-bg text-telemetry border-telemetry',
   year: 'bg-verified-bg text-verified border-verified',
   other: 'bg-surface-high text-muted border-strong',

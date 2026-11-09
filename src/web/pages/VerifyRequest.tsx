@@ -240,7 +240,7 @@ const fmtMoney = (cents: number, cur: string) => {
   try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: cur === 'KHR' ? 0 : 2 }).format(cents / 100); }
   catch { return `${(cents / 100).toFixed(2)} ${cur}`; }
 };
-const OFFER_TONE: Record<string, string> = { open: 'bg-gold-light text-charcoal', accepted: 'bg-verified text-white', declined: 'bg-counterfeit/10 text-counterfeit', withdrawn: 'bg-surface-high text-muted', superseded: 'bg-surface-high text-muted' };
+const OFFER_TONE: Record<string, string> = { open: 'bg-gold-light text-ink', accepted: 'bg-verified text-white', declined: 'bg-counterfeit/10 text-counterfeit', withdrawn: 'bg-surface-high text-muted', superseded: 'bg-surface-high text-muted' };
 
 /**
  * Buy-back after "consistent with references": HENGZ offers a price and/or the customer sends theirs.
@@ -354,7 +354,7 @@ function AiReviewCard({ requestId, ai, onChange }: { requestId: string; ai: any 
   const ok = ai && ai.suggested_outcome;
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   return (
-    <section className="space-y-3 rounded-2xl border border-charcoal/20 bg-surface-card p-4">
+    <section className="space-y-3 rounded-2xl border border-gold/20 bg-surface-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="font-serif text-lg leading-tight">🤖 {t('air.title')}</h2>

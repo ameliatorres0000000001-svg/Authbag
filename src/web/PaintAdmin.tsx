@@ -27,7 +27,7 @@ export default function PaintAdmin() {
       <h2 className="text-xl">{t('padm.title')}</h2>
       <div className="flex gap-1 rounded-full bg-surface-low p-1 text-sm">
         {(['recipes', 'products', 'requests'] as const).map((k) => (
-          <button key={k} type="button" onClick={() => setTab(k)} className={`flex-1 rounded-full px-3 py-1 ${tab === k ? 'bg-charcoal text-white' : ''}`}>{t(`padm.${k}`)}</button>
+          <button key={k} type="button" onClick={() => setTab(k)} className={`flex-1 rounded-full px-3 py-1 ${tab === k ? 'bg-gold text-charcoal' : ''}`}>{t(`padm.${k}`)}</button>
         ))}
       </div>
       {tab === 'products' && <Products products={products} reload={loadProducts} />}
@@ -316,7 +316,7 @@ function StepsEditor({ r, onChanged }: { r: PaintRecipe; onChanged: () => void }
     <div className="flex flex-wrap gap-1">
       {STEP_ICONS.map((ic) => (
         <button key={ic} type="button" title={t(`art.${ic}`)} onClick={() => onPick(value === ic ? '' : ic)}
-          className={`h-12 w-14 rounded-lg border p-0.5 ${value === ic ? 'border-charcoal ring-2 ring-gold' : 'border-hairline'}`}><StepArt icon={ic} /></button>
+          className={`h-12 w-14 rounded-lg border p-0.5 ${value === ic ? 'border-gold ring-2 ring-gold' : 'border-hairline'}`}><StepArt icon={ic} /></button>
       ))}
     </div>
   );

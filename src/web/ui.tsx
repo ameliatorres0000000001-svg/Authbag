@@ -17,11 +17,11 @@ export function OutcomeBadge({ outcome }: { outcome?: string | null }) {
 
 export function Page({ title, subtitle, actions, children }: { title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 md:px-8">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="mx-auto max-w-6xl px-4 py-4 md:px-8 md:py-6">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 md:mb-6">
         <div>
-          <h1 className="text-3xl leading-tight">{title}</h1>
-          {subtitle && <p className="mt-1 max-w-3xl text-sm text-muted">{subtitle}</p>}
+          <h1 className="text-2xl leading-tight md:text-3xl">{title}</h1>
+          {subtitle && <p className="mt-0.5 max-w-3xl text-xs text-muted md:text-sm">{subtitle}</p>}
         </div>
         {actions}
       </div>

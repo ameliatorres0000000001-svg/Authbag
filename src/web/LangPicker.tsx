@@ -13,7 +13,7 @@ export default function LangPicker({ dark, className = '' }: { dark?: boolean; c
     <label className={`relative inline-flex items-center ${className}`}>
       <span className="sr-only">{t('lang.label')}</span>
       <select value={locale} onChange={(e) => pick(e.target.value as Locale)}
-        className={`appearance-none rounded border py-1 pl-2 pr-6 font-mono text-xs font-semibold tracking-wider ${dark ? 'border-white/20 bg-white/5 text-[#e5e1e4]' : 'border-strong bg-surface-card text-charcoal'}`}>
+        className={`appearance-none rounded border py-1 pl-2 pr-6 font-mono text-xs font-semibold tracking-wider ${dark ? 'border-white/20 bg-white/5 text-[#e5e1e4]' : 'border-strong bg-surface-card text-ink'}`}>
         {LOCALES.map((l) => <option key={l.code} value={l.code} title={l.name}>{l.short}</option>)}
       </select>
       <span className={`pointer-events-none absolute right-1.5 text-[9px] ${dark ? 'text-[#d0c5af]' : 'text-muted'}`} aria-hidden>▼</span>

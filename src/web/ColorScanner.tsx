@@ -107,7 +107,7 @@ export default function ColorScanner({ onChange, onSay }: { onChange: (m: Measur
           <div className="flex flex-wrap gap-2 text-sm">
             {(['white', 'spot'] as const).map((k) => (
               <button key={k} type="button" onClick={() => setMode(k)}
-                className={`rounded-full border px-3 py-1.5 ${mode === k ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>
+                className={`rounded-full border px-3 py-1.5 ${mode === k ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>
                 {k === 'white' ? t('paint.tapWhite') : t('paint.tapColor')} {(k === 'white' ? white : spot) ? '✓' : ''}
               </button>
             ))}

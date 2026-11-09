@@ -9,11 +9,11 @@ import { ADMIN_ROLES, STAFF_ROLES } from './studio.ts';
 type Country = 'TH' | 'MY' | 'ID';
 type Status = 'new' | 'saved' | 'contacted' | 'customer' | 'not_fit';
 export interface Lead { id: string; country: Country; handle: string; name: string | null; url: string; kind: 'live_seller' | 'reseller' | 'shop'; sells: string | null; why: string | null; fit?: number | null; topic?: string | null; source_url?: string | null; status: Status; note?: string | null; found_by?: string; created_at: string }
-interface Summary { counts: { country: Country; status: Status; n: number }[]; runs: { country: Country; at: string; added: number | null; error: string | null; running: number }[]; auto: boolean; webSearch: boolean; everyDays: number; offer: string; shopName: string; lineUrl: string | null }
+interface Summary { counts: { country: Country; status: Status; n: number }[]; runs: { country: Country; at: string; added: number | null; error: string | null; running: number }[]; auto: boolean; webSearch: boolean; everyDays: number; offer: string; shopName: string }
 const CC: Country[] = ['TH', 'MY', 'ID'];
 const FLAG: Record<Country, string> = { TH: '🇹🇭', MY: '🇲🇾', ID: '🇮🇩' };
 const STATUSES: Status[] = ['new', 'saved', 'contacted', 'customer', 'not_fit'];
-const TONE: Record<Status, string> = { new: 'bg-review-bg text-review', saved: 'bg-gold-light text-charcoal', contacted: 'bg-surface-high text-charcoal', customer: 'bg-verified-bg text-verified', not_fit: 'bg-surface-high text-muted' };
+const TONE: Record<Status, string> = { new: 'bg-review-bg text-review', saved: 'bg-gold-light text-ink', contacted: 'bg-surface-high text-ink', customer: 'bg-verified-bg text-verified', not_fit: 'bg-surface-high text-muted' };
 const day = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : '');
 const count = (s: Summary | null, cc: Country, st?: Status) => (s?.counts ?? []).filter((x) => x.country === cc && (!st || x.status === st)).reduce((a, x) => a + x.n, 0);
 
@@ -38,7 +38,7 @@ function LeadRow({ l, compact, onSaved }: { l: Lead; compact?: boolean; onSaved?
       <div className="flex items-start gap-3">
         <span className="text-xl leading-none" aria-hidden>{FLAG[l.country]}</span>
         <div className="min-w-0 flex-1">
-          <a href={l.url} target="_blank" rel="noreferrer" className="block truncate font-semibold text-charcoal underline-offset-2 hover:underline">@{l.handle} <span className="text-xs text-gold">↗</span></a>
+          <a href={l.url} target="_blank" rel="noreferrer" className="block truncate font-semibold text-ink underline-offset-2 hover:underline">@{l.handle} <span className="text-xs text-gold">↗</span></a>
           {l.name && <div className="truncate text-xs text-muted">{l.name}</div>}
           <div className="mt-1 flex flex-wrap gap-1">
             <span className="rounded-full bg-charcoal px-2 py-0.5 text-[10px] text-white">{l.kind === 'live_seller' ? '🔴 LIVE' : t(`ld.kind.${l.kind}`)}</span>
@@ -88,22 +88,22 @@ export function LeadsHome() {
   if (!staff || !d) return null;
   return (
     <section aria-labelledby="leads-h">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h2 id="leads-h" className="text-lg leading-tight">🎯 {t('ld.homeTitle')}</h2>
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <h2 id="leads-h" className="text-base leading-tight">🎯 {t('ld.homeTitle')}</h2>
         <Link to="/admin?tab=leads" className="text-xs font-semibold text-gold">{t('market.seeAll')} →</Link>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {CC.map((cc) => (
-          <Link key={cc} to={`/admin?tab=leads&country=${cc}`} className="rounded-2xl border border-hairline bg-surface-card p-3">
-            <div className="text-xs text-muted">{FLAG[cc]} {t(`market.country.${cc}`)}</div>
-            <div className="font-serif text-2xl">{count(d, cc)}</div>
-            <div className="text-[11px] text-muted">{count(d, cc, 'new')} {t('ld.st.new')} · {count(d, cc, 'customer')} {t('ld.st.customer')}</div>
+          <Link key={cc} to={`/admin?tab=leads&country=${cc}`} className="rounded-xl border border-hairline bg-surface-card px-2.5 py-2">
+            <div className="text-[11px] text-muted">{t(`market.country.${cc}`)}</div>
+            <div className="font-serif text-lg leading-tight">{count(d, cc)}</div>
+            <div className="truncate text-[10px] text-muted">{count(d, cc, 'new')} {t('ld.st.new')} · {count(d, cc, 'customer')} {t('ld.st.customer')}</div>
           </Link>
         ))}
       </div>
-      <div className="mt-2 rounded-2xl border border-hairline bg-surface-card px-4">
-        {d.latest.length ? <ul className="divide-y divide-hairline">{d.latest.map((l) => <LeadRow key={l.id} l={l} compact />)}</ul>
-          : <p className="py-3 text-sm text-muted">{t('noData')}{d.auto && d.webSearch ? ` — ${t('ld.autoSoon')}` : ''}</p>}
+      <div className="mt-1.5 rounded-xl border border-hairline bg-surface-card px-3">
+        {d.latest.length ? <ul className="divide-y divide-hairline">{d.latest.slice(0, 3).map((l) => <LeadRow key={l.id} l={l} compact />)}</ul>
+          : <p className="py-2 text-xs text-muted">{t('noData')}{d.auto && d.webSearch ? ` — ${t('ld.autoSoon')}` : ''}</p>}
       </div>
     </section>
   );
@@ -194,9 +194,8 @@ export default function LeadsAdmin({ initialCountry }: { initialCountry?: string
           <summary className="cursor-pointer text-sm font-semibold">🏷️ {t('ld.offerTitle')}</summary>
           <div className="mt-2 space-y-2">
             <p className="text-xs text-muted">{t('ld.offerHelp')}</p>
-            <Field label={t('ln.shopName')}><input className="input" maxLength={80} disabled={!admin} value={offer.shopName} onChange={(e) => setOffer({ ...offer, shopName: e.target.value })} /></Field>
+            <Field label={t('ld.shopName')}><input className="input" maxLength={80} disabled={!admin} value={offer.shopName} onChange={(e) => setOffer({ ...offer, shopName: e.target.value })} /></Field>
             <textarea className="input min-h-[96px]" maxLength={1000} disabled={!admin} placeholder={t('ld.offerPh')} value={offer.offer} onChange={(e) => setOffer({ ...offer, offer: e.target.value })} />
-            <p className="text-xs text-muted">{data?.lineUrl ? `LINE: ${data.lineUrl}` : t('ld.noLine')}</p>
             {admin && <button type="button" className="btn-primary" onClick={saveOffer}>{t('save')}</button>}
           </div>
         </details>
@@ -204,10 +203,10 @@ export default function LeadsAdmin({ initialCountry }: { initialCountry?: string
 
       <div className="card space-y-3">
         <div className="flex flex-wrap gap-1.5">
-          {(['', ...CC] as const).map((cc) => <button key={cc || 'all'} type="button" onClick={() => setCountry(cc)} className={`rounded-full border px-3 py-1 text-xs ${country === cc ? 'border-charcoal bg-charcoal text-white' : 'border-hairline'}`}>{cc ? `${FLAG[cc]} ${t(`market.country.${cc}`)}` : t('sk.a.all')}</button>)}
+          {(['', ...CC] as const).map((cc) => <button key={cc || 'all'} type="button" onClick={() => setCountry(cc)} className={`rounded-full border px-3 py-1 text-xs ${country === cc ? 'border-gold bg-gold text-charcoal' : 'border-hairline'}`}>{cc ? `${FLAG[cc]} ${t(`market.country.${cc}`)}` : t('sk.a.all')}</button>)}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {(['', ...STATUSES] as const).map((s) => <button key={s || 'all'} type="button" onClick={() => setStatus(s)} className={`rounded-full border px-3 py-1 text-xs ${status === s ? 'border-charcoal bg-charcoal text-white' : 'border-hairline'}`}>{s ? t(`ld.st.${s}`) : t('sk.a.all')}</button>)}
+          {(['', ...STATUSES] as const).map((s) => <button key={s || 'all'} type="button" onClick={() => setStatus(s)} className={`rounded-full border px-3 py-1 text-xs ${status === s ? 'border-gold bg-gold text-charcoal' : 'border-hairline'}`}>{s ? t(`ld.st.${s}`) : t('sk.a.all')}</button>)}
         </div>
         {data && data.leads.length === 0 && <p className="text-sm text-muted">{t('noData')}</p>}
         <ul className="divide-y divide-hairline">{data?.leads.map((l) => <LeadRow key={l.id} l={l} />)}</ul>

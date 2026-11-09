@@ -17,7 +17,6 @@ import { MembershipSettingsCard, PaymentsCard, UsageCard } from '../MemberAdmin.
 import PaintAdmin from '../PaintAdmin.tsx';
 import SkillsAdmin from '../SkillsAdmin.tsx';
 import LeadsAdmin from '../Leads.tsx';
-import LineAdmin from '../LineAdmin.tsx';
 import AdminTools, { AiCheck, AiTrackCard, ContactAdmin, ExpertReviewCard, ExpertsCard, NotifyCard, VerifyQueue } from '../AdminTools.tsx';
 
 interface Tax { brands: { id: string; name: string }[]; models: { id: string; brand_id: string; name: string }[] }
@@ -49,7 +48,7 @@ export default function AdminPanel() {
   };
 
   const admin = ADMIN_ROLES.includes(me.role);
-  const tabs = ([['today', '📥'], ['line', '💬'], ['leads', '🎯'], ['skills', '🧠'], ['library', '📚'], ['paint', '🎨'], ['market', '📈'], ['settings', '⚙️']] as const).filter(([k]) => admin || k === 'today' || k === 'line' || k === 'leads' || k === 'skills' || k === 'library' || k === 'settings');
+  const tabs = ([['today', '📥'], ['leads', '🎯'], ['skills', '🧠'], ['library', '📚'], ['paint', '🎨'], ['market', '📈'], ['settings', '⚙️']] as const).filter(([k]) => admin || k === 'today' || k === 'leads' || k === 'skills' || k === 'library' || k === 'settings');
   const asked = sp.get('tab');
   const tab = tabs.some(([k]) => k === asked) ? asked! : 'today';
 
@@ -61,7 +60,7 @@ export default function AdminPanel() {
       <nav className="sticky top-14 z-10 -mx-4 mb-4 flex gap-1.5 overflow-x-auto bg-surface/95 px-4 py-2 backdrop-blur md:top-0 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={t('admin.title')}>
         {tabs.map(([k, icon]) => (
           <button key={k} type="button" onClick={() => setSp({ tab: k }, { replace: true })} aria-current={tab === k}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm ${tab === k ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>
+            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm ${tab === k ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>
             <span aria-hidden>{icon}</span>{t(`admin.tab.${k}`)}
           </button>
         ))}
@@ -81,7 +80,6 @@ export default function AdminPanel() {
           {tab === 'market' && <MarketAdmin />}
           {tab === 'skills' && <SkillsAdmin />}
           {tab === 'leads' && <LeadsAdmin initialCountry={sp.get('country')} />}
-          {tab === 'line' && <LineAdmin />}
           {tab === 'settings' && <>{admin && <><ExpertReviewCard owner={me.role === 'owner'} /><MembershipSettingsCard /><ExpertsCard /><ContactAdmin /><AiCheck /><VerifyAdmin /></>}<AdminTools /></>}
         </div>
         {tab === 'library' && (
@@ -313,7 +311,7 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
         <div className="flex flex-wrap gap-1.5">
           {comps.map((c) => (
             <button type="button" key={c.code} onClick={() => set('componentCode', c.code)}
-              className={`rounded-full border px-3 py-1 text-xs ${f.componentCode === c.code ? 'border-charcoal bg-charcoal text-white' : 'border-strong bg-white'}`}>{compName(c.code)}</button>
+              className={`rounded-full border px-3 py-1 text-xs ${f.componentCode === c.code ? 'border-gold bg-gold text-charcoal' : 'border-strong bg-surface-card'}`}>{compName(c.code)}</button>
           ))}
         </div>
       </Field>
@@ -321,7 +319,7 @@ function UploadForm({ tax, comps, compName, canAddTaxonomy, onTax, onDone }: {
         <div className="grid grid-cols-3 gap-2">
           {(['authentic', 'counterfeit', 'unknown'] as const).map((l) => (
             <button type="button" key={l} onClick={() => set('label', l)}
-              className={`rounded border px-2 py-2 text-left text-xs font-semibold ${f.label === l ? (l === 'authentic' ? 'border-verified bg-verified-bg text-verified' : l === 'counterfeit' ? 'border-counterfeit bg-counterfeit-bg text-counterfeit' : 'border-charcoal bg-surface-high text-charcoal') : 'border-strong bg-white'}`}>
+              className={`rounded border px-2 py-2 text-left text-xs font-semibold ${f.label === l ? (l === 'authentic' ? 'border-verified bg-verified-bg text-verified' : l === 'counterfeit' ? 'border-counterfeit bg-counterfeit-bg text-counterfeit' : 'border-gold bg-surface-high text-ink') : 'border-strong bg-surface-card'}`}>
               {l === 'authentic' ? t('study.knownGenuine') : l === 'counterfeit' ? t('study.knownCounterfeit') : t('study.unlabelled')}
             </button>
           ))}

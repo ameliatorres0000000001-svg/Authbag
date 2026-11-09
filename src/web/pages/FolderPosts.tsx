@@ -24,7 +24,7 @@ export default function FolderPosts() {
 
   return (
     <div className="mx-auto max-w-xl space-y-4 px-4 pb-8 pt-4">
-      <Link to="/" className="font-mono text-[10px] uppercase tracking-widest text-muted hover:text-charcoal">← {t('feed.title')}</Link>
+      <Link to="/" className="font-mono text-[10px] uppercase tracking-widest text-muted hover:text-ink">← {t('feed.title')}</Link>
       <header>
         <div className="font-mono text-[10px] uppercase tracking-widest text-gold">{other ? t('folder.mixed') : f?.brand ?? ''}</div>
         <h1 className="font-serif text-3xl leading-tight">{other ? t('folder.other') : f?.model ?? '…'}</h1>

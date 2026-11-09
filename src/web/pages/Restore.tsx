@@ -28,7 +28,7 @@ export default function Restore() {
         <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {['', ...topics].map((x) => (
             <button key={x || 'all'} type="button" onClick={() => setTopic(x)}
-              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm ${topic === x ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>
+              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm ${topic === x ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>
               {x ? t(`care.topic.${x}`) : t('care.all')}
             </button>
           ))}

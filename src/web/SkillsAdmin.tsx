@@ -5,11 +5,11 @@ import { MeContext } from './App.tsx';
 import { Field, Notice, errText } from './ui.tsx';
 import { ADMIN_ROLES } from './studio.ts';
 
-type Area = 'all' | 'chat' | 'identify' | 'check';
+type Area = 'all' | 'chat' | 'identify' | 'check' | 'paint' | 'repair';
 interface Skill { id: string; area: Area; title: string; body: string; brand: string | null; keywords: string | null; status: 'draft' | 'active'; ai_drafted: number; uses: number; last_used_at: string | null; updated_at: string; author: string | null }
 interface Form { id: string | null; area: Area; title: string; body: string; brand: string; keywords: string; status: 'draft' | 'active'; aiDrafted: boolean }
-const AREAS: Area[] = ['all', 'chat', 'identify', 'check'];
-const EMPTY: Form = { id: null, area: 'chat', title: '', body: '', brand: '', keywords: '', status: 'draft', aiDrafted: false };
+const AREAS: Area[] = ['paint', 'repair', 'check', 'identify', 'chat', 'all'];
+const EMPTY: Form = { id: null, area: 'paint', title: '', body: '', brand: '', keywords: '', status: 'draft', aiDrafted: false };
 const IDEAS = ['sk.idea1', 'sk.idea2', 'sk.idea3', 'sk.idea4', 'sk.idea5'];
 
 /**
@@ -100,7 +100,7 @@ export default function SkillsAdmin() {
             <div className="flex flex-wrap gap-1.5">
               {AREAS.map((a) => (
                 <button key={a} type="button" onClick={() => setF({ ...f, area: a })} aria-pressed={f.area === a}
-                  className={`rounded-full border px-3 py-1.5 text-xs ${f.area === a ? 'border-charcoal bg-charcoal text-white' : 'border-hairline bg-surface-card'}`}>{t(`sk.a.${a}`)}</button>
+                  className={`rounded-full border px-3 py-1.5 text-xs ${f.area === a ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>{t(`sk.a.${a}`)}</button>
               ))}
             </div>
             <p className="mt-1 text-xs text-muted">{t(`sk.ah.${f.area}`)}</p>

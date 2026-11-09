@@ -71,7 +71,7 @@ export default function Chat() {
         )}
         {turns.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === 'user' ? 'rounded-br-md bg-charcoal text-white' : 'rounded-bl-md border border-hairline bg-surface-card'}`}>
+            <div className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === 'user' ? 'rounded-br-md bg-gold text-charcoal' : 'rounded-bl-md border border-hairline bg-surface-card'}`}>
               {m.role === 'assistant' ? <Rich text={m.content} /> : m.content}
             </div>
           </div>

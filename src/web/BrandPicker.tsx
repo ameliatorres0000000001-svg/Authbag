@@ -72,7 +72,7 @@ export default function BrandPicker({ brands, value, onChange, canAdd, onAdded }
           {!shown.length && !q && <li className="px-3 py-2.5 text-sm text-muted">{t('noData')}</li>}
           {q.trim() && !exact && (canAdd || other) && (
             <li className="border-t border-hairline">
-              <button type="button" disabled={busy} onClick={add} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[15px] font-semibold text-charcoal hover:bg-gold-light">
+              <button type="button" disabled={busy} onClick={add} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[15px] font-semibold text-ink hover:bg-gold-light">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gold text-charcoal">+</span>
                 {busy ? '…' : `${canAdd ? t('bp.addList') : t('bp.add')} “${q.trim()}”`}
               </button>
