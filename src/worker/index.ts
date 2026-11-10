@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, checkQuick, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab, quickLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2472,7 +2472,7 @@ const productOut = ({ photo_key, sources_json, ...p }: PaintProduct & Record<str
 async function paintRecipes(env: AppEnv['Bindings'], all: boolean) {
   const recipes = (await env.DB.prepare(`SELECT id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, method, status, photo_key, updated_at, mix_text, mix_tts_key FROM paint_recipes
     ${all ? '' : "WHERE status = 'published'"} ORDER BY lab_l DESC`).all<Record<string, any>>()).results;
-  const parts = (await env.DB.prepare(`SELECT pp.recipe_id, pp.parts, pp.sort, p.id, p.brand, p.name, p.kind, p.color_hex, p.photo_key, p.updated_at
+  const parts = (await env.DB.prepare(`SELECT pp.recipe_id, pp.parts, pp.sort, p.id, p.brand, p.code, p.name, p.kind, p.color_hex, p.photo_key, p.updated_at
     FROM paint_recipe_parts pp JOIN paint_products p ON p.id = pp.product_id ORDER BY pp.sort`).all<Record<string, any>>()).results;
   const steps = (await env.DB.prepare('SELECT id, recipe_id, sort, text, icon, minutes, photo_key, tts_key, voice_key, updated_at FROM paint_recipe_steps ORDER BY sort').all<Record<string, any>>()).results;
   return recipes.map(({ photo_key, mix_tts_key, ...r }): Record<string, any> => ({
@@ -3322,16 +3322,25 @@ async function takeDaily(env: AppEnv['Bindings'], userId: string, kind: string, 
 const shopProducts = async (env: AppEnv['Bindings']) => (await env.DB.prepare('SELECT brand, code, name, kind, base FROM paint_products WHERE active = 1 ORDER BY brand, name LIMIT 80').all<{ brand: string; code: string | null; name: string; kind: string; base: string | null }>()).results
   .map((p) => `${p.brand}${p.code ? ` ${p.code}` : ''} ${p.name} (${p.kind}${p.base ? `, ${p.base}` : ''})`);
 
+const shopPaints = async (env: AppEnv['Bindings']): Promise<ShopPaint[]> => (await env.DB.prepare('SELECT brand, code, name, kind, base, color_hex AS hex FROM paint_products WHERE active = 1 ORDER BY brand, name LIMIT 80').all<ShopPaint>()).results;
+
 app.post('/api/skills/paint', async (c) => {
   const me = c.get('user');
   if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
   const gate = await memberGate(c); if (gate) return gate;
-  const b = await parse(c, z.object({ surface: z.enum(SURFACES), finish: z.enum(['matte', 'satin', 'gloss']), recipeId: z.string().max(64).nullish() }));
+  const b = await parse(c, z.object({
+    surface: z.enum(SURFACES), finish: z.enum(['matte', 'satin', 'gloss']), recipeId: z.string().max(64).nullish(),
+    colour: z.object({ hex: z.string().regex(/^#[0-9a-f]{6}$/i), lab: z.tuple([z.number(), z.number(), z.number()]), approx: z.boolean() }).nullish(),
+  }));
   if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
   const recipe = b.recipeId ? (await paintRecipes(c.env, false)).find((r) => r.id === b.recipeId) ?? null : null;
   if (b.recipeId && !recipe) return c.json({ error: 'not_found' }, 404);
   const lang = reqLang(c);
-  const key = `paint:${b.surface}:${b.finish}:${recipe ? `${recipe.id}@${recipe.updated_at}` : '-'}:${lang}`;
+  const inventory = await shopPaints(c.env);
+  // same leather / finish / recipe (or colour, rounded) / paints in the shop → same answer for 30 days
+  const colourKey = recipe ? `${recipe.id}@${recipe.updated_at}` : b.colour ? `${b.colour.lab.map((v) => Math.round(v / 3)).join(',')}${b.colour.approx ? '~' : ''}` : '-';
+  const invKey = (await sha256Hex(inventory.map((p) => `${p.brand}${p.code}${p.name}`).join('|'))).slice(0, 8);
+  const key = `paint3:${b.surface}:${b.finish}:${colourKey}:${invKey}:${lang}`;
   const hit = await c.env.DB.prepare(`SELECT value FROM skill_cache WHERE key = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')`).bind(key).first<{ value: string }>();
   if (hit) return c.json({ ...JSON.parse(hit.value), cached: true });
   const quota = await takeDaily(c.env, me.id, 'paint', 30);
@@ -3339,8 +3348,8 @@ app.post('/api/skills/paint', async (c) => {
   try {
     const skills = skillText(await pickSkills(c.env, 'paint', { text: `${b.surface.replace('_', ' ')} ${b.finish} ${recipe?.name_km ?? ''} ${recipe?.name_en ?? ''}` }, 8000));
     const r = await asFeature('paint_skill', async () => paintMethod(c.env, {
-      surface: b.surface, finish: b.finish, lang, skills, products: await shopProducts(c.env),
-      recipe: recipe ? { name: recipe.name_en || recipe.name_km, parts: recipe.parts.map((p: any) => ({ brand: p.brand, name: p.name, kind: p.kind, parts: p.parts })) } : null,
+      surface: b.surface, finish: b.finish, lang, skills, inventory, colour: recipe ? null : b.colour ?? null,
+      recipe: recipe ? { name: recipe.name_en || recipe.name_km, parts: recipe.parts.map((p: any) => ({ brand: p.brand, name: p.name, kind: p.kind, parts: p.parts, code: p.code ?? null, hex: p.color_hex ?? null })) } : null,
     }));
     await c.env.DB.prepare('INSERT OR REPLACE INTO skill_cache (key, value) VALUES (?, ?)').bind(key, JSON.stringify(r)).run();
     return c.json(r);

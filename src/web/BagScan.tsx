@@ -111,7 +111,7 @@ export default function BagScan({ file, onResult }: { file: File; onResult: (r: 
   return (
     <div className="space-y-2">
       <div className="relative overflow-hidden rounded-2xl border border-hairline bg-surface-low">
-        <canvas ref={canvas} onPointerDown={tap} className="mx-auto block h-auto max-h-[52vh] w-auto max-w-full touch-none" style={{ cursor: 'crosshair' }} />
+        <canvas ref={canvas} onPointerDown={tap} className="mx-auto block h-auto max-h-[38vh] w-auto max-w-full touch-none" style={{ cursor: 'crosshair' }} />
         {loading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-sm text-white">{t('pn.reading')}</div>}
         {!loading && <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 text-[11px] text-white">👆 {t('pn.tapToMove')}</div>}
       </div>

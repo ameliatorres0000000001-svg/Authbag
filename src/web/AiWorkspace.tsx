@@ -35,8 +35,8 @@ async function readAloud(text: string, locale: string): Promise<void> {
  * answers can be read aloud (🔊). `context` (leather, colour, recipe, problem…) goes with every question so the
  * AI knows the job. The conversation stays on this screen only.
  */
-export default function AiWorkspace({ skill, context, chips = [], title, sub, full = false, disabled = false }: {
-  skill: 'paint' | 'repair' | 'chat'; context?: unknown; chips?: string[]; title?: string; sub?: string; full?: boolean; disabled?: boolean;
+export default function AiWorkspace({ skill, context, chips = [], title, sub, full = false, disabled = false, inSheet = false }: {
+  skill: 'paint' | 'repair' | 'chat'; context?: unknown; chips?: string[]; title?: string; sub?: string; full?: boolean; disabled?: boolean; inSheet?: boolean;
 }) {
   const { t, locale } = useI18n();
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -180,7 +180,7 @@ export default function AiWorkspace({ skill, context, chips = [], title, sub, fu
       {member && <MembershipNeeded />}
       {err && <Notice tone="bad">{err}</Notice>}
 
-      <form className={`${full ? 'sticky bottom-20 md:bottom-4' : ''}`} onSubmit={(e) => { e.preventDefault(); send(text); }}>
+      <form className={`${inSheet ? 'sticky bottom-0 bg-surface pb-2 pt-1' : full ? 'sticky bottom-20 md:bottom-4' : ''}`} onSubmit={(e) => { e.preventDefault(); send(text); }}>
         {photo && (
           <div className="mb-2 flex items-center gap-2 rounded-2xl border border-hairline bg-surface-card p-2 text-xs">
             <img src={photo.url} alt="" className="h-12 w-12 rounded-xl object-cover" />
@@ -209,5 +209,36 @@ export default function AiWorkspace({ skill, context, chips = [], title, sub, fu
         </div>
       </form>
     </div>
+  );
+}
+
+/**
+ * Standard floating "Ask AI" button (bottom right, above the tab bar) that opens the workbench as a bottom sheet.
+ * The sheet stays mounted while closed, so the conversation is kept.
+ */
+export function AskAiButton({ label, title, sub, ...ws }: { label: string; title: string; sub?: string; skill: 'paint' | 'repair' | 'chat'; context?: unknown; chips?: string[] }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (!open) return; const k = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [open]);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}
+        className="fixed bottom-24 right-4 z-30 flex items-center gap-2 rounded-full bg-gold px-4 py-3 text-sm font-semibold text-charcoal shadow-xl shadow-black/40 md:bottom-6">
+        <Icon name="chat" size={20} />{label}
+      </button>
+      <div className={open ? 'fixed inset-0 z-50 flex flex-col justify-end bg-black/60' : 'hidden'} role="dialog" aria-modal="true" aria-label={title}>
+        <button type="button" className="flex-1 cursor-default" aria-label={t('cancel')} onClick={() => setOpen(false)} />
+        <div className="mx-auto flex h-[85dvh] w-full max-w-2xl flex-col rounded-t-3xl border-t border-hairline bg-surface">
+          <div className="flex items-center gap-3 border-b border-hairline px-4 py-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold text-charcoal" aria-hidden><Icon name="sparkles" size={18} /></span>
+            <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{title}</div>{sub && <div className="truncate text-[11px] text-muted">{sub}</div>}</div>
+            <button type="button" onClick={() => setOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-surface-high" aria-label={t('cancel')}>✕</button>
+          </div>
+          <div className="flex flex-1 flex-col overflow-y-auto px-4">
+            <AiWorkspace {...ws} full inSheet />
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

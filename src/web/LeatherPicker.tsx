@@ -31,7 +31,7 @@ export function StepList({ title, items, numbered = true }: { title: string; ite
   if (!items.length) return null;
   return (
     <div>
-      <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gold">{title}</div>
+      {title && <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-gold">{title}</div>}
       <ol className="space-y-1.5">
         {items.map((x, i) => (
           <li key={i} className="flex gap-2.5 text-sm leading-relaxed">
