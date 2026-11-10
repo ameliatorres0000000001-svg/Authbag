@@ -82,6 +82,7 @@ type AiTest = {
   configured: boolean; results: { name: string; model: string; ok: boolean; ms: number; error?: string }[]; untranslated: number;
   web: { ok: boolean; ms: number; error?: string } | null; tts: { ok: boolean; error?: string };
   parts: { key: string; ok: boolean | null; path: string }[];
+  anthropicKey?: { kind: 'api_key' | 'oauth_token' | 'admin_key' | 'other' | 'missing'; changedByCleaning: boolean };
 };
 /** 🧪 Is the AI working in every part of the app? One button: models, web search, Khmer voice, then each skill with a "try it" link. */
 export function AiCheck() {
@@ -103,6 +104,13 @@ export function AiCheck() {
         <button type="button" className="btn-ghost !py-2 text-xs" disabled={busy} onClick={() => run(true)}>{busy ? '…' : `🌐 ${t('ai.testWeb')}`}</button>
       </div>
       {r && !r.configured && <p className="text-xs text-counterfeit">{t('ai.noKey')}</p>}
+      {r?.anthropicKey && r.anthropicKey.kind !== 'missing' && (r.anthropicKey.kind !== 'api_key' || r.results.some((x) => /_401/.test(x.error ?? ''))) && (
+        <div className="space-y-1 rounded-lg border border-counterfeit/40 bg-counterfeit-bg p-2.5 text-xs">
+          <div className="font-semibold">🔑 {t(`ai.key.${r.anthropicKey.kind}`)}</div>
+          <p className="text-muted">{t('ai.key.fix')}</p>
+          <pre className="overflow-x-auto rounded bg-charcoal p-2 text-[11px] text-white">npx wrangler secret put ANTHROPIC_API_KEY</pre>
+        </div>
+      )}
       {r?.results.map((x) => (
         <div key={x.name} className={`rounded-lg p-2 text-xs ${x.ok ? 'bg-verified/10' : 'bg-counterfeit/10'}`}>
           <div className="font-semibold">{x.ok ? '✅' : '❌'} {x.name}</div>

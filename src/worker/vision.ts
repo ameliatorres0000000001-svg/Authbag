@@ -38,7 +38,17 @@ export function gatewayUrl(env: Env): string | null {
   if (!u) return null;
   try { const p = new URL(u); return p.protocol === 'https:' ? p.origin + p.pathname.replace(/\/$/, '') : null; } catch { return null; }
 }
-const anthropicClient = (env: Env) => new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, ...(gatewayUrl(env) ? { baseURL: gatewayUrl(env)! } : {}) });
+/** A pasted secret often carries a line break, spaces, quotes or "Bearer " — Anthropic and Google then answer 401 / 400. */
+export const cleanKey = (v: string | undefined): string => (v ?? '').trim().replace(/^Bearer\s+/i, '').replace(/^['"]|['"]$/g, '').trim();
+
+/** What kind of Anthropic credential is stored (never the key itself), to explain a 401 in the admin check. */
+export function anthropicKeyKind(v: string | undefined): { kind: 'api_key' | 'oauth_token' | 'admin_key' | 'other' | 'missing'; changedByCleaning: boolean } {
+  const k = cleanKey(v);
+  const kind = !k ? 'missing' : k.startsWith('sk-ant-api') ? 'api_key' : k.startsWith('sk-ant-oat') ? 'oauth_token' : k.startsWith('sk-ant-admin') ? 'admin_key' : 'other';
+  return { kind, changedByCleaning: !!v && k !== v };
+}
+
+const anthropicClient = (env: Env) => new Anthropic({ apiKey: cleanKey(env.ANTHROPIC_API_KEY), ...(gatewayUrl(env) ? { baseURL: gatewayUrl(env)! } : {}) });
 
 /** Drawing teaching points is the hardest vision task: it uses the strongest Claude model unless AI_MODEL pins one. */
 const POINTS_MODEL = 'claude-opus-5-5';
@@ -143,7 +153,7 @@ export function langRule(lang: OutLang = 'km'): string {
 async function callGemini(env: Env, model: string, system: string, images: VisionImage[], userText: string): Promise<string> {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
-    headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
+    headers: { 'x-goog-api-key': cleanKey(env.GEMINI_API_KEY), 'content-type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [...images.map((i) => ({ inline_data: { mime_type: i.mime, data: b64(i.data) } })), { text: userText }] }],
@@ -508,7 +518,7 @@ async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 
   if (provider === 'gemini') {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
-      headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
+      headers: { 'x-goog-api-key': cleanKey(env.GEMINI_API_KEY), 'content-type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: turns.map((t, i) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [
