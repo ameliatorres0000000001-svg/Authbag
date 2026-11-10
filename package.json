@@ -13,6 +13,7 @@
     "deploy": "vite build && wrangler deploy"
   },
   "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^1.1.1",
     "@anthropic-ai/sdk": "^1.4.0",
     "hono": "^4.6.0",
     "qrcode-generator": "^1.4.4",
