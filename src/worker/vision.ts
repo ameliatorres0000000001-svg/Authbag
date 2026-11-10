@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk';
 import type { Env } from './env.ts';
 import { recordUsage } from './usage.ts';
-import { MAX_AI_MARKS, parseBilingualMarks, parseSuggestedMarks, refineMarks, type Rect, type SuggestedMark } from '../shared/marks.ts';
+import { MAX_AI_MARKS, parseBilingualMarks, parseMarkChecks, parseSuggestedMarks, reconcileMarks, refineMarks, type Rect, type SuggestedMark } from '../shared/marks.ts';
 import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
 import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
 
@@ -410,7 +410,27 @@ export async function suggestTeachingPoints(env: Env, image: VisionImage, ctx: {
     `${ctx.label ? ` Uploader label: ${ctx.label}.` : ''}${ctx.note ? `\nAdmin note: ${ctx.note}` : ''}${ctx.prompt ? `\nAdmin instructions: ${ctx.prompt}` : ''}${context}`,
     16000, 'high', pointsModel(env) ?? undefined);
   // drop boxes that cover most of the photo or repeat another point
-  return refineMarks(parseBilingualMarks(text), existing);
+  const marks = refineMarks(parseBilingualMarks(text), existing);
+  if (!marks.length) return marks;
+  // second look: the AI finds each named detail again; boxes it cannot place twice are dropped (see reconcileMarks)
+  try { return reconcileMarks(marks, await recheckMarks(env, image, marks, pointsModel(env) ?? undefined)); }
+  catch (e) { console.error('teaching points recheck:', (e as Error).message); return marks; }
+}
+
+/**
+ * Second look at AI boxes on ONE photo: for each named detail, is it visible, and where exactly. The first boxes
+ * are not shown to the model as the answer, only the detail names and where they were said to be, so the two
+ * placements are independent enough to compare. Position only: no verdict, no new details, no text changes.
+ */
+async function recheckMarks(env: Env, image: VisionImage, marks: SuggestedMark[], model?: string) {
+  const text = await callVision(env,
+    `You check where details are on a photo of a luxury bag part. ${NO_VERDICT} ` +
+    'For each numbered detail, look for it in the image. If it is clearly visible, give a tight rectangle around exactly that detail ' +
+    '(x, y = top-left corner; x, y, w, h are fractions 0..1 of the image width and height, origin at the top-left). ' +
+    'If it is not visible, or you cannot tell where it is, set "found": false and give no rectangle. Do not guess. Do not add details. ' +
+    'Reply with JSON only: [{"i":0,"found":true,"x":0..1,"y":0..1,"w":0..1,"h":0..1},{"i":1,"found":false}]',
+    [image], marks.map((m, i) => `${i}: ${m.i18n?.en?.label ?? m.label}`).join('\n'), 800, 'medium', model);
+  return parseMarkChecks(text);
 }
 
 /**
