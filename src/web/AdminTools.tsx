@@ -83,7 +83,7 @@ type AiTest = {
   web: { ok: boolean; ms: number; error?: string } | null; tts: { ok: boolean; error?: string };
   parts: { key: string; ok: boolean | null; path: string }[];
   anthropicKey?: { kind: 'api_key' | 'oauth_token' | 'admin_key' | 'bedrock_key' | 'other' | 'missing'; changedByCleaning: boolean };
-  provider?: 'anthropic' | 'bedrock' | 'gemini' | null; region?: string | null; gateway?: string | null;
+  provider?: 'anthropic' | 'bedrock' | 'openai' | 'gemini' | null; chain?: ('anthropic' | 'bedrock' | 'openai' | 'gemini')[]; region?: string | null; gateway?: string | null;
 };
 /** 🧪 Is the AI working in every part of the app? One button: models, web search, Khmer voice, then each skill with a "try it" link. */
 export function AiCheck() {
@@ -95,6 +95,8 @@ export function AiCheck() {
     try { setR(await api.get(`/api/admin/ai/test${web ? '?web=1' : ''}`)); } catch (e) { setErr(String((e as Error).message)); }
     setBusy(false);
   }
+  // key hints are about Claude only (a backup's own error must not point to the Claude key)
+  const claude = r?.results.filter((x) => x.name.startsWith('Claude')) ?? [];
   const mark = (ok: boolean | null) => (ok === null ? '⚪' : ok ? '✅' : '❌');
   return (
     <div className="card space-y-2">
@@ -106,18 +108,19 @@ export function AiCheck() {
       </div>
       {r && !r.configured && <p className="text-xs text-counterfeit">{t('ai.noKey')}</p>}
       {r?.provider && <p className="text-xs">🔌 {t('ai.provider')}: <b>{r.gateway ? `${t('ai.prov.gateway')} ${r.gateway}` : t(`ai.prov.${r.provider}`)}</b>{r.region ? ` · ${r.region}` : ''}</p>}
-      {r?.provider === 'bedrock' && r.results.some((x) => /_40[134]/.test(x.error ?? '')) && (
+      {r?.chain && r.chain.length > 1 && <p className="text-xs text-muted">🛟 {t('ai.chain')}: {r.chain.slice(1).map((p) => t(`ai.prov.${p}`)).join(' → ')}</p>}
+      {r?.provider === 'bedrock' && claude.some((x) => /_40[134]/.test(x.error ?? '')) && (
         <div className="space-y-1 rounded-lg border border-counterfeit/40 bg-counterfeit-bg p-2.5 text-xs">
           <div className="font-semibold">☁️ Amazon Bedrock</div>
-          {r.results.some((x) => /_401/.test(x.error ?? '')) && <p>401 — {t('ai.bed.401')}</p>}
-          {r.results.some((x) => /_403/.test(x.error ?? '')) && <p>403 — {t('ai.bed.403')}</p>}
-          {r.results.some((x) => /_404/.test(x.error ?? '')) && <p>404 — {t('ai.bed.404')}</p>}
+          {claude.some((x) => /_401/.test(x.error ?? '')) && <p>401 — {t('ai.bed.401')}</p>}
+          {claude.some((x) => /_403/.test(x.error ?? '')) && <p>403 — {t('ai.bed.403')}</p>}
+          {claude.some((x) => /_404/.test(x.error ?? '')) && <p>404 — {t('ai.bed.404')}</p>}
         </div>
       )}
-      {r?.gateway && r.results.some((x) => /_40[13]/.test(x.error ?? '')) && (
+      {r?.gateway && claude.some((x) => /_40[13]/.test(x.error ?? '')) && (
         <div className="rounded-lg border border-counterfeit/40 bg-counterfeit-bg p-2.5 text-xs">🔑 {t('ai.gw.401').replace('{host}', r.gateway)}</div>
       )}
-      {r?.provider === 'anthropic' && !r.gateway && r?.anthropicKey && r.anthropicKey.kind !== 'missing' && (r.anthropicKey.kind !== 'api_key' || r.results.some((x) => /_401/.test(x.error ?? ''))) && (
+      {r?.provider === 'anthropic' && !r.gateway && r?.anthropicKey && r.anthropicKey.kind !== 'missing' && (r.anthropicKey.kind !== 'api_key' || claude.some((x) => /_401/.test(x.error ?? ''))) && (
         <div className="space-y-1 rounded-lg border border-counterfeit/40 bg-counterfeit-bg p-2.5 text-xs">
           <div className="font-semibold">🔑 {t(`ai.key.${r.anthropicKey.kind}`)}</div>
           <p className="text-muted">{t('ai.key.fix')}</p>

@@ -32,3 +32,23 @@ test('Bedrock keys are recognised and pick the Bedrock provider with anthropic. 
   assert.equal(pointsModel(env({ BEDROCK_API_KEY: 'ABSK1' })), 'anthropic.claude-opus-5-5');
   assert.equal(aiModel(env({ ANTHROPIC_API_KEY: 'sk-ant-api03-x' })), 'claude-sonnet-5-5');
 });
+
+test('OpenAI-compatible provider and the automatic backup chain', async () => {
+  const { aiProvider, aiModel, providerChain, openaiBase } = await import('../src/worker/vision.ts');
+  const env = (o: Record<string, string>) => o as never;
+  // a key without a model is not enough (no safe default model across OpenAI-compatible APIs)
+  assert.equal(aiProvider(env({ OPENAI_API_KEY: 'sk-x' })), null);
+  const oa = { OPENAI_API_KEY: 'sk-x', OPENAI_MODEL: 'gpt-x' };
+  assert.equal(aiProvider(env(oa)), 'openai');
+  assert.equal(aiModel(env(oa)), 'gpt-x');
+  assert.deepEqual(providerChain(env(oa)), ['openai']);
+  // Claude stays main when it has a key; the others back it up in a fixed order
+  assert.deepEqual(providerChain(env({ ...oa, ANTHROPIC_API_KEY: 'sk-ant-api03-x', GEMINI_API_KEY: 'g' })), ['anthropic', 'openai', 'gemini']);
+  assert.deepEqual(providerChain(env({ ...oa, ANTHROPIC_API_KEY: 'sk-ant-api03-x', GEMINI_API_KEY: 'g', AI_PROVIDER: 'gemini' })), ['gemini', 'anthropic', 'openai']);
+  assert.deepEqual(providerChain(env({ ANTHROPIC_API_KEY: 'ABSKxyz', GEMINI_API_KEY: 'g' })), ['bedrock', 'gemini']);
+  assert.deepEqual(providerChain(env({})), []);
+  // base URL: https only, trailing slash removed
+  assert.equal(openaiBase(env({})), 'https://api.openai.com/v1');
+  assert.equal(openaiBase(env({ OPENAI_BASE_URL: 'https://api.laalaa.me/v1/' })), 'https://api.laalaa.me/v1');
+  assert.equal(openaiBase(env({ OPENAI_BASE_URL: 'http://evil.example/v1' })), 'https://api.openai.com/v1');
+});

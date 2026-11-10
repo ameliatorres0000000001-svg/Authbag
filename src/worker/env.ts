@@ -16,7 +16,11 @@ export interface Env {
   AWS_SECRET_ACCESS_KEY?: string;
   AWS_SESSION_TOKEN?: string;
   AWS_REGION?: string;
-  /** Optional override of the AI provider: "anthropic", "bedrock" or "gemini" (otherwise chosen from the keys set). */
+  /** Any OpenAI-compatible chat API (OpenAI, a gateway, OpenRouter…): key (secret), base URL (default https://api.openai.com/v1) and model. */
+  OPENAI_API_KEY?: string;
+  OPENAI_BASE_URL?: string;
+  OPENAI_MODEL?: string;
+  /** Optional override of the main AI provider: "anthropic", "bedrock", "openai" or "gemini" (otherwise chosen from the keys set). */
   AI_PROVIDER?: string;
   GEMINI_API_KEY?: string;
   AI_MODEL?: string;
