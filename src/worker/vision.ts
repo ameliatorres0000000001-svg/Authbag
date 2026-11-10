@@ -19,7 +19,7 @@ function b64(buf: ArrayBuffer): string {
 }
 
 /** Default model per provider when the AI_MODEL var is left empty. Bedrock model ids carry the `anthropic.` prefix. */
-const DEFAULT_MODEL = { anthropic: 'claude-sonnet-5-5', bedrock: 'anthropic.claude-sonnet-5-5', gemini: 'gemini-3.8-flash' } as const;
+const DEFAULT_MODEL = { anthropic: 'claude-sonnet-5-5', bedrock: 'anthropic.claude-sonnet-5-5', openai: '', gemini: 'gemini-3.8-flash' } as const;
 export type AiProvider = keyof typeof DEFAULT_MODEL;
 
 /** Bedrock API keys: long-term ("ABSK…") or short-term ("bedrock-api-key-…"). */
@@ -42,13 +42,34 @@ export const bedrockRegion = (env: Env): string => env.AWS_REGION?.trim() || 'us
  */
 export const aiProvider = (env: Env): AiProvider | null => {
   const forced = env.AI_PROVIDER?.trim().toLowerCase();
-  if (forced === 'anthropic' || forced === 'bedrock' || forced === 'gemini') return forced;
+  if (forced === 'anthropic' || forced === 'bedrock' || forced === 'openai' || forced === 'gemini') return forced;
   const a = cleanKey(env.ANTHROPIC_API_KEY);
   if (a.startsWith('sk-ant-')) return 'anthropic';
   if (bedrockKey(env) || awsKeys(env)) return 'bedrock';
   if (a) return 'anthropic';
+  if (openaiConfigured(env)) return 'openai';
   return cleanKey(env.GEMINI_API_KEY) ? 'gemini' : null;
 };
+/** An OpenAI-compatible API needs a key and a model name (there is no safe default model across providers). */
+const openaiConfigured = (env: Env) => !!cleanKey(env.OPENAI_API_KEY) && !!env.OPENAI_MODEL?.trim();
+export const openaiBase = (env: Env): string => {
+  const u = env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1';
+  try { const p = new URL(u); return p.protocol === 'https:' ? (p.origin + p.pathname).replace(/\/$/, '') : 'https://api.openai.com/v1'; } catch { return 'https://api.openai.com/v1'; }
+};
+/** Which providers have credentials: the main one first, then the others as backups (tried in this order). */
+const configured = (env: Env): Record<AiProvider, boolean> => {
+  const a = cleanKey(env.ANTHROPIC_API_KEY);
+  return { anthropic: !!a && !BEDROCK_KEY.test(a), bedrock: !!(bedrockKey(env) || awsKeys(env)), openai: openaiConfigured(env), gemini: !!cleanKey(env.GEMINI_API_KEY) };
+};
+export function providerChain(env: Env): AiProvider[] {
+  const main = aiProvider(env);
+  if (!main) return [];
+  const has = configured(env);
+  return [main, ...(['anthropic', 'bedrock', 'openai', 'gemini'] as const).filter((p) => p !== main && has[p])];
+}
+/** The model a provider uses: the main provider follows AI_MODEL; backups use their own default / configured model. */
+const modelFor = (env: Env, p: AiProvider): string =>
+  p === aiProvider(env) ? aiModel(env) ?? '' : p === 'openai' ? env.OPENAI_MODEL?.trim() ?? '' : p === 'gemini' ? env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini : DEFAULT_MODEL[p];
 /** Claude (direct or through Bedrock) — everything except Gemini; web search needs Claude direct (not on Bedrock). */
 const isClaude = (p: AiProvider | null): p is 'anthropic' | 'bedrock' => p === 'anthropic' || p === 'bedrock';
 
@@ -56,8 +77,8 @@ const isClaude = (p: AiProvider | null): p is 'anthropic' | 'bedrock' => p === '
 export const aiModel = (env: Env): string | null => {
   const p = aiProvider(env);
   if (!p) return null;
-  const m = env.AI_MODEL?.trim();
-  if (!m) return DEFAULT_MODEL[p];
+  const m = env.AI_MODEL?.trim() || (p === 'openai' ? env.OPENAI_MODEL?.trim() : '');
+  if (!m) return DEFAULT_MODEL[p] || null;
   return p === 'bedrock' && !m.startsWith('anthropic.') ? `anthropic.${m}` : m;
 };
 
@@ -84,8 +105,8 @@ export function anthropicKeyKind(v: string | undefined): { kind: 'api_key' | 'oa
  * The Claude client: Anthropic directly, or Claude in Amazon Bedrock (bedrock-mantle endpoint, same Messages API) with
  * the Bedrock API key or SigV4 from the AWS keys — credentials passed explicitly, since Workers have no AWS config files.
  */
-const anthropicClient = (env: Env): Anthropic => {
-  if (aiProvider(env) === 'bedrock') {
+const anthropicClient = (env: Env, p: AiProvider | null = aiProvider(env)): Anthropic => {
+  if (p === 'bedrock') {
     const key = bedrockKey(env);
     return new AnthropicBedrockMantle({
       awsRegion: bedrockRegion(env),
@@ -111,40 +132,110 @@ const toImageMime = (m: string): ImageMime => (['image/png', 'image/gif', 'image
  * `maxTokens` is the caller's expected answer size; Claude also thinks before answering, so the request allows more.
  */
 export async function callVision(env: Env, system: string, images: VisionImage[], userText: string, maxTokens = 1500, effort: 'low' | 'medium' | 'high' = 'medium', modelOverride?: string): Promise<string> {
-  const provider = aiProvider(env);
-  const model = isClaude(provider) && modelOverride ? modelOverride : aiModel(env);
-  if (!provider || !model) throw new Error('ai_not_configured');
-  if (provider === 'gemini') return callGemini(env, model, system, images, userText);
-  const client = anthropicClient(env);
-  let msg: Anthropic.Message;
+  return aiCall(env, { system, turns: [{ role: 'user', content: userText }], images, maxTokens: Math.max(16000, maxTokens), effort, json: true, modelOverride });
+}
+
+type CallOpts = { system: string; turns: ChatTurn[]; images: VisionImage[]; maxTokens: number; effort: 'low' | 'medium' | 'high'; json: boolean; modelOverride?: string };
+
+/**
+ * One AI answer with automatic backup: the main provider first, then each other provider that has a key
+ * (Claude direct / gateway, Claude in Amazon Bedrock, an OpenAI-compatible API, Gemini). A refusal is final;
+ * any other failure (bad key, no credit, outage, unknown model) tries the next one. Images go with the last user turn.
+ */
+async function aiCall(env: Env, o: CallOpts): Promise<string> {
+  const chain = providerChain(env);
+  if (!chain.length) throw new Error('ai_not_configured');
+  let last: Error | null = null;
+  for (const [i, p] of chain.entries()) {
+    try {
+      if (p === 'gemini') return await geminiCall(env, modelFor(env, p), o);
+      if (p === 'openai') return await openaiCall(env, modelFor(env, p), o);
+      return await claudeCall(env, p, i === 0 && o.modelOverride ? o.modelOverride : modelFor(env, p), o);
+    } catch (e) {
+      if ((e as Error).message === 'ai_refused') throw e;
+      last = e as Error;
+      if (i < chain.length - 1) console.error(`ai: ${p} failed (${last.message.slice(0, 160)}); trying ${chain[i + 1]}`);
+    }
+  }
+  throw last ?? new Error('ai_failed');
+}
+
+async function claudeCall(env: Env, p: AiProvider, model: string, o: CallOpts): Promise<string> {
+  const lastIdx = o.turns.length - 1;
   try {
-    msg = await client.messages.create({
-      model,
+    const msg = await anthropicClient(env, p).messages.create({
       // Thinking is on by default for current Claude models and counts toward max_tokens.
-      max_tokens: Math.max(16000, maxTokens),
-      output_config: { effort },
-      system,
-      messages: [{ role: 'user', content: [
-        ...images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: toImageMime(i.mime), data: b64(i.data) } })),
-        { type: 'text' as const, text: userText },
-      ] }],
+      model, max_tokens: o.maxTokens, output_config: { effort: o.effort }, system: o.system,
+      messages: o.turns.map((t, i) => (o.images.length && i === lastIdx && t.role === 'user'
+        ? { role: 'user' as const, content: [
+          ...o.images.map((im) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: toImageMime(im.mime), data: b64(im.data) } })),
+          { type: 'text' as const, text: t.content }] }
+        : { role: t.role, content: t.content })),
     });
+    await recordUsage(env, model, msg.usage);
+    if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
+    return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
   } catch (e) {
     if (e instanceof Anthropic.APIError) {
       const why = apiErrorText(e);
-      // the stronger model may not be available on this account: fall back to the default model
-      if (modelOverride && modelOverride !== aiModel(env) && (e.status === 404 || e.status === 403 || /model/i.test(why))) {
-        console.error(`ai: ${modelOverride} failed (${why}); using ${aiModel(env)}`);
-        return callVision(env, system, images, userText, maxTokens, effort);
+      // the stronger model may not be available on this account: try the provider's default model once
+      const fallback = modelFor(env, p);
+      if (model !== fallback && (e.status === 404 || e.status === 403 || /model/i.test(why))) {
+        console.error(`ai: ${model} failed (${why}); using ${fallback}`);
+        return claudeCall(env, p, fallback, o);
       }
       console.error(`ai: ${model} failed: ${why}`);
       throw new Error(`ai_http_${e.status ?? 0}: ${why}`);
     }
     throw e;
   }
-  await recordUsage(env, model, msg.usage);
-  if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
-  return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
+}
+
+async function geminiCall(env: Env, model: string, o: CallOpts): Promise<string> {
+  const lastIdx = o.turns.length - 1;
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': cleanKey(env.GEMINI_API_KEY), 'content-type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: o.system }] },
+      contents: o.turns.map((t, i) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [
+        ...(i === lastIdx ? o.images.map((im) => ({ inline_data: { mime_type: im.mime, data: b64(im.data) } })) : []), { text: t.content }] })),
+      ...(o.json ? { generationConfig: { responseMimeType: 'application/json' } } : {}),
+    }),
+  });
+  if (!res.ok) throw new Error(`ai_http_${res.status}`);
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: Record<string, number> };
+  await recordUsage(env, model, data.usageMetadata);
+  return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+}
+
+/** Any OpenAI-compatible Chat Completions API (OpenAI, gateways, OpenRouter, DeepSeek…); photos as data URLs. */
+async function openaiCall(env: Env, model: string, o: CallOpts): Promise<string> {
+  const lastIdx = o.turns.length - 1;
+  const res = await fetch(`${openaiBase(env)}/chat/completions`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${cleanKey(env.OPENAI_API_KEY)}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: o.system }, ...o.turns.map((t, i) => (o.images.length && i === lastIdx && t.role === 'user'
+        ? { role: 'user', content: [{ type: 'text', text: t.content }, ...o.images.map((im) => ({ type: 'image_url', image_url: { url: `data:${im.mime};base64,${b64(im.data)}` } }))] }
+        : { role: t.role, content: t.content }))],
+    }),
+  });
+  if (!res.ok) {
+    // the provider's own message, with any key fragment it echoes masked (never shown or logged)
+    const raw = await res.text().catch(() => '');
+    let why = raw; try { why = (JSON.parse(raw) as { error?: { message?: string } }).error?.message ?? raw; } catch { /* not JSON */ }
+    const key = cleanKey(env.OPENAI_API_KEY);
+    why = (key ? why.split(key).join('…') : why).replace(/\b(sk|key|gsk|xai)[-_][A-Za-z0-9_*\-.]{3,}/gi, '$1-…');
+    throw new Error(`ai_http_${res.status}: ${why.replace(/\s+/g, ' ').slice(0, 160)}`);
+  }
+  const data = (await res.json()) as { choices?: { message?: { content?: string | { type?: string; text?: string }[] | null; refusal?: string | null } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+  await recordUsage(env, model, data.usage);
+  const m = data.choices?.[0]?.message;
+  if (m?.refusal) throw new Error('ai_refused');
+  const c = m?.content;
+  return typeof c === 'string' ? c : Array.isArray(c) ? c.map((x) => x.text ?? '').join('') : '';
 }
 
 /** The provider's own short error message (e.g. "credit balance too low", "model not found"); never contains the key. */
@@ -153,7 +244,7 @@ function apiErrorText(e: InstanceType<typeof Anthropic.APIError>): string {
   return String(body?.error?.message ?? e.message ?? '').replace(/\s+/g, ' ').slice(0, 200);
 }
 
-/** Admin check: one tiny call to each configured model, with the time taken and the provider's error message. */
+/** Admin check: one tiny call to every configured AI (main first, then the backups), with the time and the provider's error. */
 export async function testAi(env: Env): Promise<{ name: string; model: string; ok: boolean; ms: number; error?: string }[]> {
   const out: { name: string; model: string; ok: boolean; ms: number; error?: string }[] = [];
   const run = async (name: string, model: string, fn: () => Promise<string>) => {
@@ -162,24 +253,29 @@ export async function testAi(env: Env): Promise<{ name: string; model: string; o
     catch (e) { out.push({ name, model, ok: false, ms: Date.now() - t, error: String((e as Error).message).slice(0, 240) }); }
   };
   const ask = 'Reply with the single word: ok';
-  if (isClaude(aiProvider(env))) {
-    const client = anthropicClient(env);
-    const call = (model: string) => async () => {
-      try {
-        const m = await client.messages.create({ model, max_tokens: 2000, output_config: { effort: 'low' }, messages: [{ role: 'user', content: ask }] });
-        return m.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
-      } catch (e) { if (e instanceof Anthropic.APIError) throw new Error(`ai_http_${e.status ?? 0}: ${apiErrorText(e)}`); throw e; }
-    };
-    const main = aiModel(env)!;
-    const via = aiProvider(env) === 'bedrock' ? ` via Amazon Bedrock (${bedrockRegion(env)}, ${bedrockKey(env) ? 'API key' : 'AWS keys'})`
-      : gatewayUrl(env) ? ` via ${new URL(gatewayUrl(env)!).host}` : '';
-    await run(`Claude${via} (explanations, translation, guides)`, main, call(main));
-    const pm = pointsModel(env);
-    if (pm && pm !== main) await run(`Claude${via} (drawing points)`, pm, call(pm));
-  }
-  if (env.GEMINI_API_KEY) {
-    const gm = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini;
-    await run('Gemini (translation)', gm, () => callGemini(env, gm, 'Reply in JSON.', [], `${ask} as {"r":"ok"}`));
+  const tiny = (json: boolean): CallOpts => ({ system: json ? 'Reply in JSON.' : 'Reply briefly.', turns: [{ role: 'user', content: json ? `${ask} as {"r":"ok"}` : ask }], images: [], maxTokens: 2000, effort: 'low', json });
+  const main = aiProvider(env);
+  for (const p of providerChain(env)) {
+    const role = p === main ? 'main' : 'backup';
+    const model = modelFor(env, p);
+    if (isClaude(p)) {
+      const client = anthropicClient(env, p);
+      const call = (m: string) => async () => {
+        try {
+          const r = await client.messages.create({ model: m, max_tokens: 2000, output_config: { effort: 'low' }, messages: [{ role: 'user', content: ask }] });
+          return r.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
+        } catch (e) { if (e instanceof Anthropic.APIError) throw new Error(`ai_http_${e.status ?? 0}: ${apiErrorText(e)}`); throw e; }
+      };
+      const via = p === 'bedrock' ? ` via Amazon Bedrock (${bedrockRegion(env)}, ${bedrockKey(env) ? 'API key' : 'AWS keys'})`
+        : gatewayUrl(env) ? ` via ${new URL(gatewayUrl(env)!).host}` : '';
+      await run(`Claude${via} · ${role}`, model, call(model));
+      const pm = p === main ? pointsModel(env) : null;
+      if (pm && pm !== model) await run(`Claude${via} · ${role} (drawing points)`, pm, call(pm));
+    } else if (p === 'openai') {
+      await run(`OpenAI-compatible (${new URL(openaiBase(env)).host}) · ${role}`, model, () => openaiCall(env, model, tiny(false)));
+    } else {
+      await run(`Gemini · ${role}`, model, () => geminiCall(env, model, tiny(true)));
+    }
   }
   return out;
 }
@@ -200,19 +296,7 @@ export function langRule(lang: OutLang = 'km'): string {
 
 /** One Gemini generateContent call returning JSON text. */
 async function callGemini(env: Env, model: string, system: string, images: VisionImage[], userText: string): Promise<string> {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'x-goog-api-key': cleanKey(env.GEMINI_API_KEY), 'content-type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [...images.map((i) => ({ inline_data: { mime_type: i.mime, data: b64(i.data) } })), { text: userText }] }],
-      generationConfig: { responseMimeType: 'application/json' },
-    }),
-  });
-  if (!res.ok) throw new Error(`ai_http_${res.status}`);
-  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: Record<string, number> };
-  await recordUsage(env, model, data.usageMetadata);
-  return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+  return geminiCall(env, model, { system, turns: [{ role: 'user', content: userText }], images, maxTokens: 4000, effort: 'low', json: true });
 }
 
 const NO_VERDICT = 'Never state or imply whether an item is authentic or counterfeit. Describe only what is visibly present. If something is not clearly visible, omit it.';
@@ -560,39 +644,7 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
 
 /** One chat completion with the configured provider (Claude or Gemini); token use is recorded. */
 async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 8000, image: VisionImage | null = null): Promise<string> {
-  const last = turns.length - 1;
-  const provider = aiProvider(env);
-  const model = aiModel(env);
-  if (!provider || !model) throw new Error('ai_not_configured');
-  if (provider === 'gemini') {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: 'POST',
-      headers: { 'x-goog-api-key': cleanKey(env.GEMINI_API_KEY), 'content-type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: turns.map((t, i) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [
-          ...(image && i === last ? [{ inline_data: { mime_type: image.mime, data: b64(image.data) } }] : []), { text: t.content }] })),
-      }),
-    });
-    if (!res.ok) throw new Error(`ai_http_${res.status}`);
-    const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: Record<string, number> };
-    await recordUsage(env, model, data.usageMetadata);
-    return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-  }
-  try {
-    const msg = await anthropicClient(env).messages.create({
-      model, max_tokens: maxTokens, output_config: { effort: 'low' }, system,
-      messages: turns.map((t, i) => (image && i === last && t.role === 'user'
-        ? { role: 'user' as const, content: [{ type: 'image' as const, source: { type: 'base64' as const, media_type: toImageMime(image.mime), data: b64(image.data) } }, { type: 'text' as const, text: t.content }] }
-        : { role: t.role, content: t.content })),
-    });
-    await recordUsage(env, model, msg.usage);
-    if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
-    return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
-  } catch (e) {
-    if (e instanceof Anthropic.APIError) { console.error(`ai chat: ${model} failed: ${apiErrorText(e)}`); throw new Error(`ai_http_${e.status ?? 0}`); }
-    throw e;
-  }
+  return aiCall(env, { system, turns, images: image ? [image] : [], maxTokens, effort: 'low', json: false });
 }
 
 export interface SkillDraft { title: string; body: string; keywords: string; brand: string | null }

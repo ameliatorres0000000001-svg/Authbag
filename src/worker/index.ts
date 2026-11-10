@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2006,7 +2006,7 @@ app.get('/api/admin/ai/test', need(ADMINS), async (c) => {
   const web = c.req.query('web') === '1' ? await asFeature('other', () => testWebSearch(c.env)) : null;
   let tts: { ok: boolean; error?: string } = { ok: false, error: 'AZURE_SPEECH_KEY not set (the phone voice is used instead)' };
   if (ttsConfigured(c.env)) { try { await synthesize(c.env, 'សួស្តី'); tts = { ok: true }; } catch (e) { tts = { ok: false, error: String((e as Error).message).slice(0, 200) }; } }
-  const ai = results.length > 0 && results[0].ok;
+  const ai = results.some((x) => x.ok); // one working AI is enough: the others back it up
   const parts = [
     { key: 'paint', ok: ai, path: '/paint' }, { key: 'tube', ok: ai, path: '/paint' }, { key: 'repair', ok: ai, path: '/repair' },
     { key: 'check', ok: ai, path: '/check' }, { key: 'chat', ok: ai, path: '/chat' }, { key: 'skills', ok: ai, path: '/admin?tab=skills' },
@@ -2014,7 +2014,8 @@ app.get('/api/admin/ai/test', need(ADMINS), async (c) => {
     { key: 'voice', ok: tts.ok, path: '/chat' },
   ];
   return c.json({ configured: aiConfigured(c.env), results, untranslated: left, web, tts, parts, anthropicKey: anthropicKeyKind(c.env.ANTHROPIC_API_KEY),
-    provider: aiProvider(c.env), region: aiProvider(c.env) === 'bedrock' ? bedrockRegion(c.env) : null });
+    provider: aiProvider(c.env), chain: providerChain(c.env), region: aiProvider(c.env) === 'bedrock' ? bedrockRegion(c.env) : null,
+    gateway: aiProvider(c.env) === 'anthropic' && gatewayUrl(c.env) ? new URL(gatewayUrl(c.env)!).host : null });
 });
 
 app.get('/api/admin/telegram/status', need(ADMINS), async (c) => {
