@@ -11,7 +11,7 @@ import type { StepIcon } from '../../shared/voiceKeys.ts';
 import StepPlayer from '../StepPlayer.tsx';
 import LeatherPicker, { StepList, type Leather } from '../LeatherPicker.tsx';
 import { MembershipNeeded, isMembershipError } from './Membership.tsx';
-import { AskAiButton } from '../AiWorkspace.tsx';
+import AiWorkspace from '../AiWorkspace.tsx';
 
 export interface PaintPart { id: string; brand: string; name: string; kind: string; color_hex: string | null; parts: number; has_photo: boolean; updated_at: string }
 export interface PaintRecipe {
@@ -87,7 +87,7 @@ export function RecipeCard({ r, mine, level, dE }: { r: PaintRecipe; mine?: stri
 
 interface LeatherGuess { surface: Leather | null; finish: 'matte' | 'satin' | 'gloss' | null; confidence: number; colour: string; condition: string; tip: string }
 interface PaintPick { brand: string; code: string; name: string; parts: number; inShop: boolean; hex: string | null }
-interface Method { paints: PaintPick[]; paintsFrom: 'recipe' | 'ai' | 'none'; paintsNote: string; prep: string[]; mix: string[]; apply: string[]; dry: string[]; avoid: string[]; tools: string[]; safety: string }
+interface Method { paints: PaintPick[]; paintsFrom: 'recipe' | 'ai' | 'none'; paintsNote: string; steps?: string[]; prep: string[]; mix: string[]; apply: string[]; dry: string[]; avoid: string[]; tools: string[]; safety: string }
 export interface TubeRead {
   brand: string | null; code: string | null; name: string | null; volume_ml: number | null; base: string | null; kind: string | null;
   colour: string; hex: string | null; transparent: boolean | null; confidence: number; label: string;
@@ -299,72 +299,94 @@ export default function Paint() {
     </div>
   );
 
-  /** ② which paints (codes) and ③ how to paint — then the floating "Ask AI" button. */
+  /** The picture of the mix: each paint as drops in its colour, "+", then "=" the colour to reach. */
+  const MixPicture = ({ paints, target }: { paints: PaintPick[]; target: string | null }) => (
+    <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-3 rounded-2xl bg-surface-low px-3 py-4">
+      {paints.map((p, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && <span className="text-xl font-light text-muted" aria-hidden>+</span>}
+          <span className="flex flex-col items-center gap-1">
+            <span className="flex max-w-[84px] flex-wrap justify-center gap-0.5">
+              {Array.from({ length: Math.min(p.parts, 8) }).map((_, k) => <span key={k} className="h-4 w-4 rounded-full border border-black/30 shadow-inner" style={{ background: p.hex ?? '#888' }} />)}
+            </span>
+            <span className="max-w-[84px] truncate text-center text-[10px] leading-tight text-muted">{p.code || p.name}</span>
+            <span className="font-mono text-xs font-bold text-gold">×{p.parts}</span>
+          </span>
+        </React.Fragment>
+      ))}
+      {target && <>
+        <span className="text-xl font-light text-muted" aria-hidden>=</span>
+        <span className="flex flex-col items-center gap-1">
+          <span className="h-12 w-12 rounded-full border-2 border-gold shadow-lg" style={{ background: target }} />
+          <span className="text-[10px] text-muted">{t('pn.target')}</span>
+        </span>
+      </>}
+    </div>
+  );
+
+  /** ② paints with codes + the mix picture · ③ short steps · ④ chat about this job, right below. */
   const methodAndChat = (
     <>
-      <section className="space-y-3 rounded-2xl border border-hairline bg-surface-card p-4" aria-live="polite">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gold"><Icon name="tube" size={16} />{t('pn.paints')}</div>
+      <section className="space-y-3 rounded-2xl border border-gold/40 bg-surface-card p-4" aria-live="polite">
+        <div className="flex items-center gap-2 text-sm font-semibold"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold font-mono text-xs text-charcoal">2</span>{t('pn.mixTitle')}</div>
         {!leather && <p className="text-sm text-muted">{t('skill.pickLeather')}</p>}
-        {mBusy && <div className="space-y-2" aria-label={t('skill.thinking')}>{[0, 1, 2].map((i) => <div key={i} className="h-11 animate-pulse rounded-xl bg-surface-low" />)}<p className="text-xs text-muted">🤖 {t('pn.aiWorking')}</p></div>}
+        {mBusy && <div className="space-y-2" aria-label={t('skill.thinking')}><div className="h-24 animate-pulse rounded-2xl bg-surface-low" /><p className="text-xs text-muted">🤖 {t('pn.aiWorking')}</p></div>}
         {member && <MembershipNeeded />}
         {mErr && <><Notice tone="bad">{mErr}</Notice><button type="button" className="btn-ghost w-full" onClick={askMethod}>{t('pn.tryAgain')}</button></>}
-        {method && (
+        {method && (method.paints.length > 0 ? (
           <>
-            {method.paints.length > 0 ? (
-              <ul className="space-y-1.5">
-                {method.paints.map((p, i) => (
-                  <li key={i} className="flex items-center gap-3 rounded-xl bg-surface-low px-3 py-2">
-                    <span className="h-8 w-8 shrink-0 rounded-lg border border-hairline" style={{ background: p.hex ?? 'transparent' }} />
-                    <span className="min-w-0 flex-1 text-sm">
-                      {p.brand && <b>{p.brand} </b>}{p.code && <span className="font-mono text-gold">{p.code} </span>}{p.name}
-                      <span className="block text-[11px] text-muted">{p.inShop ? `✓ ${t('pn.inShop')}` : t('pn.generic')}</span>
-                    </span>
-                    <span className="shrink-0 rounded-lg bg-charcoal px-2.5 py-1 font-mono text-sm text-gold">{p.parts} <span className="text-[10px] text-white/70">{t('paint.part')}</span></span>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="text-sm text-muted">{t('pn.noPaints')}</p>}
-            {method.paintsFrom === 'ai' && <p className="rounded-xl bg-review-bg px-3 py-2 text-xs text-review">✨ {t('pn.aiMix')}{method.paintsNote ? ` ${method.paintsNote}` : ''}</p>}
-            {method.paintsFrom === 'recipe' && method.paintsNote && <p className="text-xs text-muted">{method.paintsNote}</p>}
-            {products.length === 0 && (
+            <MixPicture paints={method.paints} target={chosen?.hex ?? res?.hex ?? null} />
+            <ul className="space-y-1.5">
+              {method.paints.map((p, i) => (
+                <li key={i} className="flex items-center gap-3 rounded-xl bg-surface-low px-3 py-2">
+                  <span className="h-7 w-7 shrink-0 rounded-full border border-hairline" style={{ background: p.hex ?? 'transparent' }} />
+                  <span className="min-w-0 flex-1 text-sm">
+                    {p.brand && <b>{p.brand} </b>}{p.code && <span className="font-mono text-gold">{p.code} </span>}{p.name}
+                    <span className="block text-[11px] text-muted">{p.inShop ? `✓ ${t('pn.inShop')}` : t('pn.generic')}</span>
+                  </span>
+                  <span className="shrink-0 rounded-lg bg-charcoal px-2.5 py-1 font-mono text-sm text-gold">{p.parts} <span className="text-[10px] text-white/70">{t('pn.drops')}</span></span>
+                </li>
+              ))}
+            </ul>
+            {method.paintsFrom === 'ai' && <p className="text-[11px] leading-relaxed text-review">✨ {t('pn.aiMix')}{method.paintsNote ? ` ${method.paintsNote}` : ''}</p>}
+            {products.length === 0 && admin && (
               <button type="button" onClick={() => { restart(); setMode('tube'); }} className="flex w-full items-center gap-2 rounded-xl border border-dashed border-gold/50 px-3 py-2 text-left text-xs">
                 <Icon name="tube" size={18} className="text-gold" /><span className="flex-1">{t('pn.addPaints')}</span><span className="text-gold">›</span>
               </button>
             )}
           </>
-        )}
+        ) : <p className="text-sm text-muted">{t('pn.noPaints')}</p>)}
       </section>
 
       {method && (
-        <section className="space-y-4 rounded-2xl border border-hairline bg-surface-card p-4">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gold"><Icon name="brush" size={16} />{t('pn.how')}</div>
-          <StepList title={t('paint.m.prep')} items={method.prep} />
-          <StepList title={t('paint.m.mix')} items={method.mix} />
-          <StepList title={t('paint.m.apply')} items={method.apply} />
-          <StepList title={t('paint.m.dry')} items={method.dry} />
+        <section className="space-y-3 rounded-2xl border border-hairline bg-surface-card p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold font-mono text-xs text-charcoal">3</span>{t('pn.how')}</div>
+          <StepList title="" items={method.steps?.length ? method.steps : [...method.prep, ...method.mix, ...method.apply, ...method.dry].slice(0, 6)} />
           {(method.avoid.length > 0 || method.tools.length > 0 || method.safety) && (
             <details className="rounded-xl bg-surface-low px-3 py-2">
-              <summary className="cursor-pointer text-xs font-semibold">{t('pn.more')}</summary>
+              <summary className="cursor-pointer text-xs text-muted">{t('pn.more')}</summary>
               <div className="mt-3 space-y-3">
                 <StepList title={t('skill.avoid')} items={method.avoid} numbered={false} />
                 <StepList title={t('paint.m.tools')} items={method.tools} numbered={false} />
-                {method.safety && <p className="rounded-xl bg-review-bg px-3 py-2 text-xs text-review">⚠️ {method.safety}</p>}
+                {method.safety && <p className="text-xs text-review">⚠️ {method.safety}</p>}
               </div>
             </details>
           )}
-          <p className="text-[11px] text-muted">{t('skill.aiNote')}</p>
         </section>
       )}
 
-      <AskAiButton label={t('pn.ask')} skill="paint" title={t('ws.paintTitle')} sub={leather ? `${t(`paint.surface.${leather}`)} · ${t(`paint.finish.${finish}`)}` : undefined}
-        context={{ surface: leather, finish, recipeId: chosen?.id ?? null, lab: res?.lab ?? null, approxColour: res?.approx ?? null, guess, paints: method?.paints ?? null, steps: method ? { prep: method.prep, mix: method.mix, apply: method.apply, dry: method.dry } : null }}
-        chips={['ws.pq1', 'ws.pq2', 'ws.pq3', 'ws.pq4', 'ws.pq5', 'ws.pq6'].map((k) => t(k))} />
+      <section className="space-y-2">
+        <div className="flex items-center gap-2 px-1 text-sm font-semibold"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold font-mono text-xs text-charcoal">4</span>{t('pn.chatTitle')}</div>
+        <AiWorkspace skill="paint"
+          context={{ surface: leather, finish, recipeId: chosen?.id ?? null, lab: res?.lab ?? null, approxColour: res?.approx ?? null, guess, paints: method?.paints ?? null, steps: method?.steps ?? null }}
+          chips={['ws.pq1', 'ws.pq2', 'ws.pq3'].map((k) => t(k))} />
+      </section>
     </>
   );
 
   return (
     <Page title={`🎨 ${t('skill.paint')}`} subtitle={t('pn.sub')}>
-      <div className="mx-auto max-w-xl space-y-4 pb-20">
+      <div className="mx-auto max-w-xl space-y-4">
         {mode && <button type="button" onClick={restart} className="flex items-center gap-1 text-sm text-muted">← {t('pn.back')}</button>}
 
         {/* start: one photo */}
@@ -423,10 +445,15 @@ export default function Paint() {
         {mode === 'bag' && photo && (
           <>
             <BagScan file={photo} onResult={onScan} />
-            <PhotoButtons onFile={onBagPhoto} camera={t('pn.retake')} gallery={t('pn.gallery')} />
+            <div className="flex gap-2 text-xs">
+              <label className="btn-ghost flex flex-1 cursor-pointer items-center justify-center gap-1.5 !py-2"><Icon name="camera" size={16} />{t('pn.retake')}
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onBagPhoto(f); }} /></label>
+              <label className="btn-ghost flex flex-1 cursor-pointer items-center justify-center gap-1.5 !py-2"><Icon name="image" size={16} />{t('pn.gallery')}
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onBagPhoto(f); }} /></label>
+            </div>
 
             <section className="space-y-4 rounded-2xl border border-gold/40 bg-surface-card p-4" aria-live="polite">
-              <div className="text-xs font-semibold uppercase tracking-wider text-gold">{t('pn.result')}</div>
+              <div className="flex items-center gap-2 text-sm font-semibold"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold font-mono text-xs text-charcoal">1</span>{t('pn.result')}</div>
               {issues.length > 0 ? (
                 <div className="rounded-xl bg-counterfeit-bg px-3 py-2 text-sm">
                   <p className="font-semibold">{t('pn.spotBad')}</p>
@@ -483,7 +510,7 @@ export default function Paint() {
                     : <button type="button" className="btn-primary flex w-full items-center justify-center gap-2" disabled={adding} onClick={addTube}><Icon name="plus" size={18} />{adding ? '…' : t('pn.addToShop')}</button>
                 )}
                 {tErr && <Notice tone="bad">{tErr}</Notice>}
-                <AskAiButton label={t('pn.ask')} skill="paint" title={t('ws.paintTitle')} sub={t('tube.wsSub')}
+                <AiWorkspace skill="paint" title={t('pn.chatTitle')}
                   context={{ surface: leather, finish, tube: { brand: tube.brand, code: tube.code, name: tube.name, base: tube.base } }}
                   chips={['tube.q1', 'tube.q2', 'tube.q3'].map((k) => t(k))} />
                 <button type="button" className="btn-ghost w-full" onClick={() => { setTube(null); setAdded(false); }}>🧴 {t('tube.another')}</button>
