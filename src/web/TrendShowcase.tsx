@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from './i18n.tsx';
+import { MeContext } from './App.tsx';
+import { ADMIN_ROLES } from './studio.ts';
 import { COUNTRIES, Movement, modelImageUrl, monthLabel, priceText, type Country, type Overview, type TrendRow } from './Market.tsx';
 
 /** A model photo on a soft gold glow (cut-out photos float on it); the brand initial when there is no photo. */
@@ -26,6 +28,23 @@ export default function TrendShowcase({ market }: { market: Overview | null }) {
   const m = market?.countries.find((x) => x.country === cc);
   const rows = m?.rows ?? [];
   const [first, ...rest] = rows;
+  const me = useContext(MeContext);
+  const admin = !!me && ADMIN_ROLES.includes(me.role);
+  // nothing entered for any country: hide the block for vendors; show admins how to fill it
+  const empty = !!market && market.countries.every((x) => !x.rows.length);
+  if (empty && !admin) return null;
+  if (empty) {
+    return (
+      <Link to="/admin?tab=market" className="flex items-center gap-3 rounded-2xl border border-dashed border-gold/50 bg-surface-card p-3.5">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold/20 text-xl" aria-hidden>🔥</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">{t('tr.add')}</span>
+          <span className="block text-xs text-muted">{t('tr.emptyAdmin')}</span>
+        </span>
+        <span className="text-gold" aria-hidden>›</span>
+      </Link>
+    );
+  }
 
   return (
     <section aria-labelledby="trend-h" className="space-y-2">

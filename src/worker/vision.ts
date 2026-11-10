@@ -950,33 +950,65 @@ export const SURFACE_NAME: Record<string, string> = Object.fromEntries(LEATHERS.
 const steps = (v: unknown, n = 10) => (Array.isArray(v) ? v : []).map((x) => String(x ?? '').trim()).filter(Boolean).slice(0, n).map((x) => x.slice(0, 400));
 const parseObj = (text: string): any => { const a = text.indexOf('{'), b = text.lastIndexOf('}'); try { return a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { return null; } };
 
-export interface PaintMethod { prep: string[]; mix: string[]; apply: string[]; dry: string[]; avoid: string[]; tools: string[]; safety: string }
+export interface PaintPick { brand: string; code: string; name: string; parts: number; inShop: boolean; hex: string | null }
+export interface PaintMethod { paints: PaintPick[]; paintsFrom: 'recipe' | 'ai' | 'none'; paintsNote: string; prep: string[]; mix: string[]; apply: string[]; dry: string[]; avoid: string[]; tools: string[]; safety: string }
+export interface ShopPaint { brand: string; code: string | null; name: string; kind: string; base: string | null; hex: string | null }
+
+/** Same paint? brand + code (or brand + name when there is no code), ignoring case, spaces and "#". */
+const paintKey = (brand: string, code: string | null | undefined, name: string) =>
+  `${brand}|${code || name}`.toLowerCase().replace(/[\s#._-]+/g, '');
 
 /**
- * 🎨 Paint skill: how to prepare, mix and paint for ONE leather type (and finish), as a vendor's workshop checklist.
- * Mixing ratios come only from the shop's recipe when one is given — the AI never invents ratios; without a recipe it
- * gives mixing technique only. Shop knowledge (active paint skills) comes first. Never comments on authenticity, and
- * never explains how to add or change logos, serials or date codes.
+ * 🎨 Paint skill: for ONE colour, leather type and finish — which paints to mix (the shop recipe when there is one;
+ * otherwise a STARTING mix the AI suggests from the shop's own paints, or plain base colours, clearly labelled as a
+ * suggestion to test), then short workshop steps. Never names a product code the shop does not have.
  */
-export async function paintMethod(env: Env, x: { surface: string; finish: string; recipe: { name: string; parts: { brand: string; name: string; kind: string; parts: number }[] } | null; products: string[]; skills: string; lang: OutLang }): Promise<PaintMethod> {
+export async function paintMethod(env: Env, x: {
+  surface: string; finish: string; recipe: { name: string; parts: { brand: string; name: string; kind: string; parts: number; code?: string | null; hex?: string | null }[] } | null;
+  colour: { hex: string; lab: [number, number, number]; approx: boolean } | null; inventory: ShopPaint[]; skills: string; lang: OutLang;
+}): Promise<PaintMethod> {
+  const inv = x.inventory.slice(0, 80);
   const text = await callVision(env,
     'You are the paint-skill assistant of second-hand bag vendors who repaint and recolour bags for resale (Cambodia–Thailand border market). ' +
-    'Write a practical workshop checklist for the given leather type and finish: preparation (cleaning, deglazing / sanding only where right for that leather, masking, test on a hidden spot), ' +
-    'mixing, application (tool: sponge, brush, airbrush; thin coats; how many), drying times between coats and before use, finishing / sealing, and the mistakes that ruin this leather type. ' +
-    'Rules: use the shop knowledge first and do not contradict it. If a recipe is given, explain how to mix THAT recipe exactly (same products, same parts; measure by drops, ml or grams, stir, swatch test, adjust one drop at a time) — never change the ratio or invent another. ' +
-    'If no recipe is given, give mixing technique only, with NO ratios or product amounts, and say to scan the colour or ask the shop for a recipe. ' +
-    'Name products only from the list given; otherwise use generic product types. ' + NO_VERDICT + ' Never explain how to add, copy or alter logos, serial numbers or date codes. ' +
-    `Write in ${LANG_NAME[x.lang]}, short imperative lines (one action per line). ` +
-    'Reply with JSON only: {"prep":["…"],"mix":["…"],"apply":["…"],"dry":["…"],"avoid":["…"],"tools":["…"],"safety":"one short paragraph"}',
+    'Answer for the given bag colour, leather type and finish. ' +
+    'PAINTS: if a shop recipe is given, "paints" = exactly that recipe (same products, same parts). ' +
+    'Otherwise, if a colour is given, suggest a STARTING mix to reach it: prefer the shop\'s paints from the list (copy brand, code and name exactly as listed); ' +
+    'if the list lacks what is needed (or is empty), use plain base colours with brand "" and code "" (e.g. name "white", "black", "red", "yellow ochre", "blue"). ' +
+    'NEVER invent a brand product code that is not in the list. 1–4 paints, "parts" as small whole numbers. "paintsNote": one short line on how to adjust (e.g. "too dark → add white 1 drop at a time"). ' +
+    'If no colour and no recipe: "paints": []. ' +
+    'STEPS: practical and SHORT — at most 4 lines per list, each line under 15 words, one action per line: ' +
+    '"prep" (clean, deglaze/sand only if right for this leather, mask, test spot), "mix" (how to mix these paints: measure, stir, swatch test), ' +
+    '"apply" (tool, thin coats, how many), "dry" (times between coats / before use, sealing for the finish), "avoid" (max 4 mistakes), "tools" (max 6). ' +
+    'Use the shop knowledge first and do not contradict it. ' + NO_VERDICT + ' Never explain how to add, copy or alter logos, serial numbers or date codes. ' +
+    `Write every text in ${LANG_NAME[x.lang]} (product names and codes stay as written). ` +
+    'Reply with JSON only: {"paints":[{"brand":"","code":"","name":"","parts":1}],"paintsNote":"…","prep":["…"],"mix":["…"],"apply":["…"],"dry":["…"],"avoid":["…"],"tools":["…"],"safety":"one short line"}',
     [], [
+      `Bag colour: ${x.colour ? `${x.colour.hex} (CIELAB L ${x.colour.lab[0].toFixed(1)}, a ${x.colour.lab[1].toFixed(1)}, b ${x.colour.lab[2].toFixed(1)})${x.colour.approx ? ' — approximate (no white reference)' : ''}` : 'unknown'}`,
       `Leather type: ${SURFACE_NAME[x.surface] ?? x.surface}`,
       `Finish wanted: ${x.finish}`,
-      x.recipe ? `Recipe "${x.recipe.name}": ${x.recipe.parts.map((p) => `${p.parts} part(s) ${p.brand} ${p.name} (${p.kind})`).join(' + ')}` : 'Recipe: none',
-      `Products the shop has: ${x.products.slice(0, 40).join('; ') || '(none listed)'}`,
+      x.recipe ? `Shop recipe "${x.recipe.name}": ${x.recipe.parts.map((p) => `${p.parts} part(s) ${p.brand}${p.code ? ` ${p.code}` : ''} ${p.name} (${p.kind})`).join(' + ')}` : 'Shop recipe: none',
+      `Shop paints: ${inv.map((p) => `${p.brand}${p.code ? ` ${p.code}` : ''} ${p.name} (${p.kind}${p.base ? `, ${p.base}` : ''}${p.hex ? `, ${p.hex}` : ''})`).join('; ') || '(none yet)'}`,
       `Shop knowledge:\n${x.skills || '(none yet)'}`,
     ].join('\n'), 3000, 'medium');
   const o = parseObj(text);
-  const r = { prep: steps(o?.prep), mix: steps(o?.mix), apply: steps(o?.apply), dry: steps(o?.dry, 6), avoid: steps(o?.avoid, 8), tools: steps(o?.tools, 12), safety: String(o?.safety ?? '').trim().slice(0, 600) };
+  const byKey = new Map(inv.map((p) => [paintKey(p.brand, p.code, p.name), p]));
+  let paints: PaintPick[];
+  let from: PaintMethod['paintsFrom'];
+  if (x.recipe) {
+    from = 'recipe';
+    paints = x.recipe.parts.map((p) => ({ brand: p.brand, code: p.code ?? '', name: p.name, parts: p.parts, inShop: true, hex: p.hex ?? null }));
+  } else {
+    paints = (Array.isArray(o?.paints) ? o.paints : []).slice(0, 4).map((p: any) => {
+      const brand = String(p?.brand ?? '').trim().slice(0, 80), code = String(p?.code ?? '').trim().slice(0, 40), name = String(p?.name ?? '').trim().slice(0, 120);
+      const shop = brand ? byKey.get(paintKey(brand, code || null, name)) : undefined;
+      // a brand / code not in the shop list is dropped back to a plain colour name (no invented product codes)
+      return { brand: shop ? shop.brand : '', code: shop ? shop.code ?? '' : '', name: shop ? shop.name : name, parts: Math.max(1, Math.min(20, Math.round(Number(p?.parts) || 1))), inShop: !!shop, hex: shop?.hex ?? null };
+    }).filter((p: PaintPick) => p.name);
+    from = paints.length ? 'ai' : 'none';
+  }
+  const short = (v: unknown, n: number) => steps(v, n).map((l) => l.slice(0, 160));
+  const r: PaintMethod = { paints, paintsFrom: from, paintsNote: String(o?.paintsNote ?? '').trim().slice(0, 200),
+    prep: short(o?.prep, 4), mix: short(o?.mix, 4), apply: short(o?.apply, 4), dry: short(o?.dry, 4), avoid: short(o?.avoid, 4), tools: short(o?.tools, 6), safety: String(o?.safety ?? '').trim().slice(0, 300) };
   if (!r.prep.length && !r.apply.length) throw new Error('ai_empty');
   return r;
 }
