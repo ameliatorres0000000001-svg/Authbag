@@ -123,6 +123,10 @@ export function AiCheck() {
       {r?.provider === 'anthropic' && !r.gateway && r?.anthropicKey && r.anthropicKey.kind !== 'missing' && (r.anthropicKey.kind !== 'api_key' || claude.some((x) => /_401/.test(x.error ?? ''))) && (
         <div className="space-y-1 rounded-lg border border-counterfeit/40 bg-counterfeit-bg p-2.5 text-xs">
           <div className="font-semibold">🔑 {t(`ai.key.${r.anthropicKey.kind}`)}</div>
+          {r.anthropicKey.kind === 'other' && <>
+            <p>{t('ai.key.gw')}</p>
+            <pre className="overflow-x-auto rounded bg-charcoal p-2 text-[11px] text-white">npx wrangler secret put ANTHROPIC_BASE_URL</pre>
+          </>}
           <p className="text-muted">{t('ai.key.fix')}</p>
           <pre className="overflow-x-auto rounded bg-charcoal p-2 text-[11px] text-white">npx wrangler secret put ANTHROPIC_API_KEY</pre>
         </div>

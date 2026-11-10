@@ -499,6 +499,7 @@ const D: Record<string, { km: string; en: string }> = {
   'ai.key.oauth_token': { km: 'នេះជា OAuth token (sk-ant-oat…) របស់ Claude Code មិនមែន API key ទេ', en: 'This is a Claude Code OAuth token (sk-ant-oat…), not an API key' },
   'ai.key.admin_key': { km: 'នេះជា Admin key (sk-ant-admin…) — ត្រូវប្រើ API key ធម្មតា', en: 'This is an Admin key (sk-ant-admin…) — use a normal API key' },
   'ai.key.other': { km: 'Key មិនមែនជា Anthropic API key ទេ (គួរចាប់ផ្តើមដោយ sk-ant-api…)', en: 'This is not an Anthropic API key (it should start with sk-ant-api…)' },
+  'ai.key.gw': { km: 'បើ Key នេះទិញពីអ្នកលក់ (Gateway ដូចជា laalaa) ត្រូវដាក់អាសយដ្ឋាន Gateway ផង៖ វាយពាក្យបញ្ជាខាងក្រោម ហើយដាក់ https://api.laalaa.me (មិនបាច់ deploy)។', en: 'If this key was bought from a seller (a gateway such as laalaa), also set the gateway address: run the command below and enter https://api.laalaa.me (no deploy needed).' },
   'ai.key.fix': { km: 'បង្កើត Key ថ្មីនៅ platform.claude.com → API Keys (ត្រូវមាន Credit ក្នុង Billing) ហើយដាក់ម្តងទៀតដោយពាក្យបញ្ជាខាងក្រោម។ មិនបាច់ deploy ទេ។', en: 'Create a new key at platform.claude.com → API Keys (Billing needs credit) and set it again with the command below. No deploy needed.' },
   'ai.provider': { km: 'AI ដែលកំពុងប្រើ', en: 'AI in use' },
   'ai.prov.anthropic': { km: 'Claude (Anthropic ផ្ទាល់)', en: 'Claude (Anthropic direct)' },

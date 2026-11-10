@@ -52,3 +52,12 @@ test('OpenAI-compatible provider and the automatic backup chain', async () => {
   assert.equal(openaiBase(env({ OPENAI_BASE_URL: 'https://api.laalaa.me/v1/' })), 'https://api.laalaa.me/v1');
   assert.equal(openaiBase(env({ OPENAI_BASE_URL: 'http://evil.example/v1' })), 'https://api.openai.com/v1');
 });
+
+test('gateway address: https, a bare host is accepted, plain http is refused', async () => {
+  const { gatewayUrl } = await import('../src/worker/vision.ts');
+  const env = (o: Record<string, string>) => o as never;
+  assert.equal(gatewayUrl(env({})), null);
+  assert.equal(gatewayUrl(env({ ANTHROPIC_BASE_URL: 'https://api.laalaa.me/' })), 'https://api.laalaa.me');
+  assert.equal(gatewayUrl(env({ ANTHROPIC_BASE_URL: ' api.laalaa.me \n' })), 'https://api.laalaa.me');
+  assert.equal(gatewayUrl(env({ ANTHROPIC_BASE_URL: 'http://api.laalaa.me' })), null);
+});
