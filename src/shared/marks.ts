@@ -117,3 +117,56 @@ export function refineMarks<T extends Rect>(marks: T[], existing: Rect[] = [], m
   }
   return kept;
 }
+
+/** The AI's second look at one of its own boxes: is the named detail really there, and where exactly. */
+export interface MarkCheck { i: number; found: boolean; rect: Rect | null }
+
+/**
+ * Parse the second-look reply: [{"i":0,"found":true,"x","y","w","h"}]. `i` is the index of the box that was
+ * checked. Entries without a usable index are dropped; a missing or invalid box gives rect null. Never throws.
+ */
+export function parseMarkChecks(text: string): MarkCheck[] {
+  const m = text.match(/\[[\s\S]*\]/);
+  if (!m) return [];
+  let raw: unknown;
+  try { raw = JSON.parse(m[0]); } catch { return []; }
+  if (!Array.isArray(raw)) return [];
+  const out: MarkCheck[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== 'object') continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.i !== 'number' || !Number.isInteger(o.i) || o.i < 0 || typeof o.found !== 'boolean') continue;
+    if (out.some((c) => c.i === o.i)) continue;
+    const rect = [o.x, o.y, o.w, o.h].every((n) => typeof n === 'number')
+      ? rectFromDrag(o.x as number, o.y as number, (o.x as number) + (o.w as number), (o.y as number) + (o.h as number)) : null;
+    out.push({ i: o.i, found: o.found, rect });
+  }
+  return out;
+}
+
+/**
+ * Combine the first boxes with the second look, so a box the AI cannot place twice is not shown:
+ * - the second look says the detail is not there → the box is dropped;
+ * - both looks agree (overlap ≥ `agree`) → the middle of the two boxes;
+ * - they overlap only a little → the second box (it looked for that one detail only);
+ * - they do not overlap at all → dropped: the AI does not know where the detail is;
+ * - no second look for a box (or no box in it) → kept as it was.
+ * Text (label, note) is never changed. Order is kept.
+ */
+export function reconcileMarks<T extends Rect>(marks: T[], checks: MarkCheck[], agree = 0.3): T[] {
+  const byIndex = new Map(checks.map((c) => [c.i, c]));
+  const out: T[] = [];
+  marks.forEach((m, i) => {
+    const c = byIndex.get(i);
+    if (!c) { out.push(m); return; }
+    if (!c.found) return;
+    if (!c.rect) { out.push(m); return; }
+    const o = iou(m, c.rect);
+    if (o <= 0) return;
+    const r = o >= agree
+      ? { x: (m.x + c.rect.x) / 2, y: (m.y + c.rect.y) / 2, w: (m.w + c.rect.w) / 2, h: (m.h + c.rect.h) / 2 }
+      : c.rect;
+    out.push({ ...m, ...r });
+  });
+  return out;
+}

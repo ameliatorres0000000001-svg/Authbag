@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cropBox, iou, isValidRect, parseSuggestedMarks, rectFromDrag, refineMarks, MAX_AI_MARKS } from '../src/shared/marks.ts';
+import { cropBox, iou, isValidRect, parseMarkChecks, parseSuggestedMarks, reconcileMarks, rectFromDrag, refineMarks, MAX_AI_MARKS } from '../src/shared/marks.ts';
 
 test('drag in any direction gives the same clamped rectangle', () => {
   assert.deepEqual(rectFromDrag(0.6, 0.7, 0.2, 0.1), rectFromDrag(0.2, 0.1, 0.6, 0.7));
@@ -58,4 +58,30 @@ test('refineMarks drops near-whole-photo boxes and duplicates', () => {
   assert.deepEqual(refineMarks([a, b], [{ x: 0.6, y: 0.61, w: 0.2, h: 0.19 }]).map((m) => m.label), ['a']);
   assert.ok(Math.abs(iou(a, a) - 1) < 1e-9);
   assert.equal(iou(a, b), 0);
+});
+
+test('second look: a detail that is not found again is dropped', () => {
+  const marks = [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2, label: 'a' }, { x: 0.6, y: 0.6, w: 0.2, h: 0.2, label: 'b' }];
+  const out = reconcileMarks(marks, parseMarkChecks('[{"i":0,"found":false},{"i":1,"found":true,"x":0.6,"y":0.6,"w":0.2,"h":0.2}]'));
+  assert.deepEqual(out.map((m) => m.label), ['b']);
+});
+
+test('second look: agreeing boxes meet in the middle and keep their text', () => {
+  const [m] = reconcileMarks([{ x: 0.2, y: 0.2, w: 0.2, h: 0.2, label: 'Heat stamp', note: 'n' }], [{ i: 0, found: true, rect: { x: 0.24, y: 0.2, w: 0.2, h: 0.2 } }]);
+  assert.ok(Math.abs(m.x - 0.22) < 1e-9); assert.equal(m.label, 'Heat stamp'); assert.equal(m.note, 'n');
+});
+
+test('second look: a small overlap takes the second box, no overlap drops the mark', () => {
+  const first = { x: 0.1, y: 0.1, w: 0.3, h: 0.3, label: 'a' };
+  const near = { x: 0.3, y: 0.3, w: 0.1, h: 0.1 };
+  assert.ok(iou(first, near) > 0 && iou(first, near) < 0.3);
+  assert.deepEqual(reconcileMarks([first], [{ i: 0, found: true, rect: near }]), [{ ...first, ...near }]);
+  assert.deepEqual(reconcileMarks([first], [{ i: 0, found: true, rect: { x: 0.7, y: 0.7, w: 0.2, h: 0.2 } }]), []);
+});
+
+test('second look: a missing, broken or boxless check keeps the first mark', () => {
+  const marks = [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2, label: 'a' }];
+  assert.deepEqual(reconcileMarks(marks, parseMarkChecks('sorry')), marks);
+  assert.deepEqual(reconcileMarks(marks, parseMarkChecks('[{"i":0,"found":true}]')), marks);
+  assert.deepEqual(parseMarkChecks('[{"i":"0","found":true},{"i":1},{"i":2,"found":true,"x":0.1,"y":0.1,"w":0.001,"h":0.2}]'), [{ i: 2, found: true, rect: null }]);
 });
