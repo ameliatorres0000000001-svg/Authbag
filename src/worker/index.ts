@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, testAi, testWebSearch, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
 import { checkMeasurement, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2013,7 +2013,8 @@ app.get('/api/admin/ai/test', need(ADMINS), async (c) => {
     { key: 'leads', ok: web ? web.ok : null, path: '/admin?tab=leads' }, { key: 'market', ok: web ? web.ok : null, path: '/admin?tab=market' },
     { key: 'voice', ok: tts.ok, path: '/chat' },
   ];
-  return c.json({ configured: aiConfigured(c.env), results, untranslated: left, web, tts, parts });
+  return c.json({ configured: aiConfigured(c.env), results, untranslated: left, web, tts, parts, anthropicKey: anthropicKeyKind(c.env.ANTHROPIC_API_KEY),
+    provider: aiProvider(c.env), region: aiProvider(c.env) === 'bedrock' ? bedrockRegion(c.env) : null });
 });
 
 app.get('/api/admin/telegram/status', need(ADMINS), async (c) => {

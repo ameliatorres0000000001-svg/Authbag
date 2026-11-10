@@ -9,6 +9,15 @@ export interface Env {
   /** Optional override of Entrupy's API base (e.g. a sandbox host Entrupy gives you). Defaults to https://api.entrupy.com */
   ENTRUPY_API_BASE?: string;
   ANTHROPIC_API_KEY?: string;
+  /** Claude through Amazon Bedrock (Claude in Amazon Bedrock / bedrock-mantle): a Bedrock API key, or AWS access keys
+   *  for SigV4 (IAM permission bedrock-mantle:CreateInference); AWS_REGION is a var (default us-east-1). Secrets. */
+  BEDROCK_API_KEY?: string;
+  AWS_ACCESS_KEY_ID?: string;
+  AWS_SECRET_ACCESS_KEY?: string;
+  AWS_SESSION_TOKEN?: string;
+  AWS_REGION?: string;
+  /** Optional override of the AI provider: "anthropic", "bedrock" or "gemini" (otherwise chosen from the keys set). */
+  AI_PROVIDER?: string;
   GEMINI_API_KEY?: string;
   AI_MODEL?: string;
   /** Gemini model used for text translation when GEMINI_API_KEY is set (default gemini-3.8-flash) */

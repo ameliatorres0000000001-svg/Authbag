@@ -1,5 +1,6 @@
 import { LEATHERS } from '../shared/leathers.ts';
 import Anthropic from '@anthropic-ai/sdk';
+import { AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk';
 import type { Env } from './env.ts';
 import { recordUsage } from './usage.ts';
 import { MAX_AI_MARKS, parseBilingualMarks, parseSuggestedMarks, refineMarks, type Rect, type SuggestedMark } from '../shared/marks.ts';
@@ -17,17 +18,47 @@ function b64(buf: ArrayBuffer): string {
   return btoa(bin);
 }
 
-/** Default model per provider when the AI_MODEL var is left empty. */
-const DEFAULT_MODEL = { anthropic: 'claude-sonnet-5-5', gemini: 'gemini-3.8-flash' } as const;
+/** Default model per provider when the AI_MODEL var is left empty. Bedrock model ids carry the `anthropic.` prefix. */
+const DEFAULT_MODEL = { anthropic: 'claude-sonnet-5-5', bedrock: 'anthropic.claude-sonnet-5-5', gemini: 'gemini-3.8-flash' } as const;
+export type AiProvider = keyof typeof DEFAULT_MODEL;
 
-/** Provider: Anthropic (Claude) if ANTHROPIC_API_KEY is set, otherwise Gemini if GEMINI_API_KEY is set. */
-export const aiProvider = (env: Env): 'anthropic' | 'gemini' | null =>
-  env.ANTHROPIC_API_KEY ? 'anthropic' : env.GEMINI_API_KEY ? 'gemini' : null;
+/** Bedrock API keys: long-term ("ABSK…") or short-term ("bedrock-api-key-…"). */
+const BEDROCK_KEY = /^(ABSK|bedrock-api-key-)/;
+/** The Bedrock API key in use: BEDROCK_API_KEY, or a Bedrock key that was put into ANTHROPIC_API_KEY. */
+const bedrockKey = (env: Env): string => {
+  const b = cleanKey(env.BEDROCK_API_KEY);
+  if (b) return b;
+  const a = cleanKey(env.ANTHROPIC_API_KEY);
+  return BEDROCK_KEY.test(a) ? a : '';
+};
+const awsKeys = (env: Env) => (cleanKey(env.AWS_ACCESS_KEY_ID) && cleanKey(env.AWS_SECRET_ACCESS_KEY)
+  ? { awsAccessKey: cleanKey(env.AWS_ACCESS_KEY_ID), awsSecretAccessKey: cleanKey(env.AWS_SECRET_ACCESS_KEY), awsSessionToken: cleanKey(env.AWS_SESSION_TOKEN) || null } : null);
+export const bedrockRegion = (env: Env): string => env.AWS_REGION?.trim() || 'us-east-1';
 
-/** The model id actually used: AI_MODEL if set, else the provider's default. Recorded with every AI result. */
+/**
+ * Provider: AI_PROVIDER if set; else Claude direct for an Anthropic key (sk-ant-…); else Claude in Amazon Bedrock when
+ * Bedrock credentials are set (a Bedrock API key — also when it was put into ANTHROPIC_API_KEY — or AWS access keys);
+ * else Claude direct for any other ANTHROPIC_API_KEY (the admin check explains a 401); else Gemini.
+ */
+export const aiProvider = (env: Env): AiProvider | null => {
+  const forced = env.AI_PROVIDER?.trim().toLowerCase();
+  if (forced === 'anthropic' || forced === 'bedrock' || forced === 'gemini') return forced;
+  const a = cleanKey(env.ANTHROPIC_API_KEY);
+  if (a.startsWith('sk-ant-')) return 'anthropic';
+  if (bedrockKey(env) || awsKeys(env)) return 'bedrock';
+  if (a) return 'anthropic';
+  return cleanKey(env.GEMINI_API_KEY) ? 'gemini' : null;
+};
+/** Claude (direct or through Bedrock) — everything except Gemini; web search needs Claude direct (not on Bedrock). */
+const isClaude = (p: AiProvider | null): p is 'anthropic' | 'bedrock' => p === 'anthropic' || p === 'bedrock';
+
+/** The model id actually used: AI_MODEL if set (prefixed `anthropic.` on Bedrock), else the provider's default. */
 export const aiModel = (env: Env): string | null => {
   const p = aiProvider(env);
-  return p ? (env.AI_MODEL?.trim() || DEFAULT_MODEL[p]) : null;
+  if (!p) return null;
+  const m = env.AI_MODEL?.trim();
+  if (!m) return DEFAULT_MODEL[p];
+  return p === 'bedrock' && !m.startsWith('anthropic.') ? `anthropic.${m}` : m;
 };
 
 export const aiConfigured = (env: Env) => aiProvider(env) !== null;
@@ -38,12 +69,39 @@ export function gatewayUrl(env: Env): string | null {
   if (!u) return null;
   try { const p = new URL(u); return p.protocol === 'https:' ? p.origin + p.pathname.replace(/\/$/, '') : null; } catch { return null; }
 }
-const anthropicClient = (env: Env) => new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, ...(gatewayUrl(env) ? { baseURL: gatewayUrl(env)! } : {}) });
+/** A pasted secret often carries a line break, spaces, quotes or "Bearer " — Anthropic and Google then answer 401 / 400. */
+export const cleanKey = (v: string | undefined): string => (v ?? '').trim().replace(/^Bearer\s+/i, '').replace(/^['"]|['"]$/g, '').trim();
+
+/** What kind of Anthropic credential is stored (never the key itself), to explain a 401 in the admin check. */
+export function anthropicKeyKind(v: string | undefined): { kind: 'api_key' | 'oauth_token' | 'admin_key' | 'bedrock_key' | 'other' | 'missing'; changedByCleaning: boolean } {
+  const k = cleanKey(v);
+  const kind = !k ? 'missing' : k.startsWith('sk-ant-api') ? 'api_key' : k.startsWith('sk-ant-oat') ? 'oauth_token' : k.startsWith('sk-ant-admin') ? 'admin_key'
+    : BEDROCK_KEY.test(k) ? 'bedrock_key' : 'other';
+  return { kind, changedByCleaning: !!v && k !== v };
+}
+
+/**
+ * The Claude client: Anthropic directly, or Claude in Amazon Bedrock (bedrock-mantle endpoint, same Messages API) with
+ * the Bedrock API key or SigV4 from the AWS keys — credentials passed explicitly, since Workers have no AWS config files.
+ */
+const anthropicClient = (env: Env): Anthropic => {
+  if (aiProvider(env) === 'bedrock') {
+    const key = bedrockKey(env);
+    return new AnthropicBedrockMantle({
+      awsRegion: bedrockRegion(env),
+      ...(key ? { apiKey: key } : { apiKey: null, ...awsKeys(env) }),
+    }) as unknown as Anthropic;
+  }
+  return new Anthropic({ apiKey: cleanKey(env.ANTHROPIC_API_KEY), ...(gatewayUrl(env) ? { baseURL: gatewayUrl(env)! } : {}) });
+};
 
 /** Drawing teaching points is the hardest vision task: it uses the strongest Claude model unless AI_MODEL pins one. */
 const POINTS_MODEL = 'claude-opus-5-5';
-export const pointsModel = (env: Env): string | null =>
-  aiProvider(env) === 'anthropic' ? (env.AI_MODEL?.trim() || POINTS_MODEL) : aiModel(env);
+export const pointsModel = (env: Env): string | null => {
+  const p = aiProvider(env);
+  if (!isClaude(p) || env.AI_MODEL?.trim()) return aiModel(env);
+  return p === 'bedrock' ? `anthropic.${POINTS_MODEL}` : POINTS_MODEL;
+};
 
 type ImageMime = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 const toImageMime = (m: string): ImageMime => (['image/png', 'image/gif', 'image/webp'].includes(m) ? m as ImageMime : 'image/jpeg');
@@ -54,7 +112,7 @@ const toImageMime = (m: string): ImageMime => (['image/png', 'image/gif', 'image
  */
 export async function callVision(env: Env, system: string, images: VisionImage[], userText: string, maxTokens = 1500, effort: 'low' | 'medium' | 'high' = 'medium', modelOverride?: string): Promise<string> {
   const provider = aiProvider(env);
-  const model = provider === 'anthropic' && modelOverride ? modelOverride : aiModel(env);
+  const model = isClaude(provider) && modelOverride ? modelOverride : aiModel(env);
   if (!provider || !model) throw new Error('ai_not_configured');
   if (provider === 'gemini') return callGemini(env, model, system, images, userText);
   const client = anthropicClient(env);
@@ -104,7 +162,7 @@ export async function testAi(env: Env): Promise<{ name: string; model: string; o
     catch (e) { out.push({ name, model, ok: false, ms: Date.now() - t, error: String((e as Error).message).slice(0, 240) }); }
   };
   const ask = 'Reply with the single word: ok';
-  if (env.ANTHROPIC_API_KEY) {
+  if (isClaude(aiProvider(env))) {
     const client = anthropicClient(env);
     const call = (model: string) => async () => {
       try {
@@ -112,8 +170,9 @@ export async function testAi(env: Env): Promise<{ name: string; model: string; o
         return m.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
       } catch (e) { if (e instanceof Anthropic.APIError) throw new Error(`ai_http_${e.status ?? 0}: ${apiErrorText(e)}`); throw e; }
     };
-    const main = env.AI_MODEL?.trim() || DEFAULT_MODEL.anthropic;
-    const via = gatewayUrl(env) ? ` via ${new URL(gatewayUrl(env)!).host}` : '';
+    const main = aiModel(env)!;
+    const via = aiProvider(env) === 'bedrock' ? ` via Amazon Bedrock (${bedrockRegion(env)}, ${bedrockKey(env) ? 'API key' : 'AWS keys'})`
+      : gatewayUrl(env) ? ` via ${new URL(gatewayUrl(env)!).host}` : '';
     await run(`Claude${via} (explanations, translation, guides)`, main, call(main));
     const pm = pointsModel(env);
     if (pm && pm !== main) await run(`Claude${via} (drawing points)`, pm, call(pm));
@@ -143,7 +202,7 @@ export function langRule(lang: OutLang = 'km'): string {
 async function callGemini(env: Env, model: string, system: string, images: VisionImage[], userText: string): Promise<string> {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
-    headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
+    headers: { 'x-goog-api-key': cleanKey(env.GEMINI_API_KEY), 'content-type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [...images.map((i) => ({ inline_data: { mime_type: i.mime, data: b64(i.data) } })), { text: userText }] }],
@@ -384,7 +443,7 @@ export async function translatePoints(env: Env, items: { id: string; label: stri
     try { out = read(await callGemini(env, env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini, system, [], input)); }
     catch (e) { console.error('translate: gemini failed, falling back to claude:', (e as Error).message); }
   }
-  if (!Object.keys(out).length && env.ANTHROPIC_API_KEY) out = read(await callVision(env, system, [], input, 16000, 'low'));
+  if (!Object.keys(out).length && isClaude(aiProvider(env))) out = read(await callVision(env, system, [], input, 16000, 'low'));
   if (!Object.keys(out).length) throw new Error('ai_translate_failed');
   return out;
 }
@@ -415,7 +474,7 @@ export async function writeModelGuide(env: Env, ctx: { brand: string; model: str
     'Write it in English and in natural Khmer (not word for word); keep brand names, codes and stamped words exactly as written. ' +
     'Reply with JSON only: {"en":{"title":"How to look at <model>","intro":"one sentence","steps":["..."]},"km":{"title":"...","intro":"...","steps":["..."]}}';
   const input = JSON.stringify({ brand: ctx.brand, model: ctx.model, points: ctx.points.slice(0, 60) });
-  const text = env.GEMINI_API_KEY && !env.ANTHROPIC_API_KEY
+  const text = env.GEMINI_API_KEY && !isClaude(aiProvider(env))
     ? await callGemini(env, env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini, system, [], input)
     : await callVision(env, system, [], input, 3000, 'medium');
   const a = text.indexOf('{'), b = text.lastIndexOf('}');
@@ -508,7 +567,7 @@ async function runChat(env: Env, system: string, turns: ChatTurn[], maxTokens = 
   if (provider === 'gemini') {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
-      headers: { 'x-goog-api-key': env.GEMINI_API_KEY!, 'content-type': 'application/json' },
+      headers: { 'x-goog-api-key': cleanKey(env.GEMINI_API_KEY), 'content-type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: turns.map((t, i) => ({ role: t.role === 'assistant' ? 'model' : 'user', parts: [
@@ -992,7 +1051,7 @@ export async function readPaintTube(env: Env, image: VisionImage, x: { lang: Out
 /** Admin check: one tiny Claude web search (1 search) — used by the TikTok customer finder, market and paint research. */
 export async function testWebSearch(env: Env): Promise<{ ok: boolean; ms: number; error?: string }> {
   const t = Date.now();
-  if (aiProvider(env) !== 'anthropic') return { ok: false, ms: 0, error: 'needs ANTHROPIC_API_KEY' };
+  if (aiProvider(env) !== 'anthropic') return { ok: false, ms: 0, error: aiProvider(env) === 'bedrock' ? 'not available on Amazon Bedrock (web search needs an Anthropic API key)' : 'needs ANTHROPIC_API_KEY' };
   try {
     const r = await anthropicClient(env).beta.messages.create({
       model: aiModel(env)!, max_tokens: 2000, output_config: { effort: 'low' },

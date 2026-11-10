@@ -27,5 +27,8 @@
   //   ANTHROPIC_BASE_URL – optional https gateway in front of Claude (empty = api.anthropic.com); its key goes in ANTHROPIC_API_KEY
   //   AZURE_SPEECH_KEY  – Azure AI Speech key for Khmer voice (text-to-speech); region is the var above
   //   ENTRUPY_API_KEY   – only after Entrupy approves your business account
+  //   Claude through Amazon Bedrock (no web search there): BEDROCK_API_KEY (a Bedrock API key), or AWS_ACCESS_KEY_ID +
+  //   AWS_SECRET_ACCESS_KEY (+ AWS_SESSION_TOKEN) with IAM bedrock-mantle:CreateInference; region: AWS_REGION (default us-east-1);
+  //   models are anthropic.claude-sonnet-5-5 / anthropic.claude-opus-5-5. AI_PROVIDER (anthropic | bedrock | gemini) forces one.
   //   ANTHROPIC_API_KEY (Claude, default model claude-sonnet-5-5) or GEMINI_API_KEY (default gemini-3.8-flash); AI_MODEL var overrides the model – enables AI observation *suggestions* (never verdicts)
 }
