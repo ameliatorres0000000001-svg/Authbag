@@ -152,6 +152,24 @@ export function checkMeasurement(m: Measurement | null | undefined): Issue[] {
 /** The bag colour corrected for the light. Only call when checkMeasurement() returned no issues. */
 export const measuredLab = (m: Measurement): Lab => rgbToLab(m.sample.mean, m.white.mean);
 
+/**
+ * Quick colour without a white paper: the phone's own white balance is trusted, so the colour is only approximate
+ * (good for "which recipe is near", never "exact"). Same photo checks as above, minus everything about the paper.
+ */
+export interface QuickMeasurement { sample: PatchStats; blur: number; minSide: number; r: number }
+export type QuickIssue = 'low_resolution' | 'blurry' | 'sample_uneven' | 'sample_shiny' | 'sample_too_dark' | 'missing';
+export function checkQuick(m: QuickMeasurement | null | undefined): QuickIssue[] {
+  if (!m || !m.sample || m.sample.n < 20) return ['missing'];
+  const out: QuickIssue[] = [];
+  if (!(m.minSide >= GATES.minSide)) out.push('low_resolution');
+  if (!(m.blur >= GATES.blur)) out.push('blurry');
+  if (m.sample.sd > GATES.sampleMaxSd) out.push('sample_uneven');
+  if (m.sample.clipped > GATES.sampleMaxClip) out.push('sample_shiny');
+  if (rgbToLab(m.sample.mean)[0] < GATES.sampleMinL) out.push('sample_too_dark');
+  return out;
+}
+export const quickLab = (m: QuickMeasurement): Lab => rgbToLab(m.sample.mean);
+
 /** ΔE2000 bands: same colour, close (adjust slightly, test first), or no recipe (we do not guess). */
 export const MATCH = { exact: 3, close: 6 } as const;
 export const matchLevel = (dE: number): 'exact' | 'close' | 'none' => (dE <= MATCH.exact ? 'exact' : dE <= MATCH.close ? 'close' : 'none');

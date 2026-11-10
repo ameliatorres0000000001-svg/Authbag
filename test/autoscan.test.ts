@@ -49,3 +49,25 @@ test('a close-up where the bag fills the frame still gives the bag colour', () =
   assert.ok(s && s.white.x < w * 0.22, 'paper found');
   assert.ok(!(s.spot.x > w * 0.04 && s.spot.x < w * 0.22 && s.spot.y > h * 0.3 && s.spot.y < h * 0.7), 'colour not on the paper');
 });
+
+test('no paper: the bag colour is still found for the quick (approximate) colour', async () => {
+  const { autoColour } = await import('../src/shared/autoscan.ts');
+  const w = 800, h = 600;
+  const p = autoColour(photo(w, h, { paper: false, box: [0.3, 0.8, 0.25, 0.8] }), w, h, 12)!;
+  assert.ok(p && p.x > w * 0.3 && p.x < w * 0.8 && p.y > h * 0.25 && p.y < h * 0.8, `colour on the bag (got ${p?.x},${p?.y})`);
+});
+
+test('a bright lamp in the corner is not taken for the white paper', () => {
+  const w = 800, h = 600;
+  const d = photo(w, h, { paper: false, box: [0, 1, 0.1, 1] });
+  for (let y = 0; y < h * 0.05; y++) for (let x = Math.round(w * 0.95); x < w; x++) { const i = (y * w + x) * 4; d[i] = 240; d[i + 1] = 240; d[i + 2] = 236; }
+  assert.equal(autoSpots(d, w, h, 12), null);
+});
+
+test('quick colour checks: a sharp, even patch passes; a blurry photo does not', async () => {
+  const { checkQuick, quickLab } = await import('../src/shared/color.ts');
+  const sample = { mean: [120, 40, 50] as [number, number, number], sd: 4, clipped: 0, n: 400 };
+  assert.deepEqual(checkQuick({ sample, blur: 80, minSide: 900, r: 12 }), []);
+  assert.deepEqual(checkQuick({ sample, blur: 5, minSide: 900, r: 12 }), ['blurry']);
+  assert.ok(quickLab({ sample, blur: 80, minSide: 900, r: 12 })[1] > 20, 'red has a positive a*');
+});

@@ -17,6 +17,29 @@ const lumaOf = ([r, g, b]: [number, number, number]) => 0.2126 * r + 0.7152 * g 
 const tintOf = ([r, g, b]: [number, number, number]) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return mx > 0 ? (mx - mn) / mx : 1; };
 
 export function autoSpots(data: ArrayLike<number>, w: number, h: number, r: number): { white: Pt; spot: Pt } | null {
+  const cands = candidates(data, w, h, r);
+  // the paper: bright, neutral, even
+  let white: Cand | null = null, best = -Infinity;
+  for (const c of cands) {
+    if (c.luma < GATES.whiteMinLuma || c.tint > 0.2 || c.s.sd > GATES.whiteMaxSd * 0.8 || c.s.clipped > 0.1) continue;
+    if (c.x < w * 0.06 || c.x > w * 0.94 || c.y < h * 0.06 || c.y > h * 0.94) continue; // a lamp or window in a corner, not the paper
+    const score = c.luma - 4 * c.s.sd - 100 * c.tint;
+    if (score > best) { best = score; white = c; }
+  }
+  if (!white) return null;
+  const spot = colourSpot(cands, w, h, r, white);
+  return spot ? { white: { x: white.x, y: white.y }, spot } : null;
+}
+
+/**
+ * The bag colour alone (no paper): the most common even, not-shiny colour, weighted towards the middle of the photo,
+ * background colours that touch the edges skipped. Used for the quick (approximate) colour.
+ */
+export function autoColour(data: ArrayLike<number>, w: number, h: number, r: number): Pt | null {
+  return colourSpot(candidates(data, w, h, r), w, h, r, null);
+}
+
+function candidates(data: ArrayLike<number>, w: number, h: number, r: number): Cand[] {
   const step = Math.max(r, Math.round(Math.min(w, h) / 40));
   const cands: Cand[] = [];
   for (let y = r + 1; y < h - r - 1; y += step) {
@@ -26,24 +49,20 @@ export function autoSpots(data: ArrayLike<number>, w: number, h: number, r: numb
       cands.push({ x, y, s, luma: lumaOf(s.mean), tint: tintOf(s.mean) });
     }
   }
-  // the paper: bright, neutral, even
-  let white: Cand | null = null, best = -Infinity;
-  for (const c of cands) {
-    if (c.luma < GATES.whiteMinLuma || c.tint > 0.2 || c.s.sd > GATES.whiteMaxSd * 0.8 || c.s.clipped > 0.1) continue;
-    const score = c.luma - 4 * c.s.sd - 100 * c.tint;
-    if (score > best) { best = score; white = c; }
-  }
-  if (!white) return null;
+  return cands;
+}
+
+function colourSpot(cands: Cand[], w: number, h: number, r: number, white: Cand | null): Pt | null {
   const minDist = (GATES.minSpots + 1) * r;
   const cx = w / 2, cy = h / 2, half = Math.hypot(cx, cy);
   const buckets = new Map<string, { weight: number; edge: number; items: { c: Cand; d: number }[] }>();
   const ex = w * 0.1, ey = h * 0.1;
   for (const c of cands) {
-    if (Math.hypot(c.x - white.x, c.y - white.y) < minDist) continue;
+    if (white && Math.hypot(c.x - white.x, c.y - white.y) < minDist) continue;
     if (c.s.sd > GATES.sampleMaxSd * 0.8 || c.s.clipped > GATES.sampleMaxClip) continue;
-    const [L, a, b] = rgbToLab(c.s.mean, white.s.mean);
+    const [L, a, b] = white ? rgbToLab(c.s.mean, white.s.mean) : rgbToLab(c.s.mean);
     if (L < GATES.sampleMinL + 2) continue;
-    if (L > 85 && Math.hypot(a, b) < 8) continue; // more paper, not the bag
+    if (white && L > 85 && Math.hypot(a, b) < 8) continue; // more paper, not the bag
     const d = Math.hypot(c.x - cx, c.y - cy) / half; // 0 centre … 1 corner
     const key = `${Math.round(L / 8)}|${Math.round(a / 8)}|${Math.round(b / 8)}`;
     const k = buckets.get(key) ?? { weight: 0, edge: 0, items: [] };
@@ -61,5 +80,5 @@ export function autoSpots(data: ArrayLike<number>, w: number, h: number, r: numb
   for (const k of inner.length ? inner : all) if (!top || k.weight > top.weight) top = k;
   if (!top) return null;
   const pick = top.items.reduce((p, q) => (q.c.s.sd + 20 * q.d < p.c.s.sd + 20 * p.d ? q : p)).c;
-  return { white: { x: white.x, y: white.y }, spot: { x: pick.x, y: pick.y } };
+  return { x: pick.x, y: pick.y };
 }
