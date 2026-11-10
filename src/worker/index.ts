@@ -3221,6 +3221,10 @@ async function runLeadSearch(env: AppEnv['Bindings'], country: typeof LEAD_COUNT
 /** Every 10 minutes (cron): when automatic search is on, search the one country whose last search is oldest, at most weekly. */
 async function leadsBacklog(env: AppEnv['Bindings']) {
   if (aiProvider(env) !== 'anthropic' || (await settingStr(env, 'leads_auto')) === '0') return;
+  // the AI connection could not search the web last time: do not spend tokens every week on the same failure;
+  // a successful manual search (or a new deploy with a working key + a manual try) starts it again
+  const last = await env.DB.prepare('SELECT error FROM lead_runs ORDER BY started_at DESC LIMIT 1').first<{ error: string | null }>();
+  if (last?.error === 'no_web_results') return;
   // one search at a time
   if (await env.DB.prepare(`SELECT 1 FROM lead_runs WHERE finished_at IS NULL AND started_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes')`).first()) return;
   let pick: typeof LEAD_COUNTRIES[number] | null = null, oldest = '9999';
