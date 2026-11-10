@@ -217,7 +217,7 @@ export const MORE: Record<string, { vi: string; th: string; id: string }> = {
   'paint.autoNone': { vi: 'Không thấy giấy trắng — chạm vào giấy rồi chạm vào màu túi.', th: 'ไม่พบกระดาษขาว — แตะที่กระดาษ แล้วแตะที่สีกระเป๋า', id: 'Kertas putih tidak ditemukan — ketuk kertas, lalu warna tas.' },
   'paint.aiSees': { vi: 'AI thấy', th: 'AI เห็นว่า', id: 'AI melihat' },
   'paint.aiLooking': { vi: 'AI đang xem loại da…', th: 'AI กำลังดูชนิดหนัง…', id: 'AI sedang melihat jenis kulit…' },
-  'ws.placeholder': { vi: 'Gõ, hoặc chạm 🎤 để nói…', th: 'พิมพ์ หรือแตะ 🎤 เพื่อพูด…', id: 'Ketik, atau ketuk 🎤 untuk bicara…' },
+  'ws.placeholder': { vi: 'Tin nhắn…', th: 'ข้อความ…', id: 'Pesan…' },
   'ws.listening': { vi: 'Đang nghe… hãy nói', th: 'กำลังฟัง… พูดได้เลย', id: 'Mendengarkan… silakan bicara' },
   'ws.read': { vi: 'Đọc to', th: 'อ่านออกเสียง', id: 'Bacakan' },
   'ws.paintTitle': { vi: 'Bàn làm việc — hỏi AI khi màu lệch hoặc gặp sự cố', th: 'โต๊ะทำงาน — ถาม AI เมื่อสีไม่ตรงหรือมีปัญหา', id: 'Meja kerja — tanya AI saat warna tidak cocok atau ada masalah' },

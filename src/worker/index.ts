@@ -9,7 +9,7 @@ import {
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
 import { assessVerification, pointsModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
-import { checkMeasurement, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab } from '../shared/color.ts';
+import { checkMeasurement, checkQuick, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab, quickLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { removeBackground } from './cutout.ts';
@@ -2500,16 +2500,25 @@ app.get('/api/paint/recipes/:id/photo', async (c) => {
  * Match a measured bag colour against the published recipes. The measurement is checked again here with the
  * same rules as the phone; a bad photo gets the reasons and no colour at all. Beyond ΔE2000 6: no recipe.
  */
+/**
+ * Colour → nearest recipes. With a white paper (`measurement`) the colour is corrected for the light; without one
+ * (`quick`) the phone's white balance is trusted, so the colour is approximate: never "exact", always "test first".
+ */
 app.post('/api/paint/match', async (c) => {
-  const { measurement } = await parse(c, z.object({ measurement: measurementSchema }));
-  const issues = checkMeasurement(measurement);
+  const body = await parse(c, z.union([
+    z.object({ measurement: measurementSchema }),
+    z.object({ quick: z.object({ sample: patchSchema, blur: z.number(), minSide: z.number(), r: z.number() }) }),
+  ]));
+  const approx = 'quick' in body;
+  const issues = 'quick' in body ? checkQuick(body.quick) : checkMeasurement(body.measurement);
   if (issues.length) return c.json({ ok: false, issues }, 422);
-  const lab = measuredLab(measurement);
+  const lab = 'quick' in body ? quickLab(body.quick) : measuredLab(body.measurement);
   const ranked = (await paintRecipes(c.env, false))
     .map((r) => ({ recipe: r, dE: Math.round(deltaE2000(lab, [r.lab_l, r.lab_a, r.lab_b]) * 10) / 10 }))
     .sort((a, b) => a.dE - b.dE);
   const usable = ranked.filter((x) => matchLevel(x.dE) !== 'none').slice(0, 3);
-  return c.json({ ok: true, lab, hex: labToHex(lab), matches: usable.map((x) => ({ ...x, level: matchLevel(x.dE) })), nearest: ranked[0]?.dE ?? null });
+  return c.json({ ok: true, approx, lab, hex: labToHex(lab), nearest: ranked[0]?.dE ?? null,
+    matches: usable.map((x) => ({ ...x, level: approx ? 'close' as const : matchLevel(x.dE) })) });
 });
 
 /** Ask for a recipe for a colour that has none (signed-in users; the colour only, no photo). */
@@ -3185,6 +3194,8 @@ async function runLeadSearch(env: AppEnv['Bindings'], country: typeof LEAD_COUNT
     const known = (await env.DB.prepare('SELECT handle FROM leads WHERE country = ? ORDER BY created_at DESC LIMIT 150').bind(country).all<{ handle: string }>()).results.map((r) => r.handle);
     const offer = await settingStr(env, 'lead_offer');
     const r = await asFeature('lead_search', () => findTiktokSellers(env, { country, lang, known, topic, offer }));
+    // no web page at all: the AI connection did not run the web search (e.g. a gateway without it) — say so
+    if (!r.found.size) throw new Error('no_web_results');
     let added = 0, kept = 0;
     for (const x of r.rows) {
       const handle = handleFromInput(x.handle);
@@ -3228,7 +3239,7 @@ async function leadSummary(env: AppEnv['Bindings']) {
     (SELECT error FROM lead_runs r2 WHERE r2.country = r.country ORDER BY started_at DESC LIMIT 1) AS error,
     (SELECT finished_at IS NULL FROM lead_runs r2 WHERE r2.country = r.country ORDER BY started_at DESC LIMIT 1) AS running
     FROM lead_runs r GROUP BY country`).all<{ country: string; at: string; added: number; error: string | null; running: number }>()).results;
-  return { counts, runs, auto: (await settingStr(env, 'leads_auto')) !== '0', webSearch: aiProvider(env) === 'anthropic', everyDays: LEAD_EVERY_DAYS,
+  return { counts, runs, auto: (await settingStr(env, 'leads_auto')) !== '0', webSearch: aiProvider(env) === 'anthropic', gateway: gatewayUrl(env) ? new URL(gatewayUrl(env)!).host : null, everyDays: LEAD_EVERY_DAYS,
     offer: (await settingStr(env, 'lead_offer')) ?? '', shopName: (await settingStr(env, 'shop_name')) ?? '' };
 }
 
@@ -3275,6 +3286,7 @@ app.post('/api/admin/leads/search', need(ADMINS), async (c) => {
   if (await c.env.DB.prepare(`SELECT 1 FROM lead_runs WHERE finished_at IS NULL AND started_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 minutes')`).first()) return c.json({ error: 'search_running' }, 409);
   const r = await runLeadSearch(c.env, b.country, 'manual', reqLang(c), b.topic, new URL(c.req.url).origin);
   await audit(c.env, c.get('user').id, 'leads.search', 'leads', b.country);
+  if (r.error === 'no_web_results') return c.json({ error: 'no_web_results' }, 502);
   return r.error ? c.json({ error: 'ai_failed', detail: r.error }, 502) : c.json(r);
 });
 app.put('/api/admin/leads-settings', need(ADMINS), async (c) => {
