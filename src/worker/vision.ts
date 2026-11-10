@@ -86,8 +86,9 @@ export const aiConfigured = (env: Env) => aiProvider(env) !== null;
 
 /** The gateway in front of Claude, if one is set (ANTHROPIC_BASE_URL, https only); otherwise Anthropic directly. */
 export function gatewayUrl(env: Env): string | null {
-  const u = env.ANTHROPIC_BASE_URL?.trim();
+  let u = cleanKey(env.ANTHROPIC_BASE_URL);
   if (!u) return null;
+  if (!/^[a-z]+:\/\//i.test(u)) u = `https://${u}`; // "api.laalaa.me" typed without the scheme
   try { const p = new URL(u); return p.protocol === 'https:' ? p.origin + p.pathname.replace(/\/$/, '') : null; } catch { return null; }
 }
 /** A pasted secret often carries a line break, spaces, quotes or "Bearer " — Anthropic and Google then answer 401 / 400. */
@@ -113,7 +114,9 @@ const anthropicClient = (env: Env, p: AiProvider | null = aiProvider(env)): Anth
       ...(key ? { apiKey: key } : { apiKey: null, ...awsKeys(env) }),
     }) as unknown as Anthropic;
   }
-  return new Anthropic({ apiKey: cleanKey(env.ANTHROPIC_API_KEY), ...(gatewayUrl(env) ? { baseURL: gatewayUrl(env)! } : {}) });
+  const gw = gatewayUrl(env), key = cleanKey(env.ANTHROPIC_API_KEY);
+  // a gateway may read the key from either header (laalaa asks for "Authorization: Bearer"), so send both there
+  return new Anthropic({ apiKey: key, ...(gw ? { baseURL: gw, defaultHeaders: { authorization: `Bearer ${key}` } } : {}) });
 };
 
 /** Drawing teaching points is the hardest vision task: it uses the strongest Claude model unless AI_MODEL pins one. */
