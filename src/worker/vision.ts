@@ -7,6 +7,7 @@ import { MAX_AI_MARKS, parseBilingualMarks, parseMarkChecks, parseSuggestedMarks
 import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
 import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
 import { matchFoundUrls } from '../shared/urls.ts';
+import { catalogLine, catalogPaint } from '../shared/paintKnowledge.ts';
 
 export interface ObsDef { key: string; value_type: 'enum' | 'number' | 'boolean' | 'text'; enum_json: string | null; label_en: string }
 export interface Suggestion { key: string; value: string | number | boolean; confidence: number }
@@ -997,8 +998,9 @@ export async function paintMethod(env: Env, x: {
     'Answer for the given bag colour, leather type and finish. ' +
     'PAINTS: if a shop recipe is given, "paints" = exactly that recipe (same products, same parts). ' +
     'Otherwise, if a colour is given, suggest a STARTING mix to reach it: prefer the shop\'s paints from the list (copy brand, code and name exactly as listed); ' +
-    'if the list lacks what is needed (or is empty), use plain base colours with brand "" and code "" (e.g. name "white", "black", "red", "yellow ochre", "blue"). ' +
-    'NEVER invent a brand product code that is not in the list. 1–4 paints, "parts" as small whole numbers (drops), "hex": the paint colour as #rrggbb. ' +
+    'if the list lacks what is needed (or is empty), use paints from the reference catalogue below with brand "Sakura" and the exact code and name (the shop may still have to buy them); ' +
+    'only when neither has a suitable paint, use a plain base colour with brand "" and code "" (e.g. name "white", "black"). ' +
+    'NEVER write a product code that is in neither the shop list nor the reference catalogue. On aged leather, mute bright colours as the knowledge says. 1–4 paints, "parts" as small whole numbers (drops), "hex": the paint colour as #rrggbb. ' +
     '"paintsNote": one short line on how to adjust (e.g. "too dark → add white 1 drop at a time"). If no colour and no recipe: "paints": []. ' +
     'STEPS: the whole job in AT MOST 6 short lines, under 12 words each, in order (clean/prepare → mix → apply thin coats → dry/seal), right for this leather; ' +
     '"avoid": max 3 mistakes; "tools": max 5 items. ' +
@@ -1011,6 +1013,7 @@ export async function paintMethod(env: Env, x: {
       `Finish wanted: ${x.finish}`,
       x.recipe ? `Shop recipe "${x.recipe.name}": ${x.recipe.parts.map((p) => `${p.parts} part(s) ${p.brand}${p.code ? ` ${p.code}` : ''} ${p.name} (${p.kind})`).join(' + ')}` : 'Shop recipe: none',
       `Shop paints: ${inv.map((p) => `${p.brand}${p.code ? ` ${p.code}` : ''} ${p.name} (${p.kind}${p.base ? `, ${p.base}` : ''}${p.hex ? `, ${p.hex}` : ''})`).join('; ') || '(none yet)'}`,
+      `Reference catalogue (Sakura Acrylic Color, real codes): ${catalogLine()}`,
       `Shop knowledge:\n${x.skills || '(none yet)'}`,
     ].join('\n'), 3000, 'medium');
   const o = parseObj(text);
@@ -1024,9 +1027,12 @@ export async function paintMethod(env: Env, x: {
     paints = (Array.isArray(o?.paints) ? o.paints : []).slice(0, 4).map((p: any) => {
       const brand = String(p?.brand ?? '').trim().slice(0, 80), code = String(p?.code ?? '').trim().slice(0, 40), name = String(p?.name ?? '').trim().slice(0, 120);
       const shop = brand ? byKey.get(paintKey(brand, code || null, name)) : undefined;
-      // a brand / code not in the shop list is dropped back to a plain colour name (no invented product codes)
+      // a code is kept only for a paint in the shop list or in the reference catalogue (then with the catalogue's own name);
+      // anything else is dropped back to a plain colour name (no invented product codes)
+      const cat = shop ? null : catalogPaint(brand, code);
       const aiHex = /^#[0-9a-f]{6}$/i.test(String(p?.hex ?? '')) ? String(p.hex).toLowerCase() : null;
-      return { brand: shop ? shop.brand : '', code: shop ? shop.code ?? '' : '', name: shop ? shop.name : name, parts: Math.max(1, Math.min(20, Math.round(Number(p?.parts) || 1))), inShop: !!shop, hex: shop?.hex ?? aiHex };
+      return { brand: shop ? shop.brand : cat ? 'Sakura' : '', code: shop ? shop.code ?? '' : cat ? `#${cat.code}` : '', name: shop ? shop.name : cat ? cat.name : name,
+        parts: Math.max(1, Math.min(20, Math.round(Number(p?.parts) || 1))), inShop: !!shop, hex: shop?.hex ?? aiHex };
     }).filter((p: PaintPick) => p.name);
     from = paints.length ? 'ai' : 'none';
   }
