@@ -12,6 +12,7 @@ import StepPlayer from '../StepPlayer.tsx';
 import LeatherPicker, { StepList, type Leather } from '../LeatherPicker.tsx';
 import { MembershipNeeded, isMembershipError } from './Membership.tsx';
 import AiWorkspace from '../AiWorkspace.tsx';
+import { minutesIn } from '../../shared/stepMinutes.ts';
 
 export interface PaintPart { id: string; brand: string; name: string; kind: string; color_hex: string | null; parts: number; has_photo: boolean; updated_at: string }
 export interface PaintRecipe {
@@ -172,6 +173,7 @@ export default function Paint() {
   const [method, setMethod] = useState<Method | null>(null);
   const [mBusy, setMBusy] = useState(false);
   const [mErr, setMErr] = useState('');
+  const [follow, setFollow] = useState(false);
   const [member, setMember] = useState(false);
   const [guess, setGuess] = useState<LeatherGuess | null>(null);
   const [gBusy, setGBusy] = useState(false);
@@ -362,6 +364,19 @@ export default function Paint() {
         <section className="space-y-3 rounded-2xl border border-hairline bg-surface-card p-4">
           <div className="flex items-center gap-2 text-sm font-semibold"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold font-mono text-xs text-charcoal">3</span>{t('pn.how')}</div>
           <StepList title="" items={method.steps?.length ? method.steps : [...method.prep, ...method.mix, ...method.apply, ...method.dry].slice(0, 6)} />
+          {/* the same paints and steps, one big card at a time (with voice and drying timers); shop recipes have their own player above */}
+          {!(chosen && chosen.steps.length > 0) && (
+            <button type="button" onClick={() => setFollow(true)} className="btn-primary flex w-full items-center justify-center gap-2 !py-3 text-base">▶ {t('pn.follow')}</button>
+          )}
+          {follow && (
+            <StepPlayer onClose={() => setFollow(false)} recipe={{
+              id: 'method', name_km: guess?.colour || t('paint.yourColor'), name_en: null, surface: leather ?? 'other', finish, lab_l: 0, lab_a: 0, lab_b: 0,
+              hex: chosen?.hex ?? res?.hex ?? '#888888', method: null, status: 'published', has_photo: false, updated_at: '', mix_text: null, mix_audio: false,
+              parts: method.paints.map((p, i) => ({ id: String(i), brand: [p.brand, p.code].filter(Boolean).join(' '), name: p.name, kind: '', color_hex: p.hex, parts: p.parts, has_photo: false, updated_at: '' })),
+              steps: (method.steps?.length ? method.steps : [...method.prep, ...method.mix, ...method.apply, ...method.dry].slice(0, 6))
+                .map((text, i) => ({ id: `m${i}`, sort: i, text, icon: null, minutes: minutesIn(text), has_photo: false, audio: null, updated_at: '' })),
+            }} />
+          )}
           {(method.avoid.length > 0 || method.tools.length > 0 || method.safety) && (
             <details className="rounded-xl bg-surface-low px-3 py-2">
               <summary className="cursor-pointer text-xs text-muted">{t('pn.more')}</summary>

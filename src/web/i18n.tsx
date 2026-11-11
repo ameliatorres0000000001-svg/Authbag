@@ -460,6 +460,7 @@ const D: Record<string, { km: string; en: string }> = {
   'pn.aiMix': { km: 'AI ណែនាំជាការចាប់ផ្តើម — លាយបន្តិច សាកលើក្រដាស ឬកន្លែងលាក់មុន ហើយកែម្តងមួយតំណក់។', en: 'AI starting suggestion — mix a little, test on paper or a hidden spot first, and adjust one drop at a time.' },
   'pn.addPaints': { km: 'ស្កេនបំពង់ថ្នាំដែលអ្នកមាន → AI នឹងប្រាប់លេខកូដពិតពីថ្នាំរបស់អ្នក', en: 'Scan the paint tubes you own → the AI will name real codes from your paints' },
   'pn.how': { km: 'វិធីលាប', en: 'How to paint' },
+  'pn.follow': { km: 'ធ្វើតាមម្តងមួយជំហាន', en: 'Follow step by step' },
   'pn.more': { km: 'មើលបន្ថែម: កំហុសត្រូវចៀស · ឧបករណ៍ · សុវត្ថិភាព', en: 'More: mistakes to avoid · tools · safety' },
   'pn.ask': { km: 'សួរ AI', en: 'Ask AI' },
   'pn.addToShop': { km: 'បន្ថែមថ្នាំនេះទៅក្នុងហាង', en: 'Add this paint to the shop' },
