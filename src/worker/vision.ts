@@ -6,6 +6,7 @@ import { recordUsage } from './usage.ts';
 import { MAX_AI_MARKS, parseBilingualMarks, parseMarkChecks, parseSuggestedMarks, reconcileMarks, refineMarks, type Rect, type SuggestedMark } from '../shared/marks.ts';
 import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
 import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
+import { matchFoundUrls } from '../shared/urls.ts';
 
 export interface ObsDef { key: string; value_type: 'enum' | 'number' | 'boolean' | 'text'; enum_json: string | null; label_en: string }
 export interface Suggestion { key: string; value: string | number | boolean; confidence: number }
@@ -800,7 +801,8 @@ export async function identifyBag(env: Env, image: VisionImage, brands: { id: st
 }
 
 export interface MarketResearchRow { brand: string; model: string; reason: string; price_min: number | null; price_max: number | null; currency: string | null; sources: string[] }
-export interface MarketResearch { rows: MarketResearchRow[]; sources: { title: string; url: string }[]; model: string }
+/** `searched`: how many pages the web search returned (0 = no search happened, e.g. a gateway without web search); `proposed`: rows the AI wrote before the source check. */
+export interface MarketResearch { rows: MarketResearchRow[]; sources: { title: string; url: string }[]; model: string; searched: number; proposed: number }
 
 const COUNTRY_NAME: Record<string, { name: string; currency: string; places: string }> = {
   TH: { name: 'Thailand', currency: 'THB', places: 'Shopee TH, Lazada TH, Kaidee, Facebook Marketplace, TikTok Shop, Brand Off / 2nd Street / Komehyo Thailand, Thai resale news' },
@@ -857,7 +859,7 @@ export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY';
   const rows: MarketResearchRow[] = [];
   for (const r of Array.isArray(o.rows) ? o.rows : []) {
     // a row stays only if at least one of its links really came back from the search
-    const sources = (Array.isArray(r?.sources) ? r.sources : []).map((u: unknown) => String(u)).filter((u: string) => found.has(u)).slice(0, 4);
+    const sources = matchFoundUrls(Array.isArray(r?.sources) ? r.sources : [], found.keys(), 4);
     const brand = str(r?.brand, 80), name = str(r?.model, 120);
     if (!brand || !name || !sources.length) continue;
     let pmin = num(r?.price_min), pmax = num(r?.price_max);
@@ -867,7 +869,9 @@ export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY';
     if (rows.length >= 10) break;
   }
   const used = [...new Set(rows.flatMap((r) => r.sources))];
-  return { rows, sources: used.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model };
+  const proposed = Array.isArray(o.rows) ? o.rows.length : 0;
+  if (!rows.length) console.error(`market research: no rows kept (search results: ${found.size}, rows written: ${proposed})`);
+  return { rows, sources: used.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model, searched: found.size, proposed };
 }
 
 export interface LeadFound { handle: string; name: string | null; kind: 'live_seller' | 'reseller' | 'shop'; sells: string; why: string; fit: 1 | 2 | 3 | null; source_url: string; source_title: string }
