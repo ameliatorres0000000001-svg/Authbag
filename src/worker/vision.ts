@@ -1000,7 +1000,7 @@ export async function paintMethod(env: Env, x: {
     'Otherwise, if a colour is given, suggest a STARTING mix to reach it: prefer the shop\'s paints from the list (copy brand, code and name exactly as listed); ' +
     'if the list lacks what is needed (or is empty), use paints from the reference catalogue below with brand "Sakura" and the exact code and name (the shop may still have to buy them); ' +
     'only when neither has a suitable paint, use a plain base colour with brand "" and code "" (e.g. name "white", "black"). ' +
-    'NEVER write a product code that is in neither the shop list nor the reference catalogue. On aged leather, mute bright colours as the knowledge says. 1–4 paints, "parts" as small whole numbers (drops), "hex": the paint colour as #rrggbb. ' +
+    'NEVER write a product code that is in neither the shop list nor the reference catalogue. On aged leather, mute bright colours as the knowledge says; a blend of 3–4 paints usually matches better than 1–2, and the wet mix should be a touch lighter than the bag because it dries darker. 1–4 paints, "parts" as small whole numbers (drops), "hex": the paint colour as #rrggbb. ' +
     '"paintsNote": one short line on how to adjust (e.g. "too dark → add white 1 drop at a time"). If no colour and no recipe: "paints": []. ' +
     'STEPS: the whole job in AT MOST 6 short lines, under 12 words each, in order (clean/prepare → mix → apply thin coats → dry/seal), right for this leather; ' +
     '"avoid": max 3 mistakes; "tools": max 5 items. ' +

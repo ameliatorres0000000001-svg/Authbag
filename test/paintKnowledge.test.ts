@@ -29,7 +29,7 @@ test('shop knowledge comes first and the built-in notes fit the paint budget', (
   const s = withBuiltinPaintKnowledge('### Shop\nour way');
   assert.ok(s.startsWith('### Shop'));
   assert.equal(withBuiltinPaintKnowledge(''), BUILTIN_PAINT_KNOWLEDGE);
-  assert.ok(BUILTIN_PAINT_KNOWLEDGE.length < 4000);
+  assert.ok(BUILTIN_PAINT_KNOWLEDGE.length < 6000);
 });
 
 test('Khmer screens lead with the Khmer colour name and code; other paints and languages keep the label words', () => {

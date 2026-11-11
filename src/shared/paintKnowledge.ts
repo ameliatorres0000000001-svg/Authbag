@@ -90,7 +90,16 @@ Troubleshooting:
 - Bag LIGHTER or more FADED than the mixed paint: add #50 Titanium White a drop at a time to lighten; if the result looks too fresh or
   chalky, bring it back with a drop of #15 Yellow Ochre.
 - After every change: stir, paint a small swatch, let it DRY (acrylic dries a little darker), then compare next to the bag in daylight.
-  Change one paint at a time and say how many drops.`;
+  Change one paint at a time and say how many drops.
+
+### How this shop mixes (owner's working rules, built-in)
+- There is no fixed formula in bag painting. Every mix given is a STARTING POINT; the painter adjusts by eye on the real bag, and
+  should feel free to blend. Say so plainly, and never present a mix as exact or guaranteed.
+- Sakura acrylic dries a little DARKER than it looks wet. So aim the wet mix slightly LIGHTER than the bag: when the wet paint looks
+  exactly like the bag, it will dry too dark. Judge only a dry swatch.
+- A single paint almost never matches. Blending 3–4 paints gets to the bag's colour faster than fighting with 2: a main colour, an
+  earth colour to age it (#15 Yellow Ochre or #112 Burnt Sienna), and #50 Titanium White or a touch of #49 Carbon Black to set how
+  light or dark it is. Example for an aged red-brown: #19 Red + #112 Burnt Sienna + #15 Yellow Ochre + a little #50 Titanium White.`;
 
 /** Shop knowledge first, then the built-in notes. */
 export const withBuiltinPaintKnowledge = (shopSkills: string): string =>
