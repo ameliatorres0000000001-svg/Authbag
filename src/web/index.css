@@ -12,7 +12,7 @@
     --c-surface-high: 43 43 49;
     --c-charcoal: 5 5 6;
     --c-ink: 243 238 228;
-    --c-muted: 161 156 146;
+    --c-muted: 172 167 157;
     --c-hairline: 44 43 40;
     --c-strong: 74 70 63;
     --c-gold: 212 175 95;
@@ -36,7 +36,7 @@
     --c-surface-high: 233 232 229;
     --c-charcoal: 26 26 26;
     --c-ink: 26 26 26;
-    --c-muted: 110 107 100;
+    --c-muted: 98 95 88;
     --c-hairline: 229 224 216;
     --c-strong: 200 194 183;
     --c-gold: 180 138 58;
@@ -69,3 +69,18 @@
   .label { @apply mb-1 block font-mono text-[10px] uppercase tracking-widest text-muted; }
   .card { @apply rounded-2xl border border-hairline bg-gradient-to-b from-surface-card to-surface-canvas p-4; }
 }
+
+/*
+ * Khmer readability. The page's root size is 14px, so Tailwind's text-xs is 10.5px and text-sm 12.25px: fine for
+ * Latin, too small for Khmer (stacked vowels and subscripts). In Khmer only, small text gets a floor of 12px, body
+ * text 15px, and more line height so subscripts do not touch the next line. Latin locales are unchanged.
+ * Elements that set their own line height (leading-*) keep it.
+ */
+:lang(km) body { font-size: 15px; line-height: 1.7; }
+:lang(km) .btn, :lang(km) .btn-primary, :lang(km) .btn-ghost, :lang(km) .btn-danger, :lang(km) .input { font-size: 14px; }
+:lang(km) .text-sm { font-size: 14px; }
+:lang(km) .text-xs { font-size: 12.5px; }
+:lang(km) .text-\[9px\], :lang(km) .text-\[10px\], :lang(km) .text-\[11px\], :lang(km) .label { font-size: 12px; }
+:lang(km) .text-\[9px\]:not([class*='leading-']), :lang(km) .text-\[10px\]:not([class*='leading-']), :lang(km) .text-\[11px\]:not([class*='leading-']),
+:lang(km) .text-xs:not([class*='leading-']) { line-height: 1.55; }
+:lang(km) .text-sm:not([class*='leading-']) { line-height: 1.6; }
