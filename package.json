@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite build && wrangler dev",
     "build": "vite build",
-    "test": "node --experimental-strip-types --test test/engine.test.ts test/stages.test.ts test/marks.test.ts test/lens.test.ts test/datecode.test.ts test/appearance.test.ts test/uploadGuess.test.ts test/crop.test.ts test/styleCode.test.ts test/nfc.test.ts test/webpush.test.ts test/aiReview.test.ts test/color.test.ts test/voice.test.ts test/skills.test.ts test/leads.test.ts test/autoscan.test.ts test/leathers.test.ts test/keys.test.ts test/stepMinutes.test.ts test/paintKnowledge.test.ts test/urls.test.ts",
+    "test": "node --experimental-strip-types --test test/engine.test.ts test/stages.test.ts test/marks.test.ts test/lens.test.ts test/datecode.test.ts test/appearance.test.ts test/uploadGuess.test.ts test/crop.test.ts test/styleCode.test.ts test/nfc.test.ts test/webpush.test.ts test/aiReview.test.ts test/color.test.ts test/voice.test.ts test/skills.test.ts test/leads.test.ts test/autoscan.test.ts test/leathers.test.ts test/keys.test.ts test/stepMinutes.test.ts test/paintKnowledge.test.ts test/mixShares.test.ts test/urls.test.ts",
     "typecheck": "tsc --noEmit",
     "db:local": "wrangler d1 migrations apply hengz-authentic --local",
     "db:remote": "wrangler d1 migrations apply hengz-authentic --remote",
