@@ -13,6 +13,7 @@ import LeatherPicker, { StepList, type Leather } from '../LeatherPicker.tsx';
 import { MembershipNeeded, isMembershipError } from './Membership.tsx';
 import AiWorkspace from '../AiWorkspace.tsx';
 import { minutesIn } from '../../shared/stepMinutes.ts';
+import { paintLabel } from '../../shared/paintKnowledge.ts';
 
 export interface PaintPart { id: string; brand: string; name: string; kind: string; color_hex: string | null; parts: number; has_photo: boolean; updated_at: string }
 export interface PaintRecipe {
@@ -155,7 +156,7 @@ function PhotoButtons({ onFile, disabled, camera, gallery }: { onFile: (f: File)
  * method for that leather, and the workbench to ask anything. Other ways in: scan a paint tube, or pick a recipe.
  */
 export default function Paint() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const me = useContext(MeContext);
   const admin = !!me && ['owner', 'lead_authenticator'].includes(me.role);
   const [mode, setMode] = useState<Source | null>(null);
@@ -311,7 +312,7 @@ export default function Paint() {
             <span className="flex max-w-[84px] flex-wrap justify-center gap-0.5">
               {Array.from({ length: Math.min(p.parts, 8) }).map((_, k) => <span key={k} className="h-4 w-4 rounded-full border border-black/30 shadow-inner" style={{ background: p.hex ?? '#888' }} />)}
             </span>
-            <span className="max-w-[84px] truncate text-center text-[10px] leading-tight text-muted">{p.code || p.name}</span>
+            <span className="max-w-[96px] text-center text-[11px] font-semibold leading-snug">{paintLabel(p, locale).main}{paintLabel(p, locale).code && <span className="block font-mono text-gold">{paintLabel(p, locale).code}</span>}</span>
             <span className="font-mono text-xs font-bold text-gold">×{p.parts}</span>
           </span>
         </React.Fragment>
@@ -343,19 +344,14 @@ export default function Paint() {
                 <li key={i} className="flex items-center gap-3 rounded-xl bg-surface-low px-3 py-2">
                   <span className="h-7 w-7 shrink-0 rounded-full border border-hairline" style={{ background: p.hex ?? 'transparent' }} />
                   <span className="min-w-0 flex-1 text-sm">
-                    {p.brand && <b>{p.brand} </b>}{p.code && <span className="font-mono text-gold">{p.code} </span>}{p.name}
-                    <span className="block text-[11px] text-muted">{p.inShop ? `✓ ${t('pn.inShop')}` : p.code ? t('pn.notInShop') : t('pn.generic')}</span>
+                    <b>{paintLabel(p, locale).main}</b>{paintLabel(p, locale).code && <span className="font-mono text-gold"> {paintLabel(p, locale).code}</span>}
+                    <span className="block text-[11px] text-muted">{paintLabel(p, locale).sub && `${paintLabel(p, locale).sub} · `}{p.inShop ? `✓ ${t('pn.inShop')}` : p.code ? t('pn.notInShop') : t('pn.generic')}</span>
                   </span>
                   <span className="shrink-0 rounded-lg bg-charcoal px-2.5 py-1 font-mono text-sm text-gold">{p.parts} <span className="text-[10px] text-white/70">{t('pn.drops')}</span></span>
                 </li>
               ))}
             </ul>
             {method.paintsFrom === 'ai' && <p className="text-[11px] leading-relaxed text-review">✨ {t('pn.aiMix')}{method.paintsNote ? ` ${method.paintsNote}` : ''}</p>}
-            {products.length === 0 && admin && (
-              <button type="button" onClick={() => { restart(); setMode('tube'); }} className="flex w-full items-center gap-2 rounded-xl border border-dashed border-gold/50 px-3 py-2 text-left text-xs">
-                <Icon name="tube" size={18} className="text-gold" /><span className="flex-1">{t('pn.addPaints')}</span><span className="text-gold">›</span>
-              </button>
-            )}
           </>
         ) : <p className="text-sm text-muted">{t('pn.noPaints')}</p>)}
       </section>
@@ -372,7 +368,7 @@ export default function Paint() {
             <StepPlayer onClose={() => setFollow(false)} recipe={{
               id: 'method', name_km: guess?.colour || t('paint.yourColor'), name_en: null, surface: leather ?? 'other', finish, lab_l: 0, lab_a: 0, lab_b: 0,
               hex: chosen?.hex ?? res?.hex ?? '#888888', method: null, status: 'published', has_photo: false, updated_at: '', mix_text: null, mix_audio: false,
-              parts: method.paints.map((p, i) => ({ id: String(i), brand: [p.brand, p.code].filter(Boolean).join(' '), name: p.name, kind: '', color_hex: p.hex, parts: p.parts, has_photo: false, updated_at: '' })),
+              parts: method.paints.map((p, i) => ({ id: String(i), brand: paintLabel(p, locale).main, name: paintLabel(p, locale).code, kind: '', color_hex: p.hex, parts: p.parts, has_photo: false, updated_at: '' })),
               steps: (method.steps?.length ? method.steps : [...method.prep, ...method.mix, ...method.apply, ...method.dry].slice(0, 6))
                 .map((text, i) => ({ id: `m${i}`, sort: i, text, icon: null, minutes: minutesIn(text), has_photo: false, audio: null, updated_at: '' })),
             }} />
@@ -390,12 +386,14 @@ export default function Paint() {
         </section>
       )}
 
-      <section className="space-y-2">
-        <div className="flex items-center gap-2 px-1 text-sm font-semibold"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold font-mono text-xs text-charcoal">4</span>{t('pn.chatTitle')}</div>
-        <AiWorkspace skill="paint"
-          context={{ surface: leather, finish, recipeId: chosen?.id ?? null, lab: res?.lab ?? null, approxColour: res?.approx ?? null, guess, paints: method?.paints ?? null, steps: method?.steps ?? null }}
-          chips={['ws.pq1', 'ws.pq2', 'ws.pq3'].map((k) => t(k))} />
-      </section>
+      {/* the chat comes with the answer it is about: nothing to ask before the paints and steps are there */}
+      {method && (
+        <section className="space-y-2">
+          <div className="flex items-center gap-2 px-1 text-sm font-semibold"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold font-mono text-xs text-charcoal">4</span>{t('pn.chatTitle')}</div>
+          <AiWorkspace skill="paint"
+            context={{ surface: leather, finish, recipeId: chosen?.id ?? null, lab: res?.lab ?? null, approxColour: res?.approx ?? null, guess, paints: method?.paints ?? null, steps: method?.steps ?? null }} />
+        </section>
+      )}
     </>
   );
 
@@ -429,7 +427,7 @@ export default function Paint() {
 
             <div className="space-y-2">
               <div className="px-1 text-xs font-semibold text-muted">{t('pn.other')}</div>
-              {([['tube', 'tube', 'pw.tube', 'pw.tubeSub'], ['recipe', 'palette', 'pw.recipe', 'pw.recipeSub']] as const).map(([k, icon, title, sub]) => (
+              {([['recipe', 'palette', 'pw.recipe', 'pw.recipeSub']] as const).map(([k, icon, title, sub]) => (
                 <button key={k} type="button" onClick={() => { restart(); setMode(k); }}
                   className="flex w-full items-center gap-3 rounded-2xl border border-hairline bg-surface-card p-3.5 text-left hover:border-gold">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-low text-gold" aria-hidden><Icon name={icon} /></span>
