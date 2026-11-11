@@ -56,7 +56,7 @@ export function MixDiagram({ parts, hex }: { parts: { id: string; brand: string;
                 {half && <Spoon color={p.color_hex ?? '#999'} half />}
               </div>
               <span className="rounded-full bg-charcoal px-2.5 py-0.5 font-mono text-sm text-gold">× {p.parts}</span>
-              <span className="max-w-[120px] truncate text-center text-[11px]"><b>{p.brand}</b> {p.name}</span>
+              <span className="max-w-[130px] text-center text-sm leading-snug"><b>{p.brand}</b>{p.name && <span className={`block ${/^#/.test(p.name) ? 'font-mono text-gold' : ''}`}>{p.name}</span>}</span>
             </div>
           </React.Fragment>
         );

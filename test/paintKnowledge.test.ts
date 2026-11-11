@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BUILTIN_PAINT_KNOWLEDGE, SAKURA_ACRYLIC, catalogLine, catalogPaint, withBuiltinPaintKnowledge } from '../src/shared/paintKnowledge.ts';
+import { BUILTIN_PAINT_KNOWLEDGE, SAKURA_ACRYLIC, catalogLine, catalogPaint, paintLabel, withBuiltinPaintKnowledge } from '../src/shared/paintKnowledge.ts';
 
 test('catalogue lookup accepts the ways a code is written and nothing else', () => {
   for (const c of ['15', '#15', ' # 15 ', 'No.15']) assert.equal(catalogPaint('Sakura', c)?.name, 'Yellow Ochre');
@@ -30,4 +30,12 @@ test('shop knowledge comes first and the built-in notes fit the paint budget', (
   assert.ok(s.startsWith('### Shop'));
   assert.equal(withBuiltinPaintKnowledge(''), BUILTIN_PAINT_KNOWLEDGE);
   assert.ok(BUILTIN_PAINT_KNOWLEDGE.length < 4000);
+});
+
+test('Khmer screens lead with the Khmer colour name and code; other paints and languages keep the label words', () => {
+  assert.deepEqual(paintLabel({ brand: 'Sakura', code: '#15', name: 'Yellow Ochre' }, 'km'), { main: 'លឿងដី', code: '#15', sub: 'Sakura Yellow Ochre' });
+  assert.deepEqual(paintLabel({ brand: 'Sakura', code: '#15', name: 'Yellow Ochre' }, 'en'), { main: 'Sakura Yellow Ochre', code: '#15', sub: '' });
+  assert.deepEqual(paintLabel({ brand: 'Angelus', code: '001', name: 'Black' }, 'km'), { main: 'Angelus Black', code: '001', sub: '' });
+  assert.deepEqual(paintLabel({ brand: '', code: '', name: 'white' }, 'km'), { main: 'white', code: '', sub: '' });
+  for (const p of SAKURA_ACRYLIC) assert.ok(p.km.trim(), p.code);
 });

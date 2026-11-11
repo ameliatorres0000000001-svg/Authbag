@@ -2,7 +2,7 @@
 // (the paints the owner works with) and the owner's own restoration notes (2026-11). Shop knowledge written in
 // the admin "AI skills" tab and the shop's own paint list always come first; this only fills the gaps.
 
-export interface CatalogPaint { code: string; name: string; opacity: 'opaque' | 'transparent' | null }
+export interface CatalogPaint { code: string; name: string; /** everyday Khmer colour name, as the owner calls it */ km: string; opacity: 'opaque' | 'transparent' | null }
 
 /**
  * Sakura Acrylic Color codes, checked against Sakura's product list (sakuracraypas.com/products/505) and the
@@ -10,24 +10,24 @@ export interface CatalogPaint { code: string; name: string; opacity: 'opaque' | 
  * Note: #36 is Cobalt Blue (the tube says so); Ultramarine Blue is #38. Silver is #53.
  */
 export const SAKURA_ACRYLIC: CatalogPaint[] = [
-  { code: '50', name: 'Titanium White', opacity: 'opaque' },
-  { code: '3', name: 'Yellow', opacity: 'opaque' },
-  { code: '7', name: 'Pale Orange', opacity: 'opaque' },
-  { code: '15', name: 'Yellow Ochre', opacity: 'opaque' },
-  { code: '112', name: 'Burnt Sienna', opacity: 'opaque' },
-  { code: '18', name: 'Vermilion', opacity: 'transparent' },
-  { code: '19', name: 'Red', opacity: 'opaque' },
-  { code: '20', name: 'Pink', opacity: 'opaque' },
-  { code: '23', name: 'Violet', opacity: 'transparent' },
-  { code: '25', name: 'Cerulean Blue', opacity: 'opaque' },
-  { code: '36', name: 'Cobalt Blue', opacity: 'opaque' },
-  { code: '38', name: 'Ultramarine Blue', opacity: 'transparent' },
-  { code: '143', name: 'Phthalo Blue', opacity: 'transparent' },
-  { code: '27', name: 'Yellow Green', opacity: 'transparent' },
-  { code: '131', name: 'Phthalo Green', opacity: 'transparent' },
-  { code: '49', name: 'Carbon Black', opacity: 'opaque' },
-  { code: '51', name: 'Gold', opacity: null },
-  { code: '53', name: 'Silver', opacity: null },
+  { code: '50', name: 'Titanium White', km: 'ស', opacity: 'opaque' },
+  { code: '3', name: 'Yellow', km: 'លឿង', opacity: 'opaque' },
+  { code: '7', name: 'Pale Orange', km: 'ទឹកក្រូចខ្ចី (សាច់)', opacity: 'opaque' },
+  { code: '15', name: 'Yellow Ochre', km: 'លឿងដី', opacity: 'opaque' },
+  { code: '112', name: 'Burnt Sienna', km: 'ត្នោត', opacity: 'opaque' },
+  { code: '18', name: 'Vermilion', km: 'ក្រហមទឹកក្រូច', opacity: 'transparent' },
+  { code: '19', name: 'Red', km: 'ក្រហម', opacity: 'opaque' },
+  { code: '20', name: 'Pink', km: 'ផ្កាឈូក', opacity: 'opaque' },
+  { code: '23', name: 'Violet', km: 'ស្វាយ', opacity: 'transparent' },
+  { code: '25', name: 'Cerulean Blue', km: 'ខៀវមេឃ', opacity: 'opaque' },
+  { code: '36', name: 'Cobalt Blue', km: 'ខៀវ', opacity: 'opaque' },
+  { code: '38', name: 'Ultramarine Blue', km: 'ខៀវចាស់', opacity: 'transparent' },
+  { code: '143', name: 'Phthalo Blue', km: 'ខៀវស្រងាត់', opacity: 'transparent' },
+  { code: '27', name: 'Yellow Green', km: 'បៃតងខ្ចី', opacity: 'transparent' },
+  { code: '131', name: 'Phthalo Green', km: 'បៃតងចាស់', opacity: 'transparent' },
+  { code: '49', name: 'Carbon Black', km: 'ខ្មៅ', opacity: 'opaque' },
+  { code: '51', name: 'Gold', km: 'មាស', opacity: null },
+  { code: '53', name: 'Silver', km: 'ប្រាក់', opacity: null },
 ];
 
 const bare = (code: string) => String(code ?? '').replace(/[\s#.]+/g, '').replace(/^no/i, '');
@@ -37,6 +37,16 @@ export function catalogPaint(brand: string, code: string): CatalogPaint | null {
   if (!/^sakura\b/i.test(String(brand ?? '').trim())) return null;
   const c = bare(code);
   return c ? SAKURA_ACRYLIC.find((p) => p.code === c) ?? null : null;
+}
+
+/**
+ * How a paint is written on screen. In Khmer, a catalogue paint leads with its Khmer colour name and code
+ * ("លឿងដី #15") and keeps the label's own words small ("Sakura Yellow Ochre"); otherwise brand, code and name as given.
+ */
+export function paintLabel(p: { brand: string; code?: string | null; name: string }, locale: string): { main: string; code: string; sub: string } {
+  const cat = catalogPaint(p.brand, p.code ?? '');
+  if (cat && locale === 'km') return { main: cat.km, code: `#${cat.code}`, sub: `Sakura ${cat.name}` };
+  return { main: [p.brand, p.name].filter(Boolean).join(' '), code: p.code ?? '', sub: '' };
 }
 
 /** One line for the prompt: "#50 Titanium White (opaque); #3 Yellow (opaque); …". */
