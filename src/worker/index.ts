@@ -3341,7 +3341,7 @@ app.post('/api/skills/paint', async (c) => {
   // same leather / finish / recipe (or colour, rounded) / paints in the shop → same answer for 30 days
   const colourKey = recipe ? `${recipe.id}@${recipe.updated_at}` : b.colour ? `${b.colour.lab.map((v) => Math.round(v / 3)).join(',')}${b.colour.approx ? '~' : ''}` : '-';
   const invKey = (await sha256Hex(inventory.map((p) => `${p.brand}${p.code}${p.name}`).join('|'))).slice(0, 8);
-  const key = `paint4:${b.surface}:${b.finish}:${colourKey}:${invKey}:${lang}`;
+  const key = `paint5:${b.surface}:${b.finish}:${colourKey}:${invKey}:${lang}`;
   const hit = await c.env.DB.prepare(`SELECT value FROM skill_cache WHERE key = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')`).bind(key).first<{ value: string }>();
   if (hit) return c.json({ ...JSON.parse(hit.value), cached: true });
   const quota = await takeDaily(c.env, me.id, 'paint', 30);
