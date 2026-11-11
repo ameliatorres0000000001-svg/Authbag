@@ -79,7 +79,18 @@ Troubleshooting:
   orange = #3 ×2 + #19 ×1; green = #3 ×1 + blue ×1; purple = #19 ×1 + blue ×1; pink = #50 ×3 + #19 ×1; sky blue = #50 ×4 + blue ×1;
   grey = #50 ×4 + #49 ×1; flesh = #50 + #7 + a tiny drop of #19; brown = #19 + #3 + a little #49 (or use #112).
 - When matching an old or faded colour, give: the exact codes, the ratio, "add #15 or #112 drop by drop until it matches",
-  and "test on a hidden spot (inside rim or bottom) before the outside".`;
+  and "test on a hidden spot (inside rim or bottom) before the outside".
+
+### Reading the bag and correcting a mix that does not match (built-in)
+- Describe the bag's colour as it is on old leather (aged red, faded brown, vintage yellow), and whether it is darker, lighter or more
+  faded than the plain paint colour; note the surface (glossy, matte, textured). The measured colour given with the job is the reference:
+  never replace it with a guess from the photo.
+- Bag DARKER than the mixed paint: add #112 Burnt Sienna a drop at a time (a natural aged darkening). Only if it must go much darker,
+  add #49 Carbon Black in the tiniest amount (the tip of a toothpick): black takes over quickly.
+- Bag LIGHTER or more FADED than the mixed paint: add #50 Titanium White a drop at a time to lighten; if the result looks too fresh or
+  chalky, bring it back with a drop of #15 Yellow Ochre.
+- After every change: stir, paint a small swatch, let it DRY (acrylic dries a little darker), then compare next to the bag in daylight.
+  Change one paint at a time and say how many drops.`;
 
 /** Shop knowledge first, then the built-in notes. */
 export const withBuiltinPaintKnowledge = (shopSkills: string): string =>
