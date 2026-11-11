@@ -771,6 +771,8 @@ const D: Record<string, { km: string; en: string }> = {
   'madm.askAi': { km: '🔎 ឲ្យ AI ស្វែងរកទីផ្សារខែនេះ', en: '🔎 Ask AI to research this month' },
   'madm.aiCheck': { km: 'AI បានបំពេញតារាងខាងលើ — សូមបើក link ពិនិត្យ កែ ឬលុបបន្ទាត់ ហើយចុច "រក្សាទុកខែនេះ"។ គ្មានអ្វីផ្សាយទេ រហូតដល់អ្នករក្សាទុក។', en: 'The AI filled the form above — open the links, edit or delete lines, then press "Save this month". Nothing is published until you save.' },
   'madm.aiNothing': { km: 'AI រកមិនឃើញទិន្នន័យដែលមានប្រភពច្បាស់សម្រាប់ប្រទេស និងខែនេះ។', en: 'The AI found no well-sourced data for this country and month.' },
+  'madm.aiNoSearch': { km: 'AI មិនបានស្វែងរក internet ទេ (key ឬ gateway របស់ Claude ដែលកំពុងប្រើ មិនបើក web search)។ សូមវាយតារាងដោយដៃ ឬប្តូរ key។', en: 'The AI did not search the web (the Claude key or gateway in use has no web search). Type the ranking by hand, or change the key.' },
+  'madm.aiNoLinks': { km: 'AI បានស្វែងរក ប៉ុន្តែគ្មានម៉ូដែលណាមាន link ដែលការស្វែងរកពិតជាបានរកឃើញ ដូច្នេះមិនបង្ហាញទេ។ សូមសាកម្តងទៀត ឬវាយដោយដៃ។', en: 'The AI searched, but no model came with a link the search really returned, so nothing is shown. Try again, or type it by hand.' },
   'madm.aiSource': { km: 'AI ស្រាវជ្រាវលើ web (ពិនិត្យដោយក្រុមការងារ)', en: 'AI web research (checked by our team)' },
   'install.dataNote': { km: 'ទិន្នន័យទីផ្សារ (មានប្រភព) — មិនមែនការផ្ទៀងផ្ទាត់កាបូបទេ', en: 'Market data (with sources) — not a bag verification' },
   'home.checkSub': { km: 'ថតកាបូប → AI ស្គាល់ម៉ាក និងប្រៀបធៀបមួយចំណុចៗ', en: 'Photograph a bag → the AI recognises and compares it point by point' },

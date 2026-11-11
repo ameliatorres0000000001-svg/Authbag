@@ -55,9 +55,9 @@ export default function MarketAdmin() {
   const askAi = async () => {
     setMsg(null); setResearch(null); setResearching(true);
     try {
-      const r = await api.post<{ draft: { rows: { brand: string; model: string; reason: string; price_min: number | null; price_max: number | null; currency: string | null; sources: string[] }[]; sources: { title: string; url: string }[] } }>('/api/admin/market/research', { country, period });
+      const r = await api.post<{ draft: { rows: { brand: string; model: string; reason: string; price_min: number | null; price_max: number | null; currency: string | null; sources: string[] }[]; sources: { title: string; url: string }[]; searched?: number; proposed?: number } }>('/api/admin/market/research', { country, period });
       const d = r.draft;
-      if (!d.rows.length) { setMsg({ tone: 'bad', text: t('madm.aiNothing') }); return; }
+      if (!d.rows.length) { setMsg({ tone: 'bad', text: t(d.searched === 0 ? 'madm.aiNoSearch' : d.proposed ? 'madm.aiNoLinks' : 'madm.aiNothing') }); return; }
       setLines(d.rows.map((x) => [x.brand, x.model, x.price_min ?? '', x.price_max ?? '', '', x.reason.replace(/\|/g, '/')].join(' | ')).join('\n'));
       const cur = d.rows.find((x) => x.currency)?.currency; if (cur) setCurrency(cur);
       const hosts = [...new Set(d.sources.map((x) => { try { return new URL(x.url).hostname.replace(/^www\./, ''); } catch { return ''; } }).filter(Boolean))];
