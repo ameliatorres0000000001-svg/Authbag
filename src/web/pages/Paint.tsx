@@ -419,10 +419,14 @@ export default function Paint() {
                   <li key={k} className="rounded-xl bg-surface-low px-1.5 py-2"><span className="mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-gold/20 font-mono text-[11px] font-bold text-gold">{i + 1}</span>{t(k)}</li>
                 ))}
               </ol>
-              <details className="rounded-xl bg-surface-low px-3 py-2 text-xs">
-                <summary className="cursor-pointer font-semibold">💡 {t('pn.paperQ')}</summary>
-                <p className="mt-1.5 leading-relaxed text-muted">{t('pn.paperA')}</p>
-              </details>
+              {/* the white sheet is found by itself (autoSpots); say so up front instead of hiding it in a tip */}
+              <div className="rounded-xl border border-gold/30 bg-surface-low px-3 py-2 text-xs leading-relaxed">
+                <p className="font-semibold">📄 {t('pn.whiteAuto')}</p>
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-muted">{t('pn.whiteWhy')}</summary>
+                  <p className="mt-1 text-muted">{t('pn.paperA')}</p>
+                </details>
+              </div>
             </section>
 
             <div className="space-y-2">
