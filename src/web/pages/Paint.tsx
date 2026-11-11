@@ -344,7 +344,7 @@ export default function Paint() {
                   <span className="h-7 w-7 shrink-0 rounded-full border border-hairline" style={{ background: p.hex ?? 'transparent' }} />
                   <span className="min-w-0 flex-1 text-sm">
                     {p.brand && <b>{p.brand} </b>}{p.code && <span className="font-mono text-gold">{p.code} </span>}{p.name}
-                    <span className="block text-[11px] text-muted">{p.inShop ? `✓ ${t('pn.inShop')}` : t('pn.generic')}</span>
+                    <span className="block text-[11px] text-muted">{p.inShop ? `✓ ${t('pn.inShop')}` : p.code ? t('pn.notInShop') : t('pn.generic')}</span>
                   </span>
                   <span className="shrink-0 rounded-lg bg-charcoal px-2.5 py-1 font-mono text-sm text-gold">{p.parts} <span className="text-[10px] text-white/70">{t('pn.drops')}</span></span>
                 </li>

@@ -456,6 +456,7 @@ const D: Record<string, { km: string; en: string }> = {
   'pn.tryAgain': { km: 'សាកម្តងទៀត', en: 'Try again' },
   'pn.inShop': { km: 'មានក្នុងហាង', en: 'in the shop' },
   'pn.generic': { km: 'ពណ៌មូលដ្ឋាន (ម៉ាកណាក៏បាន)', en: 'base colour (any brand)' },
+  'pn.notInShop': { km: 'មិនទាន់មានក្នុងបញ្ជីថ្នាំហាង', en: 'not in the shop\'s paint list yet' },
   'pn.noPaints': { km: 'AI មិនទាន់អាចណែនាំថ្នាំបាន — សួរ AI ខាងក្រោម។', en: 'The AI could not suggest paints — ask the AI below.' },
   'pn.aiMix': { km: 'AI ណែនាំជាការចាប់ផ្តើម — លាយបន្តិច សាកលើក្រដាស ឬកន្លែងលាក់មុន ហើយកែម្តងមួយតំណក់។', en: 'AI starting suggestion — mix a little, test on paper or a hidden spot first, and adjust one drop at a time.' },
   'pn.addPaints': { km: 'ស្កេនបំពង់ថ្នាំដែលអ្នកមាន → AI នឹងប្រាប់លេខកូដពិតពីថ្នាំរបស់អ្នក', en: 'Scan the paint tubes you own → the AI will name real codes from your paints' },

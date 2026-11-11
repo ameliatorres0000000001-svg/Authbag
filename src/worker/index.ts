@@ -15,6 +15,7 @@ import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
 import { removeBackground } from './cutout.ts';
 import { sniffAudio, synthesize, ttsConfigured, ttsHash } from './tts.ts';
 import { chooseSkills, type SkillRow, type SkillUse } from '../shared/skills.ts';
+import { withBuiltinPaintKnowledge } from '../shared/paintKnowledge.ts';
 import { asFeature } from './usage.ts';
 import { LEATHERS, LEATHER_KEYS, isLeather } from '../shared/leathers.ts';
 import { evidenceFor, handleFromInput, profileUrl } from '../shared/leads.ts';
@@ -3340,13 +3341,13 @@ app.post('/api/skills/paint', async (c) => {
   // same leather / finish / recipe (or colour, rounded) / paints in the shop → same answer for 30 days
   const colourKey = recipe ? `${recipe.id}@${recipe.updated_at}` : b.colour ? `${b.colour.lab.map((v) => Math.round(v / 3)).join(',')}${b.colour.approx ? '~' : ''}` : '-';
   const invKey = (await sha256Hex(inventory.map((p) => `${p.brand}${p.code}${p.name}`).join('|'))).slice(0, 8);
-  const key = `paint3:${b.surface}:${b.finish}:${colourKey}:${invKey}:${lang}`;
+  const key = `paint4:${b.surface}:${b.finish}:${colourKey}:${invKey}:${lang}`;
   const hit = await c.env.DB.prepare(`SELECT value FROM skill_cache WHERE key = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')`).bind(key).first<{ value: string }>();
   if (hit) return c.json({ ...JSON.parse(hit.value), cached: true });
   const quota = await takeDaily(c.env, me.id, 'paint', 30);
   if (!quota.ok) return c.json({ error: 'too_many' }, 429);
   try {
-    const skills = skillText(await pickSkills(c.env, 'paint', { text: `${b.surface.replace('_', ' ')} ${b.finish} ${recipe?.name_km ?? ''} ${recipe?.name_en ?? ''}` }, 8000));
+    const skills = withBuiltinPaintKnowledge(skillText(await pickSkills(c.env, 'paint', { text: `${b.surface.replace('_', ' ')} ${b.finish} ${recipe?.name_km ?? ''} ${recipe?.name_en ?? ''}` }, 8000)));
     const r = await asFeature('paint_skill', async () => paintMethod(c.env, {
       surface: b.surface, finish: b.finish, lang, skills, inventory, colour: recipe ? null : b.colour ?? null,
       recipe: recipe ? { name: recipe.name_en || recipe.name_km, parts: recipe.parts.map((p: any) => ({ brand: p.brand, name: p.name, kind: p.kind, parts: p.parts, code: p.code ?? null, hex: p.color_hex ?? null })) } : null,
@@ -3376,7 +3377,7 @@ app.post('/api/paint/tube', async (c) => {
   const quota = await takeDaily(c.env, me.id, 'tube', 40);
   if (!quota.ok) return c.json({ error: 'too_many' }, 429);
   try {
-    const skills = skillText(await pickSkills(c.env, 'paint', { text: `paint tube ${surface}` }, 6000));
+    const skills = withBuiltinPaintKnowledge(skillText(await pickSkills(c.env, 'paint', { text: `paint tube ${surface}` }, 6000)));
     const r = await asFeature('paint_skill', async () => readPaintTube(c.env, { data, mime }, { lang: reqLang(c), surface: isLeather(surface) ? surface : null, products: await shopProducts(c.env), skills }));
     const norm = (v: string | null | undefined) => (v ?? '').toLowerCase().replace(/[^a-z0-9ក-៿]/g, '');
     const rows = (await c.env.DB.prepare('SELECT id, brand, code, name FROM paint_products').all<{ id: string; brand: string; code: string | null; name: string }>()).results;
@@ -3481,7 +3482,8 @@ app.post('/api/skills/ask', async (c) => {
         { market: await marketContext(c.env), skills: skillText(await pickSkills(c.env, 'chat', { text: recent }, 12000)), app: await appContext(c.env) }, image));
     } else {
       const context = skill === 'paint' ? await paintContext(c.env, ctx) : repairContext(ctx);
-      const skills = skillText(await pickSkills(c.env, skill as 'paint' | 'repair', { text: `${context}\n${recent}` }, 8000));
+      const shopSkills = skillText(await pickSkills(c.env, skill as 'paint' | 'repair', { text: `${context}\n${recent}` }, 8000));
+      const skills = skill === 'paint' ? withBuiltinPaintKnowledge(shopSkills) : shopSkills;
       reply = await asFeature(skill === 'paint' ? 'paint_skill' : 'repair_skill', () => workspaceAnswer(c.env, { skill: skill as 'paint' | 'repair', turns, image, lang: reqLang(c), context, skills }));
     }
     return c.json({ reply: reply.trim() });
