@@ -14,6 +14,7 @@ import { MembershipNeeded, isMembershipError } from './Membership.tsx';
 import AiWorkspace from '../AiWorkspace.tsx';
 import { minutesIn } from '../../shared/stepMinutes.ts';
 import { paintLabel } from '../../shared/paintKnowledge.ts';
+import { inkOn, sharePercents } from '../../shared/mixShares.ts';
 
 export interface PaintPart { id: string; brand: string; name: string; kind: string; color_hex: string | null; parts: number; has_photo: boolean; updated_at: string }
 export interface PaintRecipe {
@@ -175,6 +176,7 @@ export default function Paint() {
   const [mBusy, setMBusy] = useState(false);
   const [mErr, setMErr] = useState('');
   const [follow, setFollow] = useState(false);
+  const [added, setAdded] = useState<Set<number>>(new Set()); // paints ticked off while mixing
   const [member, setMember] = useState(false);
   const [guess, setGuess] = useState<LeatherGuess | null>(null);
   const [gBusy, setGBusy] = useState(false);
@@ -190,7 +192,7 @@ export default function Paint() {
     api.get<{ recipes: PaintRecipe[] }>('/api/paint/recipes').then((r) => setRecipes(r.recipes)).catch(() => setRecipes([]));
     api.get<{ products: PaintProduct[] }>('/api/paint/products').then((r) => setProducts(r.products)).catch(() => {});
   }, []);
-  useEffect(() => { setMethod(null); setMErr(''); setMember(false); }, [leather, finish, chosen]);
+  useEffect(() => { setMethod(null); setMErr(''); setMember(false); setAdded(new Set()); }, [leather, finish, chosen]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [mode, photo]);
 
   const restart = () => {
@@ -255,7 +257,7 @@ export default function Paint() {
     const body = { surface: leather, finish, recipeId: chosen?.id ?? null, colour: !chosen && res ? { hex: res.hex, lab: res.lab, approx: !!res.approx } : null };
     asked.current = JSON.stringify(body);
     setMBusy(true); setMErr(''); setMember(false);
-    try { setMethod(await api.post<Method>('/api/skills/paint', body)); }
+    try { setMethod(await api.post<Method>('/api/skills/paint', body)); setAdded(new Set()); }
     catch (e) {
       if (isMembershipError(e)) setMember(true);
       else setMErr(e instanceof ApiError && e.status === 429 ? t('skill.tooMany') : e instanceof ApiError && e.body?.error === 'ai_not_configured' ? t('chat.notConfigured') : errText(e));
@@ -303,29 +305,33 @@ export default function Paint() {
   );
 
   /** The picture of the mix: each paint as drops in its colour, "+", then "=" the colour to reach. */
-  const MixPicture = ({ paints, target }: { paints: PaintPick[]; target: string | null }) => (
-    <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-3 rounded-2xl bg-surface-low px-3 py-4">
-      {paints.map((p, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <span className="text-xl font-light text-muted" aria-hidden>+</span>}
-          <span className="flex flex-col items-center gap-1">
-            <span className="flex max-w-[84px] flex-wrap justify-center gap-0.5">
-              {Array.from({ length: Math.min(p.parts, 8) }).map((_, k) => <span key={k} className="h-4 w-4 rounded-full border border-black/30 shadow-inner" style={{ background: p.hex ?? '#888' }} />)}
+  /** One bar for the whole mix: each paint's width is its share of the drops, then the bag colour to aim for. */
+  const MixBar = ({ paints, target }: { paints: PaintPick[]; target: string | null }) => {
+    const pct = sharePercents(paints.map((p) => p.parts));
+    const total = paints.reduce((a, p) => a + p.parts, 0);
+    return (
+      <div className="space-y-2 rounded-2xl bg-surface-low p-3">
+        <div className="flex items-stretch gap-3">
+          <div className="flex h-14 min-w-0 flex-1 overflow-hidden rounded-xl border border-hairline" role="img"
+            aria-label={paints.map((p, k) => `${paintLabel(p, locale).main} ${p.parts} ${t('pn.drops')}`).join(', ')}>
+            {paints.map((p, k) => (
+              <span key={k} className="flex min-w-[22px] items-center justify-center font-mono text-sm font-bold"
+                style={{ flexGrow: p.parts, flexBasis: 0, background: p.hex ?? '#888888', color: inkOn(p.hex) }}>{pct[k] >= 9 ? p.parts : ''}</span>
+            ))}
+          </div>
+          {target && (
+            <span className="flex shrink-0 flex-col items-center justify-center">
+              <span className="h-14 w-14 rounded-xl border-2 border-gold" style={{ background: target }} />
             </span>
-            <span className="max-w-[96px] text-center text-[11px] font-semibold leading-snug">{paintLabel(p, locale).main}{paintLabel(p, locale).code && <span className="block font-mono text-gold">{paintLabel(p, locale).code}</span>}</span>
-            <span className="font-mono text-xs font-bold text-gold">×{p.parts}</span>
-          </span>
-        </React.Fragment>
-      ))}
-      {target && <>
-        <span className="text-xl font-light text-muted" aria-hidden>=</span>
-        <span className="flex flex-col items-center gap-1">
-          <span className="h-12 w-12 rounded-full border-2 border-gold shadow-lg" style={{ background: target }} />
-          <span className="text-[10px] text-muted">{t('pn.target')}</span>
-        </span>
-      </>}
-    </div>
-  );
+          )}
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-muted">
+          <span>{t('pn.totalDrops').replace('{n}', String(total))}</span>
+          {target && <span>{t('pn.target')} ↑</span>}
+        </div>
+      </div>
+    );
+  };
 
   /** ② paints with codes + the mix picture · ③ short steps · ④ chat about this job, right below. */
   const methodAndChat = (
@@ -338,19 +344,37 @@ export default function Paint() {
         {mErr && <><Notice tone="bad">{mErr}</Notice><button type="button" className="btn-ghost w-full" onClick={askMethod}>{t('pn.tryAgain')}</button></>}
         {method && (method.paints.length > 0 ? (
           <>
-            <MixPicture paints={method.paints} target={chosen?.hex ?? res?.hex ?? null} />
-            <ul className="space-y-1.5">
-              {method.paints.map((p, i) => (
-                <li key={i} className="flex items-center gap-3 rounded-xl bg-surface-low px-3 py-2">
-                  <span className="h-7 w-7 shrink-0 rounded-full border border-hairline" style={{ background: p.hex ?? 'transparent' }} />
-                  <span className="min-w-0 flex-1 text-sm">
-                    <b>{paintLabel(p, locale).main}</b>{paintLabel(p, locale).code && <span className="font-mono text-gold"> {paintLabel(p, locale).code}</span>}
-                    <span className="block text-[11px] text-muted">{paintLabel(p, locale).sub && `${paintLabel(p, locale).sub} · `}{p.inShop ? `✓ ${t('pn.inShop')}` : p.code ? t('pn.notInShop') : t('pn.generic')}</span>
-                  </span>
-                  <span className="shrink-0 rounded-lg bg-charcoal px-2.5 py-1 font-mono text-sm text-gold">{p.parts} <span className="text-[10px] text-white/70">{t('pn.drops')}</span></span>
-                </li>
-              ))}
+            <MixBar paints={method.paints} target={chosen?.hex ?? res?.hex ?? null} />
+            <p className="px-1 text-xs text-muted">👆 {t('pn.tapAdded')}</p>
+            <ul className="space-y-2">
+              {method.paints.map((p, i) => {
+                const lbl = paintLabel(p, locale), done = added.has(i), pct = sharePercents(method.paints.map((x) => x.parts))[i];
+                return (
+                  <li key={i}>
+                    <button type="button" aria-pressed={done}
+                      onClick={() => setAdded((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${done ? 'border-gold/60 bg-gold/10' : 'border-transparent bg-surface-low'}`}>
+                      <span className="relative h-11 w-11 shrink-0 rounded-full border border-hairline shadow-inner" style={{ background: p.hex ?? 'transparent' }}>
+                        {done && <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-lg font-bold text-white">✓</span>}
+                      </span>
+                      <span className={`min-w-0 flex-1 ${done ? 'opacity-60' : ''}`}>
+                        <span className="block text-base font-semibold leading-snug">{lbl.main}{lbl.code && <span className="ml-1.5 font-mono text-gold">{lbl.code}</span>}</span>
+                        <span className="block text-xs text-muted">{lbl.sub || (p.code ? '' : t('pn.anyBrand'))}{p.inShop && <span className="ml-1 text-verified">✓ {t('pn.inShop')}</span>}</span>
+                      </span>
+                      <span className="flex shrink-0 flex-col items-end">
+                        <span className="font-mono text-2xl font-bold leading-none text-gold">{p.parts}</span>
+                        <span className="text-[11px] text-muted">{t('pn.drops')} · {pct}%</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
+            {(() => {
+              const missing = method.paints.filter((p) => !p.inShop && p.code).length;
+              return missing > 0 ? <p className="px-1 text-[11px] text-muted">ⓘ {t('pn.missingCount').replace('{n}', String(missing))}</p> : null;
+            })()}
+            <p className="rounded-xl bg-surface-low px-3 py-2 text-xs leading-relaxed">💧 {t('pn.mixLighter')}</p>
             {method.paintsFrom === 'ai' && <p className="text-[11px] leading-relaxed text-review">✨ {t('pn.aiMix')}{method.paintsNote ? ` ${method.paintsNote}` : ''}</p>}
           </>
         ) : <p className="text-sm text-muted">{t('pn.noPaints')}</p>)}
