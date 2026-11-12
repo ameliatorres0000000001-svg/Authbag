@@ -8,6 +8,7 @@ import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppe
 import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
 import { matchFoundUrls } from '../shared/urls.ts';
 import { SHOT_PARTS, parseShots, type RequiredShot } from '../shared/shots.ts';
+import { parseGuides, type PointGuide } from '../shared/pointGuide.ts';
 import { catalogLine, catalogPaint } from '../shared/paintKnowledge.ts';
 
 export interface ObsDef { key: string; value_type: 'enum' | 'number' | 'boolean' | 'text'; enum_json: string | null; label_en: string }
@@ -818,6 +819,38 @@ export async function identifyBag(env: Env, image: VisionImage, brands: { id: st
     size: brandName ? str(o?.size, 60) : null, material: brandName ? str(o?.material, 80) : null, desc: brandName ? str(o?.short_desc, 200) : null,
     shots: brandName && confidence >= 0.5 ? parseShots(o?.required_shots) : [],
   };
+}
+
+/**
+ * Teaching guide for the numbered boxes staff drew on an ORIGINAL reference photo (one AI call per photo, stored).
+ * For each box: a short title, a popup line shown on the photo (where to look + what the original shows), and below
+ * it what to look at, what this original shows, and what a bag that differs from it tends to show. Teaching only:
+ * it compares with this reference and never calls any bag genuine or fake.
+ */
+export async function guidePoints(env: Env, image: VisionImage, o: {
+  brand: string; model: string | null; part: string | null;
+  boxes: { n: number; x: number; y: number; w: number; h: number; label: string; note: string | null; todo: boolean }[];
+}): Promise<Map<number, PointGuide>> {
+  const todo = o.boxes.filter((b) => b.todo);
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const text = await callVision(env,
+    'You are a master luxury-bag appraiser writing a visual training guide for a REFERENCE photo of an original bag, for staff and customers of a second-hand shop. ' +
+    `${NO_VERDICT} Teach what to compare with this reference; never write that a bag is genuine, authentic, real, fake, counterfeit or replica. ` +
+    'Numbered boxes were drawn on the photo by staff; each box is given as its top-left corner and size in % of the image width/height, with the staff label. ' +
+    'For each box you are asked about, look inside that exact area and write: ' +
+    'title (2–5 words, the detail\'s name); popup (max 18 words, shown on the photo when tapped: where to look + what this original shows); ' +
+    'look_at (what exactly to look at); match (what this original shows there, concrete: shapes, spacing, depth, colour, stitch count); ' +
+    'differs (what a bag that differs from this reference typically shows at this spot — describe the difference, no verdict words). ' +
+    'Khmer: natural, practical shop Khmer, not word-for-word translation (no phrases like "រាងអក្សរ serif"); keep brand names, stamped words and codes exactly as written. ' +
+    'If a box does not show a clear detail, still describe honestly what is visible and keep it short. Only describe what is visible in the photo. ' +
+    'Reply with JSON only: {"annotations":[{"box_id":1,"title_km":"","popup_km":"","look_at_km":"","match_km":"","differs_km":"","title_en":"","popup_en":"","look_at_en":"","match_en":"","differs_en":""}]}',
+    [image],
+    `Brand: ${o.brand}\nModel: ${o.model ?? 'unspecified'}\nPart: ${o.part ?? 'unspecified'}\nBoxes on this photo:\n` +
+    o.boxes.map((b) => `${b.n}. left ${pct(b.x)}, top ${pct(b.y)}, width ${pct(b.w)}, height ${pct(b.h)} — staff label: ${b.label}${b.note ? ` (${b.note.split('\n')[0].slice(0, 160)})` : ''}`).join('\n') +
+    `\nWrite the guide for boxes: ${todo.map((b) => b.n).join(', ')}`,
+    Math.min(6000, 600 + todo.length * 700), 'medium');
+  const all = parseGuides(text, o.boxes.length);
+  return new Map([...all].filter(([n]) => todo.some((b) => b.n === n)));
 }
 
 export interface MarketResearchRow { brand: string; model: string; reason: string; price_min: number | null; price_max: number | null; currency: string | null; sources: string[] }

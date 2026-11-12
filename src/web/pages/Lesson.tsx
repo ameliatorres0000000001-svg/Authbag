@@ -2,6 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
+import GuideButton from '../GuideButton.tsx';
 import { MeContext } from '../App.tsx';
 import { Badge, Field, Notice, errText } from '../ui.tsx';
 import AnnotatedPhoto, { PointCards, type Point } from '../AnnotatedPhoto.tsx';
@@ -221,6 +222,7 @@ function AdminTools({ step, model, ai, onChanged }: { step: Step; model: LessonD
                   onAdd={(r, label, note) => run(() => api.post(`/api/assets/${photo.id}/points`, { ...r, label, note }))}
                   onDelete={(id) => run(() => api.del(`/api/reference-points/${id}`))}
                   onSuggest={() => run(() => api.post(`/api/assets/${photo.id}/points/suggest`))} />
+                {(photo as any).label === 'authentic' && step.component_code && <GuideButton assetId={photo.id} points={photo.points as any} onDone={() => run(async () => {})} />}
                 {step.component_code === 'date_code' && <DateCodeAppearanceCard base={`/api/assets/${photo.id}`} canRun askTyped />}
               </>
             )}

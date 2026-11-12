@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket } from './vision.ts';
+import { assessVerification, pointsModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
 import { checkMeasurement, checkQuick, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab, quickLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -847,7 +847,7 @@ app.get('/api/studio', async (c) => {
 app.get('/api/studio/assets/:id', async (c) => {
   const a = await c.env.DB.prepare(`SELECT a.id, a.brand_id, a.model_id, a.component_code, a.label, a.label_basis, a.license, a.source_url, a.status, a.purpose, a.slot, a.teaching_title, a.teaching_note, a.ai_prompt, a.created_at, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id WHERE a.id = ?`).bind(c.req.param('id')).first<Record<string, any>>();
   if (!a) return c.json({ error: 'not_found' }, 404);
-  const points = (await c.env.DB.prepare('SELECT id, x, y, w, h, label, note, i18n_json, source, created_at FROM reference_points WHERE asset_id = ? ORDER BY created_at').bind(a.id).all()).results;
+  const points = (await c.env.DB.prepare('SELECT id, x, y, w, h, label, note, i18n_json, guide_json, source, created_at FROM reference_points WHERE asset_id = ? ORDER BY created_at').bind(a.id).all()).results;
   return c.json({ ...a, points, aiConfigured: aiConfigured(c.env) });
 });
 
@@ -878,6 +878,42 @@ app.delete('/api/reference-points/:id', need(STAFF), async (c) => {
   await c.env.DB.prepare('DELETE FROM reference_points WHERE id = ?').bind(p.id).run();
   await audit(c.env, c.get('user').id, 'reference_point.delete', 'asset', p.asset_id, { point: p.id, label: p.label });
   return c.json({ ok: true });
+});
+
+/**
+ * AI teaching guide for the numbered boxes on one ORIGINAL reference photo (not the whole-bag photo): written once and
+ * stored on each point, so viewers never cost an AI call. Boxes that already have a guide are skipped unless `force`.
+ * Numbers are the order the boxes were drawn, as every viewer shows them.
+ */
+app.post('/api/assets/:id/guide', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ force: z.boolean().optional() }));
+  const a = await c.env.DB.prepare(`SELECT a.id, a.r2_key, a.component_code, a.label, b.name AS brand, m.name AS model, cp.name_en AS part
+    FROM reference_assets a JOIN brands b ON b.id = a.brand_id LEFT JOIN models m ON m.id = a.model_id LEFT JOIN components cp ON cp.code = a.component_code WHERE a.id = ?`)
+    .bind(c.req.param('id')).first<Record<string, any>>();
+  if (!a) return c.json({ error: 'not_found' }, 404);
+  if (!a.component_code) return c.json({ error: 'whole_bag' }, 409); // the whole-bag photo is not explained
+  if (a.label !== 'authentic') return c.json({ error: 'not_original' }, 409);
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  const pts = (await c.env.DB.prepare('SELECT id, x, y, w, h, label, note, guide_json FROM reference_points WHERE asset_id = ? ORDER BY created_at').bind(a.id)
+    .all<{ id: string; x: number; y: number; w: number; h: number; label: string; note: string | null; guide_json: string | null }>()).results;
+  const boxes = pts.map((p, i) => ({ ...p, n: i + 1, todo: !!b.force || !p.guide_json }));
+  if (!boxes.some((x) => x.todo)) return c.json({ done: 0, boxes: boxes.length });
+  const obj = await c.env.VAULT.get(a.r2_key);
+  if (!obj) return c.json({ error: 'not_found' }, 404);
+  try {
+    const img = { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? 'image/jpeg' };
+    const g = await asFeature('other', () => guidePoints(c.env, img,
+      { brand: a.brand, model: a.model, part: a.part, boxes }));
+    const now = nowIso(), model = aiModel(c.env);
+    for (const x of boxes) {
+      const v = g.get(x.n);
+      if (v) await c.env.DB.prepare('UPDATE reference_points SET guide_json = ?, guide_model = ?, guide_at = ? WHERE id = ?').bind(JSON.stringify(v), model, now, x.id).run();
+    }
+    await audit(c.env, c.get('user').id, 'reference_point.ai_guide', 'asset', a.id, { written: g.size, asked: boxes.filter((x) => x.todo).length });
+    return c.json({ done: g.size, boxes: boxes.length });
+  } catch (e) {
+    return c.json({ error: 'ai_failed', detail: (e as Error).message }, 502);
+  }
 });
 
 app.post('/api/assets/:id/points/suggest', need(STAFF), async (c) => {
@@ -1020,7 +1056,7 @@ app.get('/api/lessons/:modelId', async (c) => {
      JOIN lesson_steps s ON s.id = a.lesson_step_id WHERE s.model_id = ? AND a.status <> 'rejected' ORDER BY a.created_at`,
   ).bind(model.id).all<Record<string, any>>()).results;
   const points = assets.length ? (await c.env.DB.prepare(
-    `SELECT p.id, p.asset_id, p.x, p.y, p.w, p.h, p.label, p.note, p.i18n_json, p.source FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id
+    `SELECT p.id, p.asset_id, p.x, p.y, p.w, p.h, p.label, p.note, p.i18n_json, p.guide_json, p.source FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id
      JOIN lesson_steps s ON s.id = a.lesson_step_id WHERE s.model_id = ? ORDER BY p.created_at`,
   ).bind(model.id).all<Record<string, any>>()).results : [];
   return c.json({
@@ -1046,7 +1082,7 @@ async function buildPosts(c: any, page: Record<string, any>[]): Promise<Record<s
   const ids = page.map((p) => p.id);
   const marks = ids.length ? `(${ids.map(() => '?').join(',')})` : '(NULL)';
   const [points, readings, refs] = await Promise.all([
-    ids.length ? c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, source FROM reference_points WHERE asset_id IN ${marks} ORDER BY created_at`).bind(...ids).all() : null,
+    ids.length ? c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, guide_json, source FROM reference_points WHERE asset_id IN ${marks} ORDER BY created_at`).bind(...ids).all() : null,
     ids.length ? c.env.DB.prepare(`SELECT target_id, result_json, created_at FROM datecode_analyses WHERE target_type = 'asset' AND target_id IN ${marks} ORDER BY created_at DESC`).bind(...ids).all() : null,
     // one approved genuine photo per brand + part, to show beside counterfeit-labelled posts
     c.env.DB.prepare(`SELECT a.id, a.brand_id, a.component_code, a.model_id FROM reference_assets a WHERE a.label = 'authentic' AND a.status = 'approved' AND a.component_code IS NOT NULL ORDER BY a.created_at DESC LIMIT 200`).all(),
@@ -1589,7 +1625,7 @@ app.get('/api/verify/:id', async (c) => {
   const plan = r.plan_id ? await c.env.DB.prepare('SELECT * FROM verify_plans WHERE id = ?').bind(r.plan_id).first() : null;
   const found = await verifyRefs(c.env, r.brand_id, r.model_text);
   const ids = Object.values(found).map((x) => x.id);
-  const pts = ids.length ? (await c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, source FROM reference_points WHERE asset_id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at`).bind(...ids).all<Record<string, any>>()).results : [];
+  const pts = ids.length ? (await c.env.DB.prepare(`SELECT id, asset_id, x, y, w, h, label, note, i18n_json, guide_json, source FROM reference_points WHERE asset_id IN (${ids.map(() => '?').join(',')}) ORDER BY created_at`).bind(...ids).all<Record<string, any>>()).results : [];
   const refs = Object.fromEntries(Object.entries(found).map(([step, x]) => [step, { id: x.id, label: x.label, status: x.status, model: x.model, same_model: x.same_model, points: pts.filter((p) => p.asset_id === x.id) }]));
   const certificate = await c.env.DB.prepare(`SELECT ${CERT_COLS} FROM hengz_certificates c JOIN brands b ON b.id = c.brand_id WHERE c.request_id = ? AND NOT EXISTS (SELECT 1 FROM hengz_certificate_hidden h WHERE h.cert_id = c.id)`).bind(r.id).first().catch(() => null);
   const offers = (await c.env.DB.prepare(`SELECT o.id, o.from_side, o.amount_cents, o.currency, o.note, o.status, o.created_at, o.responded_at, u.name AS by_name

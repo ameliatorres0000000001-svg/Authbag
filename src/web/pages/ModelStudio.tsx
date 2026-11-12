@@ -2,6 +2,7 @@ import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
+import GuideButton from '../GuideButton.tsx';
 import { MeContext } from '../App.tsx';
 import { Badge, Field, Notice, Page, errText } from '../ui.tsx';
 import MarkCanvas, { type Mark } from '../MarkCanvas.tsx';
@@ -124,6 +125,7 @@ function AssetEditor({ assetId, canEdit, canRemove, onChanged, onRemoved }: { as
           onAdd={(r, label, note) => run(async () => { await api.post(`/api/assets/${a.id}/points`, { ...r, label, note }); await load(); onChanged(); })}
           onDelete={(id) => run(async () => { await api.del(`/api/reference-points/${id}`); await load(); onChanged(); })}
           onSuggest={() => run(async () => { await api.post(`/api/assets/${a.id}/points/suggest`); await load(); onChanged(); })} />
+        {canEdit && a.label === 'authentic' && a.component_code && <div className="mt-3"><GuideButton assetId={a.id} points={a.points} onDone={() => { load(); onChanged(); }} /></div>}
       </div>
       <div className="space-y-3">
         <div className="card space-y-3">
