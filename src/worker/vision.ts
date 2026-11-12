@@ -7,6 +7,7 @@ import { MAX_AI_MARKS, parseBilingualMarks, parseMarkChecks, parseSuggestedMarks
 import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppearance.ts';
 import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
 import { matchFoundUrls } from '../shared/urls.ts';
+import { SHOT_PARTS, parseShots, type RequiredShot } from '../shared/shots.ts';
 import { catalogLine, catalogPaint } from '../shared/paintKnowledge.ts';
 
 export interface ObsDef { key: string; value_type: 'enum' | 'number' | 'boolean' | 'text'; enum_json: string | null; label_en: string }
@@ -776,7 +777,13 @@ export async function researchPaintProduct(env: Env, x: { brand: string; name: s
   return { info, sources: urls.map((url) => ({ url, title: (found.get(url) ?? url).slice(0, 200) })), model: final.model };
 }
 
-export interface BagIdentity { brandId: string | null; brandName: string | null; modelId: string | null; modelName: string | null; confidence: number; clues: string }
+export interface BagIdentity {
+  brandId: string | null; brandName: string | null; modelId: string | null; modelName: string | null; confidence: number; clues: string;
+  size: string | null; material: string | null; desc: string | null;
+  /** the 5–6 details to photograph next for THIS model (empty when the bag was not recognised) */
+  shots: RequiredShot[];
+}
+
 
 /**
  * Recognise the brand and model of a bag from one photo of the whole bag, so the customer does not have to
@@ -784,13 +791,21 @@ export interface BagIdentity { brandId: string | null; brandName: string | null;
  * it never says whether it is genuine. Brand/model ids must come from the lists; otherwise names only.
  */
 export async function identifyBag(env: Env, image: VisionImage, brands: { id: string; name: string }[], models: { id: string; brand_id: string; name: string }[], lang: OutLang, tips: string[] = []): Promise<BagIdentity> {
+  const L = LANG_NAME[lang];
   const text = await callVision(env,
-    `You recognise which designer brand and model a handbag is styled as, from one photo of the whole bag, for a second-hand shop. ${NO_VERDICT} ` +
+    `You identify which designer brand, model, size and material a handbag is styled as, from one photo of the whole bag, for a second-hand shop. ${NO_VERDICT} ` +
     'Identify only what the bag is presented as (its design), never whether it is genuine. Use visible design features: shape, logo or monogram pattern, hardware, closure, handles. ' +
+    'Be specific: give the exact model name (e.g. "Danube", "Lady Dior", "Classic Flap"), never a generic word like "crossbody bag" when you can tell the model. ' +
     'Pick brand_id and model_id from the lists when one fits; if the brand is not in the list give brand_name only; if the model is not in the list give model_name only. ' +
-    'If the photo is not a bag, is too unclear, or you cannot tell, use nulls and confidence 0. ' +
-    `Reply with JSON only: {"brand_id": id|null, "brand_name": string|null, "model_id": id|null, "model_name": string|null, "confidence": 0..1, "clues": "one short sentence in ${LANG_NAME[lang]} on the visible features used"}`,
-    [image], `Brands: ${JSON.stringify(brands.map((b) => ({ id: b.id, name: b.name })))}\nModels: ${JSON.stringify(models.map((m) => ({ id: m.id, brand_id: m.brand_id, name: m.name })))}${tips.length ? `\nStaff tips for telling brands and models apart:\n- ${tips.join('\n- ')}` : ''}`, 800, 'medium');
+    'Then, for THIS specific model, list the 5 or 6 details the user must photograph next so an expert can compare it with references ' +
+    '(e.g. for an LV Danube: exterior monogram, interior heat stamp, date code inside the pocket, zipper pull, strap D-ring and rivets). ' +
+    `Give each one a part code from this list: ${SHOT_PARTS.join(', ')} ("canvas" = the main material / leather surface; "other" if none fits). ` +
+    'If the photo is not a bag, is too unclear, or you cannot tell, use nulls, confidence 0 and an empty required_shots list. ' +
+    `Write clues, short_desc, part_text and hint in natural ${L}; keep brand and model names in Latin. Keep values short. ` +
+    'Reply with JSON only: {"brand_id": id|null, "brand_name": string|null, "model_id": id|null, "model_name": string|null, "size": string|null, "material": string|null, ' +
+    '"confidence": 0..1, "clues": "one short sentence on the visible features used", "short_desc": "one short sentence describing the bag", ' +
+    '"required_shots": [{"part": code, "part_text": "what to photograph", "hint": "how to photograph it"}]}',
+    [image], `Brands: ${JSON.stringify(brands.map((b) => ({ id: b.id, name: b.name })))}\nModels: ${JSON.stringify(models.map((m) => ({ id: m.id, brand_id: m.brand_id, name: m.name })))}${tips.length ? `\nStaff tips for telling brands and models apart:\n- ${tips.join('\n- ')}` : ''}`, 1600, 'medium');
   const a = text.indexOf('{'), b = text.lastIndexOf('}');
   let o: any = null; try { o = a >= 0 && b > a ? JSON.parse(text.slice(a, b + 1)) : null; } catch { o = null; }
   const brand = brands.find((x) => x.id === o?.brand_id) ?? null;
@@ -798,7 +813,11 @@ export async function identifyBag(env: Env, image: VisionImage, brands: { id: st
   const str = (v: unknown, n: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
   const brandName = brand?.name ?? str(o?.brand_name, 80);
   const confidence = brandName ? Math.max(0, Math.min(1, Number(o?.confidence) || 0)) : 0;
-  return { brandId: brand?.id ?? null, brandName, modelId: model?.id ?? null, modelName: model?.name ?? str(o?.model_name, 120), confidence, clues: str(o?.clues, 300) ?? '' };
+  return {
+    brandId: brand?.id ?? null, brandName, modelId: model?.id ?? null, modelName: model?.name ?? str(o?.model_name, 120), confidence, clues: str(o?.clues, 300) ?? '',
+    size: brandName ? str(o?.size, 60) : null, material: brandName ? str(o?.material, 80) : null, desc: brandName ? str(o?.short_desc, 200) : null,
+    shots: brandName && confidence >= 0.5 ? parseShots(o?.required_shots) : [],
+  };
 }
 
 export interface MarketResearchRow { brand: string; model: string; reason: string; price_min: number | null; price_max: number | null; currency: string | null; sources: string[] }

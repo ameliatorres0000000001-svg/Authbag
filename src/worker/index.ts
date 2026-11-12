@@ -2893,6 +2893,26 @@ app.post('/api/admin/voice/ui', need(ADMINS), async (c) => {
  * One photo of the whole bag → the brand and model it is styled as, so the customer does not have to pick them.
  * Identification only (never genuine/fake). The photo is not stored. Signed-in users, 20 a day.
  */
+/**
+ * Approved original reference photos of one model, grouped by part (component code), for the thumbnails next to
+ * each "photograph next" shot. The whole-bag shot uses the model's cover photo, else an approved photo with no part.
+ */
+async function shotReferences(env: AppEnv['Bindings'], modelId: string) {
+  const rows = (await env.DB.prepare(`SELECT id, component_code, teaching_title FROM reference_assets
+    WHERE model_id = ? AND status = 'approved' AND label = 'authentic'
+    ORDER BY (purpose = 'model_set') DESC, slot, created_at LIMIT 60`).bind(modelId).all<{ id: string; component_code: string | null; teaching_title: string | null }>()).results;
+  const byPart = new Map<string, { id: string; title: string | null }[]>();
+  const loose: { id: string; title: string | null }[] = [];
+  for (const x of rows) {
+    const item = { id: x.id, title: x.teaching_title };
+    if (!x.component_code) { loose.push(item); continue; }
+    byPart.set(x.component_code, [...(byPart.get(x.component_code) ?? []), item]);
+  }
+  const cover = await env.DB.prepare(`SELECT a.id, a.teaching_title FROM models m JOIN reference_assets a ON a.id = m.cover_asset_id
+    WHERE m.id = ? AND a.status = 'approved' AND a.label = 'authentic'`).bind(modelId).first<{ id: string; teaching_title: string | null }>();
+  return { byPart, whole: cover ? [{ id: cover.id, title: cover.teaching_title }, ...loose.filter((l) => l.id !== cover.id)] : loose };
+}
+
 app.post('/api/verify/identify', async (c) => {
   const me = c.get('user');
   if (!me.id) return c.json({ error: 'unauthenticated' }, 401);
@@ -2915,7 +2935,10 @@ app.post('/api/verify/identify', async (c) => {
     const r = await asFeature('identify', () => identifyBag(c.env, { data: buf, mime }, brands, models, reqLang(c), tips));
     // a brand we do not list goes to the "other brand" choice with its name
     const other = r.brandId || !r.brandName ? null : await c.env.DB.prepare("SELECT id FROM brands WHERE slug = 'other'").first<{ id: string }>();
-    return c.json({ ...r, otherBrandId: other?.id ?? null, model: aiModel(c.env) });
+    // our own approved original photos of this model, matched to each shot by part, for the user to follow
+    const refs = r.modelId ? await shotReferences(c.env, r.modelId) : null;
+    const shots = r.shots.map((s) => ({ ...s, refs: refs ? (s.part === 'whole' ? refs.whole : refs.byPart.get(s.part) ?? []).slice(0, 2) : [] }));
+    return c.json({ ...r, shots, otherBrandId: other?.id ?? null, model: aiModel(c.env) });
   } catch (e) {
     await c.env.DB.prepare('UPDATE ai_chat_usage SET n = MAX(n - 1, 0) WHERE user_id = ? AND day = ?').bind(me.id, day).run();
     console.error('identify failed:', (e as Error).message);

@@ -11,7 +11,12 @@ import { errText } from '../ui.tsx';
 import { STEPS } from './Verify.tsx';
 import { MembershipNeeded, isMembershipError } from './Membership.tsx';
 
-interface Identity { brandId: string | null; brandName: string | null; modelId: string | null; modelName: string | null; confidence: number; clues: string; otherBrandId: string | null }
+interface ShotRef { id: string; title: string | null }
+interface Shot { step: number; part: string; title: string; hint: string; refs: ShotRef[] }
+interface Identity {
+  brandId: string | null; brandName: string | null; modelId: string | null; modelName: string | null; confidence: number; clues: string; otherBrandId: string | null;
+  size?: string | null; material?: string | null; desc?: string | null; shots?: Shot[];
+}
 
 
 const ICON: Record<string, string> = {
@@ -44,6 +49,7 @@ export default function Check() {
   const [preview, setPreview] = useState<string | null>(null);
   const [manual, setManual] = useState(false);
   const [needMember, setNeedMember] = useState(false);
+  const [zoom, setZoom] = useState<ShotRef | null>(null);
   const identify = async (f: File) => {
     setIdErr(''); setIdent(null); setManual(false); setIdBusy(true);
     setPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(f); });
@@ -124,6 +130,8 @@ export default function Check() {
                 <>
                   <div className="text-[11px] font-semibold text-gold">{t('ck.aiSees')}</div>
                   <div className="font-serif text-xl leading-tight">{ident.brandName}{ident.modelName ? ` · ${ident.modelName}` : ''}</div>
+                  {(ident.size || ident.material) && <div className="mt-0.5 text-xs text-gold/90">{[ident.size, ident.material].filter(Boolean).join(' · ')}</div>}
+                  {ident.desc && <div className="mt-1 text-xs leading-relaxed">{ident.desc}</div>}
                   <div className="mt-0.5 text-xs text-muted">{t('ck.confidence')} {Math.round(ident.confidence * 100)}%{ident.clues ? ` · ${ident.clues}` : ''}</div>
                   {!manual && <button type="button" className="mt-1 text-xs text-gold underline" onClick={() => setManual(true)}>✎ {t('ck.fix')}</button>}
                 </>
@@ -148,17 +156,58 @@ export default function Check() {
         {hint && <p className="text-xs text-counterfeit">{t('ck.needBag')}</p>}
       </div>
 
-      {/* 2. where to photograph next (the expert needs these details) */}
-      {brandId && (
-        <div className="rounded-2xl border border-hairline bg-surface-card p-4">
-          <div className="font-serif text-lg">2. {t('ck.where')}</div>
-          <ol className="mt-2 grid grid-cols-2 gap-2 text-sm">
-            {STEPS.filter((s) => s !== 'extra').map((s, i) => (
-              <li key={s} className="flex items-center gap-2 rounded-xl bg-surface-low px-3 py-2">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-charcoal font-mono text-[11px] text-gold">{i + 1}</span>{t(`vr.step.${s}`)}
-              </li>
-            ))}
-          </ol>
+      {/* 2. where to photograph next: the AI's list for this exact model (with our original photos to follow), else the
+          standard list. The AI list is only used while the bag is still the one the AI recognised. */}
+      {brandId && (() => {
+        const aiShots = ident?.shots?.length && choice?.brandId === (ident.brandId ?? ident.otherBrandId) && model.trim() === (ident.modelName ?? '') ? ident.shots : null;
+        return (
+          <div className="rounded-2xl border border-hairline bg-surface-card p-4">
+            <div className="font-serif text-lg">2. {t('ck.where')}</div>
+            {aiShots ? (
+              <>
+                <p className="mt-0.5 text-[11px] text-muted">✨ {t('ck.shotsAi').replace('{model}', [ident!.brandName, ident!.modelName].filter(Boolean).join(' '))}</p>
+                <ol className="mt-3 space-y-2">
+                  {aiShots.map((s) => (
+                    <li key={s.step} className="flex gap-3 rounded-xl bg-surface-low p-3">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold font-mono text-xs font-bold text-charcoal">{s.step}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold leading-snug">{s.title}</span>
+                        {s.hint && <span className="mt-0.5 block text-xs leading-relaxed text-muted">{s.hint}</span>}
+                      </span>
+                      {s.refs.length > 0 && (
+                        <span className="flex shrink-0 gap-1.5">
+                          {s.refs.map((r) => (
+                            <button key={r.id} type="button" onClick={() => setZoom(r)} aria-label={t('ck.refOpen')}
+                              className="relative h-14 w-14 overflow-hidden rounded-lg border border-gold/40">
+                              <img src={`/api/assets/${r.id}/image`} alt={r.title ?? ''} loading="lazy" className="h-full w-full object-cover" />
+                              <span className="absolute inset-x-0 bottom-0 bg-black/60 text-center text-[9px] font-semibold text-gold">{t('ck.refTag')}</span>
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+                {aiShots.every((s) => !s.refs.length) && <p className="mt-2 text-[11px] text-muted">{t('ck.noRefs')}</p>}
+              </>
+            ) : (
+              <ol className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                {STEPS.filter((s) => s !== 'extra').map((s, i) => (
+                  <li key={s} className="flex items-center gap-2 rounded-xl bg-surface-low px-3 py-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-charcoal font-mono text-[11px] text-gold">{i + 1}</span>{t(`vr.step.${s}`)}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        );
+      })()}
+      {zoom && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/85 p-4" onClick={() => setZoom(null)} role="dialog" aria-modal="true">
+          <img src={`/api/assets/${zoom.id}/image`} alt={zoom.title ?? ''} className="max-h-[75vh] max-w-full rounded-xl object-contain" />
+          {zoom.title && <p className="text-center text-sm text-white">{zoom.title}</p>}
+          <p className="text-xs text-white/60">{t('ck.refNote')}</p>
+          <button type="button" className="rounded-full border border-white/30 px-5 py-2 text-sm text-white">{t('steps.close')}</button>
         </div>
       )}
 
