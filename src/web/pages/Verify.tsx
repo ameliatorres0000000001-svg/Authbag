@@ -75,6 +75,40 @@ export default function Verify() {
     if (STEPS[idx] !== 'extra') setIdx((i) => i + 1);
   }, [idx]);
 
+  /** Upload: pick every photo at once. They fill the steps in order (whole bag, logo, code, material, hardware,
+   *  zipper, then extras); the review screen lets the user move any photo to the right step. */
+  const takeAll = async (raw: File[]) => {
+    const fs = await Promise.all(raw.slice(0, 6 + MAX_EXTRA).map((f) => shrink(f)));
+    setShots((s) => {
+      const next: Partial<Record<Step, File[]>> = { ...s };
+      const free = STEPS.filter((st) => st !== 'extra' && !next[st]?.length);
+      for (const f of fs) {
+        const st = free.shift();
+        if (st) next[st] = [f];
+        else next.extra = [...(next.extra ?? []), f].slice(0, MAX_EXTRA);
+      }
+      return next;
+    });
+    setIdx(STEPS.length); // straight to the review
+  };
+  /** Review: move one photo to another step; a photo already there swaps back (or goes to extras). */
+  const moveShot = (from: Step, i: number, to: Step) => {
+    if (from === to) return;
+    setShots((s) => {
+      const next: Partial<Record<Step, File[]>> = { ...s };
+      const f = (next[from] ?? [])[i];
+      if (!f) return s;
+      next[from] = (next[from] ?? []).filter((_, k) => k !== i);
+      if (to === 'extra') next.extra = [...(next.extra ?? []), f].slice(0, MAX_EXTRA);
+      else {
+        const old = next[to]?.[0];
+        next[to] = [f];
+        if (old) { if (from === 'extra') next.extra = [...(next.extra ?? []), old].slice(0, MAX_EXTRA); else next[from] = [old]; }
+      }
+      return next;
+    });
+  };
+
   async function submit() {
     if (!brandId || !mode) return;
     setBusy(true); setErr(null);
@@ -106,10 +140,14 @@ export default function Verify() {
       <p className="text-sm text-muted">{brandText || brand?.name}{model ? ` · ${model}` : ''}</p>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {STEPS.flatMap((s) => (urls[s] ?? []).map((u, i) => (
-          <button key={`${s}${i}`} type="button" onClick={() => setIdx(STEPS.indexOf(s))} className="relative overflow-hidden rounded-xl bg-charcoal">
-            <img src={u} alt="" className="aspect-square w-full object-cover" />
-            <span className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-0.5 text-[10px] text-white">{t(`vr.step.${s}`)}</span>
-          </button>
+          <div key={`${s}${i}`} className="overflow-hidden rounded-xl border border-hairline bg-charcoal">
+            <button type="button" onClick={() => setIdx(STEPS.indexOf(s))} className="block w-full"><img src={u} alt="" className="aspect-square w-full object-cover" /></button>
+            {/* which part this photo shows: change it if the order was different */}
+            <select value={s} onChange={(e) => moveShot(s, i, e.target.value as Step)} aria-label={t('vr.whichPart')}
+              className="w-full border-0 bg-black/70 px-1.5 py-1 text-[11px] text-white">
+              {STEPS.map((x) => <option key={x} value={x}>{t(`vr.step.${x}`)}</option>)}
+            </select>
+          </div>
         )))}
       </div>
       {REQUIRED.some((s) => !shots[s]?.length) && <Notice tone="warn">{t('vr.needRequired')}</Notice>}
@@ -163,6 +201,14 @@ export default function Verify() {
         </div>
       )}
 
+      {mode === 'upload' && idx === 0 && !STEPS.some((x) => shots[x]?.length) && (
+        <label className="flex cursor-pointer flex-col items-center gap-1 rounded-2xl border-2 border-dashed border-gold/60 bg-gold/10 p-4 text-center">
+          <span className="text-base font-semibold text-gold">🖼 {t('vr.pickAll')}</span>
+          <span className="text-xs text-muted">{t('vr.pickAllHelp')}</span>
+          <input type="file" accept="image/*" multiple className="hidden"
+            onChange={async (e) => { const fs = Array.from(e.target.files ?? []) as File[]; e.target.value = ''; if (fs.length) await takeAll(fs); }} />
+        </label>
+      )}
       {mode === 'scan'
         ? <CameraCapture locale={lc} onCapture={take} example={ex ? assetImg(ex) : null} disabled={step === 'extra' && (shots.extra?.length ?? 0) >= MAX_EXTRA} />
         : (
