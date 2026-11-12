@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
+import AiBusy from '../AiBusy.tsx';
 import { MeContext } from '../App.tsx';
 import { STAFF_ROLES } from '../studio.ts';
 import BrandPicker, { type BrandChoice } from '../BrandPicker.tsx';
@@ -74,6 +75,7 @@ export default function Check() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-4 pb-10 pt-5 md:px-8">
+      <AiBusy show={idBusy} stages={['aib.check1', 'aib.check2']} />
       <header>
         <h1 className="text-[28px] leading-tight">{t('check.title')}</h1>
         <p className="mt-1 text-sm text-muted">{t(ai ? 'check.subtitleAi' : 'check.subtitle')}</p>

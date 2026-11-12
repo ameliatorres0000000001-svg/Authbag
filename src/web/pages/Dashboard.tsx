@@ -7,6 +7,7 @@ import { FolderCard, LooseFolderCard, type Folder } from '../FeedFolders.tsx';
 import Timeline from '../Timeline.tsx';
 import { LeadsHome } from '../Leads.tsx';
 import TrendShowcase from '../TrendShowcase.tsx';
+import Galaxy from '../Galaxy.tsx';
 
 export interface StudioModel {
   id: string; name: string; brand: string; brand_id: string;
@@ -32,8 +33,8 @@ interface Stats { paintRecipes: number; careLessons: number; authLessons: number
 
 /**
  * Anajak Bag: an AI work assistant for second-hand bag vendors (Aran / Rong Kluea).
- * Home: this month's fast-selling models on top, then the skills (🎨 paint, 🔍 check, 🧽 repair, 💬 ask), then (for staff)
- * customers found on TikTok.
+ * Home, on the install screen's galaxy (calm): this month's fast-selling models, then (for staff) customers found on
+ * TikTok, then the tools that have no tab of their own. The four skills are not repeated here: they are the bottom tabs.
  */
 export default function Dashboard() {
   const { t } = useI18n();
@@ -47,43 +48,37 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 px-4 pb-6 pt-3 md:px-8">
-      <header className="flex items-center gap-2 text-sm text-muted">
-        <span className="h-1.5 w-1.5 rotate-45 bg-gold" aria-hidden />
-        <h1 className="font-sans text-sm font-normal">{t('home.headline')}</h1>
-      </header>
+    <>
+      <Galaxy calm />
+      <div className="home-glass relative mx-auto max-w-5xl space-y-6 px-4 pb-8 pt-4 md:px-8">
+        <header className="flex items-center gap-3">
+          <span className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+            <span aria-hidden className="absolute inset-0 rounded-2xl" style={{ background: 'radial-gradient(circle, rgba(242,202,80,0.45), transparent 70%)', filter: 'blur(8px)' }} />
+            <img src="/icons/icon-192.png" alt="" width={44} height={44} className="relative rounded-xl" />
+          </span>
+          <h1 className="font-sans text-base font-normal leading-snug text-white/85">{t('home.headline')}</h1>
+        </header>
 
-      {/* this month's fast sellers first: what vendors look at every day */}
-      <TrendShowcase market={market} />
+        {/* this month's fast sellers first: what vendors look at every day */}
+        <TrendShowcase market={market} />
 
-      {/* the skills: four tiles in one row, paint first */}
-      <section aria-labelledby="skills-h" className="space-y-2">
-        <h2 id="skills-h" className="text-base leading-tight">✦ {t('skill.title')}</h2>
-        <div className="grid grid-cols-4 gap-2">
-          {([['/paint', 'skill.paint', ICON.brush], ['/check', 'skill.check', ICON.scan], ['/repair', 'skill.repair', ICON.wrench], ['/chat', 'skill.chat', ICON.chat]] as const).map(([to, title, icon], i) => (
-            <Link key={to} to={to} className={`flex flex-col items-center gap-1.5 rounded-2xl border px-1 py-2.5 text-center transition ${i === 0 ? 'border-gold/50 bg-gold-light' : 'border-hairline bg-surface-card hover:border-gold/50'}`}>
-              <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${i === 0 ? 'bg-gold text-charcoal' : 'bg-surface-low text-gold'}`}><Svg d={icon} className="h-5 w-5" /></span>
-              <span className="line-clamp-2 text-[11px] font-semibold leading-tight">{t(`${title}Short`)}</span>
-            </Link>
-          ))}
-        </div>
-        <p className="text-[11px] text-muted">{t('skill.hint')}</p>
-      </section>
+        {/* staff: customers found on TikTok */}
+        <LeadsHome />
 
-      {/* staff: customers found on TikTok */}
-      <LeadsHome />
-
-      <section aria-labelledby="tools-h">
-        <h2 id="tools-h" className="mb-1.5 text-xs font-semibold text-muted">{t('home.more')}</h2>
-        <div className="grid grid-cols-2 gap-2">
-          {([['/datecode', 'home.datecode', ICON.shield], ['/verify', 'nav.verify', ICON.trend]] as const).map(([to, title, icon]) => (
-            <Link key={to} to={to} className="flex items-center gap-2 rounded-xl border border-hairline bg-surface-card px-3 py-2 text-xs font-semibold transition hover:border-gold">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-light text-gold"><Svg d={icon} className="h-4 w-4" /></span>{t(title)}
-            </Link>
-          ))}
-        </div>
-      </section>
-    </div>
+        {/* only what has no tab at the bottom */}
+        <section aria-labelledby="tools-h" className="space-y-2">
+          <h2 id="tools-h" className="px-1 text-sm font-semibold text-muted">{t('home.more')}</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {([['/datecode', 'home.datecode', ICON.shield], ['/verify', 'nav.verify', ICON.trend]] as const).map(([to, title, icon]) => (
+              <Link key={to} to={to} className="flex flex-col gap-3 rounded-2xl border border-gold/20 bg-surface-card p-4 transition hover:border-gold/60">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold"><Svg d={icon} className="h-5 w-5" /></span>
+                <span className="flex items-center justify-between text-sm font-semibold">{t(title)}<span aria-hidden className="text-gold">→</span></span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { api, ApiError } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
+import AiBusy from '../AiBusy.tsx';
 import { Notice, Page, errText } from '../ui.tsx';
 import LeatherPicker, { StepList, type Leather } from '../LeatherPicker.tsx';
 import { MembershipNeeded, isMembershipError } from './Membership.tsx';
@@ -42,6 +43,7 @@ export default function Repair() {
 
   return (
     <Page title={`🧽 ${t('skill.repair')}`} subtitle={t('repair.sub')}>
+      <AiBusy show={busy} stages={['aib.repair1', 'aib.repair2', 'aib.repair3']} />
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="space-y-4">
           <div>
