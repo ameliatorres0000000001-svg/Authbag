@@ -56,6 +56,24 @@ export default function DateCodeAppearanceCard({ base, canRun, askTyped = false 
       {!r ? (ai !== false && <p className="text-sm text-muted">{t('dca.none')}</p>) : (
         <>
           {r.summary && <p className="text-sm">{r.summary}</p>}
+          {/* owner's 4 typography checks: font & size, spacing & stamp, each compared with references */}
+          {(r.fontSize || r.spacingStyle || r.checks?.length > 0) && (
+            <div className="space-y-2 rounded-lg border border-gold/30 bg-surface-low p-3 text-sm">
+              {r.fontSize && <p><b>🔠 {t('dca.fontSize')}</b> {r.fontSize}</p>}
+              {r.spacingStyle && <p><b>↔ {t('dca.spacingStyle')}</b> {r.spacingStyle}</p>}
+              {r.checks?.length > 0 && (
+                <ul className="grid grid-cols-2 gap-1.5">
+                  {r.checks.map((c) => (
+                    <li key={c.key} className="rounded-md bg-surface-card px-2 py-1.5 text-xs" title={c.note}>
+                      <span className={`mr-1 font-bold ${c.status === 'matches' ? 'text-verified' : c.status === 'differs' ? 'text-counterfeit' : 'text-muted'}`}>{c.status === 'matches' ? '✓' : c.status === 'differs' ? '!' : '?'}</span>
+                      <span className="font-semibold">{t(`dca.chk.${c.key}`)}</span>
+                      {c.note && <span className="mt-0.5 block text-muted">{c.note}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           <dl className="divide-y divide-hairline text-sm">
             {rows.filter(([, v]) => v !== '' && v != null).map(([k, v]) => (
               <div key={k} className="grid grid-cols-[7.5rem_1fr] gap-2 py-1.5">

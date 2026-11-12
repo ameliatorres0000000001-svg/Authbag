@@ -438,6 +438,25 @@ async function recheckMarks(env: Env, image: VisionImage, marks: SuggestedMark[]
 }
 
 /**
+ * Owner's typography checks for date codes (2026-11), worded as comparisons with references, never as a verdict.
+ * Correction to the owner's draft: a space between the letters and the digits is NOT by itself a difference: genuine
+ * modern codes are printed both ways (e.g. "DR 3105", "GI 4152", "LB 1002" next to "DU5105"); what matters is that
+ * the spacing is even and matches references of the same era and factory.
+ */
+export const DATE_CODE_TYPOGRAPHY =
+  'Date-code typography: even when the characters follow the right date format, compare these 4 visual checks with the references ' +
+  '(same brand, era, factory and stamp type first) and report each as matches / differs / unclear: ' +
+  '(1) WEIGHT: references are usually thin, crisp strokes of even thickness; thick, bloated or blurry strokes where the stamp or ink spread are a difference. ' +
+  '(2) PROPORTIONS: all characters the same height on one straight baseline; compare the shapes of 0 and 1 with the references (on Louis Vuitton heat stamps the 0 is usually a narrow oval, ' +
+  'not a wide circle, and the 1 a clean stem); one character taller, wider or tilted than its neighbours is a difference. ' +
+  '(3) SPACING: even gaps throughout and placement centred on the tab with margins to the stitching; a single space between letters and digits occurs on genuine items, ' +
+  'so judge only whether the gaps are even and match the references; letters squeezed together, overlapping, or one odd gap are differences; ' +
+  'vintage codes from about 1985-1989 put the digits first and the factory letters after a clear space (e.g. "8909 VX"). ' +
+  '(4) STAMP: blind stamps pressed in with sharp inner edges and smooth surrounding material; foil stays inside the grooves; ' +
+  'a shallow mark that looks printed on the surface, foil bleeding onto the grain, or a melted / over-deep stamp are differences. ' +
+  'Blur, glare, angle and wear make most of these "unclear": say so instead of guessing.';
+
+/**
  * Describe what a date code LOOKS like: shape, size, font, spacing, alignment, depth, placement.
  * Image 1 is the photo to describe; any further images are reference date-code photos of the same brand.
  * Descriptive only, no verdict, no score. Millimetre sizes are kept only when a ruler/scale is visible.
@@ -450,7 +469,11 @@ export async function analyzeDateCodeAppearance(env: Env, image: VisionImage, re
     `font (serif or sans-serif, narrow or wide, stroke thickness, shapes of distinctive digits such as 0, 1, 4, 7); size relative to nearby features; ` +
     `character height in millimetres ONLY if a ruler or scale is visible (otherwise null and scaleVisible false); spacing between characters; baseline alignment and centring; pressed depth, edge sharpness and any foil or ink fill; ` +
     `photo problems (blur, glare, angle, crop) that limit what can be seen. Use short, plain sentences a beginner understands. ` +
-    `Reply with JSON only: {"transcription":"","characterCount":0,"lines":1,"method":"","placement":"","surface":"","font":"","size":"","sizeMm":null,"scaleVisible":false,"spacing":"","alignment":"","depthEdges":"","differences":[{"feature":"","inspected":"","reference":"","photoCaveat":""}],"photoIssues":[""],"summary":""}` + langRule(ctx.lang) + ' The transcription field is the code exactly as visible.',
+    `${DATE_CODE_TYPOGRAPHY} Put the 4 checks in "checks" (key weight / proportions / spacing / stamp). ` +
+    `Then write fontSize: 1-2 short sentences on font weight, size and the shapes of 0 and 1; and spacingStyle: 1-2 short sentences on spacing and how cleanly the stamp is pressed. ` +
+    `Reply with JSON only: {"transcription":"","characterCount":0,"lines":1,"method":"","placement":"","surface":"","font":"","size":"","sizeMm":null,"scaleVisible":false,"spacing":"","alignment":"","depthEdges":"",` +
+    `"checks":[{"key":"weight|proportions|spacing|stamp","status":"matches|differs|unclear","note":""}],"fontSize":"","spacingStyle":"",` +
+    `"differences":[{"feature":"","inspected":"","reference":"","photoCaveat":""}],"photoIssues":[""],"summary":""}` + langRule(ctx.lang) + ' The transcription field is the code exactly as visible.',
     [image, ...refs],
     `Brand: ${ctx.brand}.${ctx.model ? ` Model: ${ctx.model}.` : ''}${ctx.typed ? ` The appraiser typed the code as: ${ctx.typed}.` : ''}`,
     1800);
@@ -630,6 +653,7 @@ export async function assessVerification(env: Env, ctx: {
     'different angle or lighting, or no reference), with your confidence 0..1 in THAT observation. Lighting, angle and resolution often explain differences: say so. ' +
     'Then suggest ONE outcome: "consistent_with_references" (all key features match), "concerns_found" (one or more clear differences on key features), ' +
     '"insufficient_evidence" (key photos missing or too unclear) or "requires_expert_review" (mixed or uncertain), with your confidence 0..1 in that suggestion. ' +
+    `For the serial / date-code photo: ${DATE_CODE_TYPOGRAPHY} Report each of the 4 checks as its own finding (step "serial"). ` +
     'FIRST check every CUSTOMER photo for quality: "clear", "soft" (usable but blurry / dim / a little far) or "unclear" (too blurry, dark, far or cropped to see stitching, ' +
     'engravings or code characters). For a soft or unclear photo say in one short line what to change when retaking (closer, steadier, more light, straight on). ' +
     'Features in an unclear photo are "unclear"; if a key photo (logo / stamp, serial / date code, hardware) is unclear or missing, suggest "insufficient_evidence". ' +
