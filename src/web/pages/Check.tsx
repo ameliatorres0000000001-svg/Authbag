@@ -169,10 +169,6 @@ export default function Check() {
 
       {/* STEP 2 — the bag is known: its photo, brand and model, then the photos to take, then scan or upload */}
       {known && (() => {
-        const aiShots = ident?.shots?.length && choice?.brandId === (ident.brandId ?? ident.otherBrandId) && model.trim() === (ident.modelName ?? '') ? ident.shots : null;
-        const rows: { title: string; hint: string; refs: ShotRef[] }[] = aiShots
-          ? aiShots.map((x) => ({ title: x.title, hint: x.hint, refs: x.refs }))
-          : STEPS.filter((x) => x !== 'extra').map((x) => ({ title: t(`vr.step.${x}`), hint: t(`vr.tip.${x}`), refs: [] }));
         const sameBag = !!ident && choice?.brandId === (ident.brandId ?? ident.otherBrandId);
         return (
           <>
@@ -188,60 +184,18 @@ export default function Check() {
                 <div className="font-serif text-2xl leading-tight">{brandName}</div>
                 <div className="text-lg leading-snug">{model.trim() || <span className="text-muted">{t('ck.modelUnknown')}</span>}</div>
                 {sameBag && (ident!.size || ident!.material) && <div className="text-xs text-gold/90">{[ident!.size, ident!.material].filter(Boolean).join(' · ')}</div>}
-                {sameBag && ident!.desc && <p className="pt-1 text-sm leading-relaxed text-muted">{ident!.desc}</p>}
-                {sameBag && <div className="text-[11px] text-muted">{t('ck.confidence')} {Math.round(ident!.confidence * 100)}%</div>}
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <button type="button" className="btn-ghost !py-1.5 text-xs" onClick={() => setManual(true)}>✎ {t('ck.fix')}</button>
-                  <button type="button" className="btn-ghost !py-1.5 text-xs" onClick={restart}>↺ {t('ck.rescan')}</button>
+                {/* the two ways to go on: scan the points with the camera, or upload them (several at once) */}
+                <div className="grid grid-cols-2 gap-2 pt-3">
+                  <Link to={go('scan') ?? '/check'} className="btn-primary flex items-center justify-center gap-2 !py-3 text-base"><Svg d={ICON.photo} />{t('ck.scanVerify')}</Link>
+                  <Link to={go('upload') ?? '/check'} className="btn-ghost flex items-center justify-center gap-2 !py-3 text-base"><Svg d={ICON.upload} />{t('ck.uploadAll')}</Link>
+                </div>
+                <div className="flex justify-between pt-1 text-xs text-muted">
+                  <button type="button" className="underline underline-offset-2" onClick={() => setManual(true)}>✎ {t('ck.fix')}</button>
+                  <button type="button" className="underline underline-offset-2" onClick={restart}>↺ {t('ck.rescan')}</button>
                 </div>
               </div>
             </section>
 
-            {/* the photos to take, as short links: tap one to see how to shoot it (and our original photos to follow) */}
-            <section className="rounded-2xl border border-hairline bg-surface-card p-4">
-              <div className="font-serif text-lg">2. {t('ck.where')}</div>
-              {aiShots && <p className="mt-0.5 text-[11px] text-muted">✨ {t('ck.shotsAi').replace('{model}', [ident!.brandName, ident!.modelName].filter(Boolean).join(' '))}</p>}
-              <ol className="mt-3 divide-y divide-hairline">
-                {rows.map((r, k) => {
-                  const on = open === k;
-                  return (
-                    <li key={k}>
-                      <button type="button" aria-expanded={on} onClick={() => setOpen(on ? null : k)} className="flex w-full items-center gap-3 py-2.5 text-left">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold font-mono text-xs font-bold text-charcoal">{k + 1}</span>
-                        <span className="min-w-0 flex-1 text-sm font-semibold leading-snug">{r.title}</span>
-                        {r.refs.length > 0 && <span className="shrink-0 text-[10px] text-gold">🖼 {r.refs.length}</span>}
-                        <span className="shrink-0 text-xs text-gold underline underline-offset-2">{on ? t('ck.hide') : t('ck.howShoot')}</span>
-                      </button>
-                      {on && (
-                        <div className="mb-3 ml-10 space-y-2 rounded-xl bg-surface-low p-3 text-sm">
-                          {r.hint ? <p className="leading-relaxed">📷 {r.hint}</p> : null}
-                          {r.refs.length > 0 && (
-                            <div className="flex gap-2">
-                              {r.refs.map((x) => (
-                                <button key={x.id} type="button" onClick={() => setZoom(x)} aria-label={t('ck.refOpen')} className="relative h-20 w-20 overflow-hidden rounded-lg border border-gold/40">
-                                  <img src={`/api/assets/${x.id}/image`} alt={x.title ?? ''} loading="lazy" className="h-full w-full object-cover" />
-                                  <span className="absolute inset-x-0 bottom-0 bg-black/60 text-center text-[9px] font-semibold text-gold">{t('ck.refTag')}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-              {aiShots && aiShots.every((x) => !x.refs.length) && <p className="mt-2 text-[11px] text-muted">{t('ck.noRefs')}</p>}
-            </section>
-
-            {/* 3. scan or upload the points → straight into the photo steps */}
-            <section className="space-y-2">
-              <div className="px-1 font-serif text-lg">3. {t('ck.verifyNow')}</div>
-              <div className="grid grid-cols-2 gap-3">
-                <Tile id="photo" title={t('check.photo')} help={t(ai ? 'check.photoHelpAi' : 'check.photoHelp')} to={go('scan')} onClick={needBrand} primary />
-                <Tile id="upload" title={t('check.upload')} help={t(ai ? 'check.uploadHelpAi' : 'check.uploadHelp')} to={go('upload')} onClick={needBrand} />
-              </div>
-            </section>
           </>
         );
       })()}
@@ -253,7 +207,7 @@ export default function Check() {
           <button type="button" className="rounded-full border border-white/30 px-5 py-2 text-sm text-white">{t('steps.close')}</button>
         </div>
       )}
-      <p className="rounded-2xl bg-surface-low p-3 text-xs text-muted">{t(ai ? 'pc.disclaimer' : 'ck.noVerdict')} <Link to="/authenticity" className="text-gold underline">{t('ck.learn')}</Link></p>
+      {!known && <p className="rounded-2xl bg-surface-low p-3 text-xs text-muted">{t(ai ? 'pc.disclaimer' : 'ck.noVerdict')} <Link to="/authenticity" className="text-gold underline">{t('ck.learn')}</Link></p>}
     </div>
   );
 }
