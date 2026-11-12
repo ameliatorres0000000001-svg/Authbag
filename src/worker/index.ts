@@ -1640,8 +1640,8 @@ app.get('/api/verify/:id', async (c) => {
   let precheck = null as Record<string, unknown> | null;
   const experts = await expertReviewOn(c.env);
   if (!experts) {
-    const row = await c.env.DB.prepare('SELECT suggested_outcome, findings_json, summary_en, summary_km, error, created_at FROM verify_ai_reviews WHERE request_id = ? ORDER BY created_at DESC LIMIT 1')
-      .bind(r.id).first<{ suggested_outcome: string | null; findings_json: string | null; summary_en: string | null; summary_km: string | null; error: string | null; created_at: string }>().catch(() => null);
+    const row = await c.env.DB.prepare('SELECT suggested_outcome, findings_json, summary_en, summary_km, photos_json, error, created_at FROM verify_ai_reviews WHERE request_id = ? ORDER BY created_at DESC LIMIT 1')
+      .bind(r.id).first<{ suggested_outcome: string | null; findings_json: string | null; summary_en: string | null; summary_km: string | null; photos_json: string | null; error: string | null; created_at: string }>().catch(() => null);
     precheck = { pending: !row, failed: !!row && !row.suggested_outcome, result: row ? customerPrecheck(row) : null, refs: Object.keys(found).length, at: row?.created_at ?? null };
   }
   return c.json({ request: r, photos, plan, refs, certificate, offers, ai, precheck, expertReview: experts });
@@ -1959,9 +1959,9 @@ async function runAiReview(env: AppEnv['Bindings'], requestId: string): Promise<
   const r = await env.DB.prepare(`SELECT r.id, r.brand_id, r.model_text, COALESCE(r.brand_text, b.name) AS brand FROM verify_requests r JOIN brands b ON b.id = r.brand_id WHERE r.id = ?`)
     .bind(requestId).first<Record<string, any>>();
   if (!r) return { ok: false, error: 'not_found' };
-  const rows = (await env.DB.prepare('SELECT step, r2_key, mime FROM verify_photos WHERE request_id = ? ORDER BY created_at LIMIT 10').bind(r.id).all<{ step: string; r2_key: string; mime: string }>()).results;
-  const photos: { step: string; image: { data: ArrayBuffer; mime: string } }[] = [];
-  for (const p of rows) { const o = await env.VAULT.get(p.r2_key); if (o) photos.push({ step: p.step, image: { data: await o.arrayBuffer(), mime: p.mime } }); }
+  const rows = (await env.DB.prepare('SELECT id, step, r2_key, mime FROM verify_photos WHERE request_id = ? ORDER BY created_at LIMIT 10').bind(r.id).all<{ id: string; step: string; r2_key: string; mime: string }>()).results;
+  const photos: { id: string; step: string; image: { data: ArrayBuffer; mime: string } }[] = [];
+  for (const p of rows) { const o = await env.VAULT.get(p.r2_key); if (o) photos.push({ id: p.id, step: p.step, image: { data: await o.arrayBuffer(), mime: p.mime } }); }
   if (!photos.length) return { ok: false, error: 'no_photos' };
   const found = await verifyRefs(env, r.brand_id, r.model_text);
   const refs: { step: string; image: { data: ArrayBuffer; mime: string }; model: string | null }[] = [];
@@ -1981,8 +1981,10 @@ async function runAiReview(env: AppEnv['Bindings'], requestId: string): Promise<
     const text = await assessVerification(env, { brand: r.brand, model: r.model_text, photos, refs, knowledge, expertNotes, skills });
     const a = parseAiReview(text);
     if (!a) throw new Error('ai_unreadable_reply');
-    await env.DB.prepare(`INSERT INTO verify_ai_reviews (id, request_id, model, suggested_outcome, confidence, findings_json, summary_en, summary_km) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, r.id, pointsModel(env), a.suggestion, a.confidence, JSON.stringify(a.findings), a.summary_en || null, a.summary_km || null).run();
+    // photo quality, tied to the stored photo (the AI numbers the customer photos 1..n in the order sent)
+    const quality = a.photos.filter((q) => photos[q.image - 1]).map((q) => ({ photo_id: photos[q.image - 1].id, step: photos[q.image - 1].step, quality: q.quality, note_en: q.note_en, note_km: q.note_km }));
+    await env.DB.prepare(`INSERT INTO verify_ai_reviews (id, request_id, model, suggested_outcome, confidence, findings_json, summary_en, summary_km, photos_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, r.id, pointsModel(env), a.suggestion, a.confidence, JSON.stringify(a.findings), a.summary_en || null, a.summary_km || null, quality.length ? JSON.stringify(quality).slice(0, 6000) : null).run();
     return { ok: true };
   } catch (e) {
     const msg = String((e as Error).message ?? e).slice(0, 300);

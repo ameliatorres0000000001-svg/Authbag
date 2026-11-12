@@ -630,8 +630,14 @@ export async function assessVerification(env: Env, ctx: {
     'different angle or lighting, or no reference), with your confidence 0..1 in THAT observation. Lighting, angle and resolution often explain differences: say so. ' +
     'Then suggest ONE outcome: "consistent_with_references" (all key features match), "concerns_found" (one or more clear differences on key features), ' +
     '"insufficient_evidence" (key photos missing or too unclear) or "requires_expert_review" (mixed or uncertain), with your confidence 0..1 in that suggestion. ' +
-    'Write feature names and notes in English and natural Khmer. Keep brand names and codes exactly as written. ' +
-    'Reply with JSON only: {"suggestion":"…","confidence":0..1,"summary_en":"2-3 sentences","summary_km":"…","findings":[{"step":"model|logo|serial|material|hardware|zipper|extra","feature_en":"…","feature_km":"…","status":"matches|differs|unclear","confidence":0..1,"note_en":"one short line","note_km":"…"}]}';
+    'FIRST check every CUSTOMER photo for quality: "clear", "soft" (usable but blurry / dim / a little far) or "unclear" (too blurry, dark, far or cropped to see stitching, ' +
+    'engravings or code characters). For a soft or unclear photo say in one short line what to change when retaking (closer, steadier, more light, straight on). ' +
+    'Features in an unclear photo are "unclear"; if a key photo (logo / stamp, serial / date code, hardware) is unclear or missing, suggest "insufficient_evidence". ' +
+    'Write feature names and notes in English and natural, short Khmer a buyer or seller understands at once. Keep brand names and codes exactly as written. ' +
+    'Reply with JSON only: {"suggestion":"…","confidence":0..1,"summary_en":"2-3 sentences","summary_km":"…",' +
+    '"photos":[{"image":1,"quality":"clear|soft|unclear","note_en":"…","note_km":"…"}],' +
+    '"findings":[{"step":"model|logo|serial|material|hardware|zipper|extra","feature_en":"…","feature_km":"…","status":"matches|differs|unclear","confidence":0..1,"note_en":"one short line","note_km":"…"}]} ' +
+    '— "image" in photos is the Image number of a CUSTOMER photo.';
   const user = [
     `Brand: ${ctx.brand}${ctx.model ? ` · Model: ${ctx.model}` : ''}`,
     ...lines,
