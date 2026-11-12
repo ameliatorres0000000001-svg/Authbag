@@ -84,3 +84,15 @@
 :lang(km) .text-\[9px\]:not([class*='leading-']), :lang(km) .text-\[10px\]:not([class*='leading-']), :lang(km) .text-\[11px\]:not([class*='leading-']),
 :lang(km) .text-xs:not([class*='leading-']) { line-height: 1.55; }
 :lang(km) .text-sm:not([class*='leading-']) { line-height: 1.6; }
+
+/*
+ * Home screen on the galaxy background (dark theme only): cards become frosted glass so the sky shows through,
+ * the same look as the install screen's country cards. The light theme keeps its plain ivory cards.
+ */
+[data-theme='light'] .galaxy-calm { display: none; }
+:root:not([data-theme='light']) .home-glass .bg-surface-card,
+:root:not([data-theme='light']) .home-glass .from-surface-card {
+  background: linear-gradient(165deg, rgba(242, 202, 80, 0.09), rgba(255, 255, 255, 0.045) 45%, rgba(255, 255, 255, 0.03));
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}

@@ -12,6 +12,7 @@ import StepPlayer from '../StepPlayer.tsx';
 import LeatherPicker, { StepList, type Leather } from '../LeatherPicker.tsx';
 import { MembershipNeeded, isMembershipError } from './Membership.tsx';
 import AiWorkspace from '../AiWorkspace.tsx';
+import AiBusy from '../AiBusy.tsx';
 import { minutesIn } from '../../shared/stepMinutes.ts';
 import { paintLabel } from '../../shared/paintKnowledge.ts';
 import { inkOn, sharePercents } from '../../shared/mixShares.ts';
@@ -423,6 +424,7 @@ export default function Paint() {
 
   return (
     <Page title={`🎨 ${t('skill.paint')}`} subtitle={t('pn.sub')}>
+      <AiBusy show={busy || gBusy || mBusy} stages={busy ? ['aib.measure'] : gBusy ? ['aib.leather'] : ['aib.mix', 'aib.steps']} />
       <div className="mx-auto max-w-xl space-y-4">
         {mode && <button type="button" onClick={restart} className="flex items-center gap-1 text-sm text-muted">← {t('pn.back')}</button>}
 
