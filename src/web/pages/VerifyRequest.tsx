@@ -403,7 +403,10 @@ function AiReviewCard({ requestId, ai, onChange }: { requestId: string; ai: any 
 }
 
 interface PcFinding { step: string; feature_en: string; feature_km: string; status: 'matches' | 'differs' | 'unclear'; note_en: string; note_km: string }
-interface Pc { pending: boolean; failed: boolean; refs: number; at: string | null; result: { level: string; summary_en: string; summary_km: string; findings: PcFinding[] } | null }
+interface PcPhoto { photo_id: string; step: string; quality: 'clear' | 'soft' | 'unclear'; note_en: string; note_km: string }
+interface Pc { pending: boolean; failed: boolean; refs: number; at: string | null; result: { level: string; summary_en: string; summary_km: string; findings: PcFinding[]; photos?: PcPhoto[] } | null }
+const QUALITY: Record<string, [string, string]> = { clear: ['●', 'bg-verified text-white'], soft: ['◐', 'bg-review text-white'], unclear: ['○', 'bg-counterfeit text-white'] };
+const LEVEL_ICON: Record<string, string> = { no_differences_seen: '✓', concerns: '!', more_photos: '📷', unclear: '?' };
 const STATUS_ICON: Record<string, [string, string]> = { matches: ['✓', 'bg-verified-bg text-verified'], differs: ['!', 'bg-counterfeit-bg text-counterfeit'], unclear: ['?', 'bg-surface-high text-muted'] };
 
 /**
@@ -438,23 +441,64 @@ function PrecheckCard({ id, pc, onChange }: { id: string; pc: Pc; onChange: () =
       )}
       {res && (
         <>
-          <p className="text-sm">{t(`pc.what.${res.level}`)}</p>
+          {/* the level, large: what the AI saw in these photos (never a verdict) */}
+          <div className={`flex items-center gap-3 rounded-2xl p-4 ${PRECHECK_TONE[res.level] ?? PRECHECK_TONE.unclear}`}>
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/10 text-2xl font-bold" aria-hidden>{LEVEL_ICON[res.level] ?? '?'}</span>
+            <div className="min-w-0">
+              <div className="text-lg font-semibold leading-tight">{t(`pc.lvl.${res.level}`)}</div>
+              <p className="mt-0.5 text-[13px] leading-snug opacity-90">{t(`pc.what.${res.level}`)}</p>
+            </div>
+          </div>
           {(km ? res.summary_km : res.summary_en) && <p className="rounded-xl bg-surface-low p-3 text-sm leading-relaxed">{km ? res.summary_km || res.summary_en : res.summary_en}</p>}
           {pc.refs === 0 && <Notice tone="warn">{t('pc.noRefs')}</Notice>}
-          <ul className="space-y-2">
-            {res.findings.map((f, i) => {
-              const [icon, tone] = STATUS_ICON[f.status] ?? STATUS_ICON.unclear;
-              return (
-                <li key={i} className="flex gap-3 rounded-xl border border-hairline p-3 text-sm">
-                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-bold ${tone}`} aria-label={t(`pc.st.${f.status}`)}>{icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold">{(km && f.feature_km) || f.feature_en} <span className="text-xs font-normal text-muted">· {t(`vr.step.${f.step}`)} · {t(`pc.st.${f.status}`)}</span></div>
-                    {((km && f.note_km) || f.note_en) && <p className="mt-0.5 text-muted">{(km && f.note_km) || f.note_en}</p>}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+
+          {/* how clear each photo was: retake the ones that were not */}
+          {!!res.photos?.length && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold">{t('pc.photosTitle')}</h3>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {res.photos.map((p) => {
+                  const [icon, tone] = QUALITY[p.quality] ?? QUALITY.unclear;
+                  return (
+                    <figure key={p.photo_id} className="overflow-hidden rounded-xl border border-hairline bg-surface-low">
+                      <div className="relative">
+                        <img src={`/api/verify/photos/${p.photo_id}/image`} alt="" loading="lazy" className="aspect-square w-full object-cover" />
+                        <span className={`absolute left-1 top-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${tone}`}>{icon} {t(`pc.q.${p.quality}`)}</span>
+                      </div>
+                      <figcaption className="px-1.5 py-1 text-[11px] leading-tight">
+                        <span className="block font-semibold">{t(`vr.step.${p.step}`)}</span>
+                        {p.quality !== 'clear' && ((km && p.note_km) || p.note_en) && <span className="block text-muted">{(km && p.note_km) || p.note_en}</span>}
+                      </figcaption>
+                    </figure>
+                  );
+                })}
+              </div>
+              {res.photos.some((p) => p.quality === 'unclear') && <Notice tone="warn">{t('pc.retake')}</Notice>}
+            </div>
+          )}
+
+          {/* point by point */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold">{t('pc.pointsTitle')}</h3>
+            <ol className="space-y-2">
+              {res.findings.map((f, i) => {
+                const [icon, tone] = STATUS_ICON[f.status] ?? STATUS_ICON.unclear;
+                return (
+                  <li key={i} className="flex gap-3 rounded-xl border border-hairline p-3 text-sm">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-bold ${tone}`} aria-label={t(`pc.st.${f.status}`)}>{icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-semibold">{(km && f.feature_km) || f.feature_en}</span>
+                        <span className="text-[11px] text-muted">{t(`vr.step.${f.step}`)}</span>
+                      </div>
+                      <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone}`}>{t(`pc.st.${f.status}`)}</span>
+                      {((km && f.note_km) || f.note_en) && <p className="mt-1 leading-snug text-muted">{(km && f.note_km) || f.note_en}</p>}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         </>
       )}
       {err && <Notice tone="bad">{err}</Notice>}
