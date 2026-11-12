@@ -1,7 +1,8 @@
 import React from 'react';
 import { useI18n } from './i18n.tsx';
+import { guideFor } from '../shared/pointGuide.ts';
 
-export interface Point { id: string; x: number; y: number; w: number; h: number; label: string; note?: string | null; source?: string; i18n_json?: string | null }
+export interface Point { id: string; x: number; y: number; w: number; h: number; label: string; note?: string | null; source?: string; i18n_json?: string | null; guide_json?: string | null }
 
 /** The point's label and note in the viewer's language: Khmer for KH, English otherwise; the original text if no translation. */
 export function localizePoint(p: Point, locale: string): { label: string; note: string | null } {
@@ -23,7 +24,9 @@ export default function AnnotatedPhoto({ src, points, active, onPick, tone = 'ne
   /** limit the photo to ~56% of the screen height (feed) instead of full width */
   fit?: boolean;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
+  const act = active != null && points[active] ? points[active] : null;
+  const guide = act ? guideFor(act.guide_json, locale) : null;
   const dot = { genuine: 'bg-verified', counterfeit: 'bg-counterfeit', neutral: 'bg-gold' }[tone];
   return (
     <figure className={`overflow-hidden rounded-xl border border-hairline bg-surface-card ${className}`}>
@@ -48,8 +51,27 @@ export default function AnnotatedPhoto({ src, points, active, onPick, tone = 'ne
             }, <span className={`absolute -left-2.5 -top-2.5 flex h-5 w-5 items-center justify-center rounded-full border font-mono text-[10px] font-semibold ${on ? 'border-gold bg-gold text-charcoal' : 'border-white bg-gold text-charcoal'}`}>{i + 1}</span>)
           );
         })}
+        {/* tapped box with an AI guide: a short dark tooltip with a gold frame, right above (or below) the box */}
+        {act && guide && onPick && (() => {
+          const cx = act.x + act.w / 2, above = act.y > 0.22;
+          const pos: React.CSSProperties = cx < 0.3 ? { left: `${Math.max(1, act.x * 100)}%` } : cx > 0.7 ? { right: `${Math.max(1, (1 - act.x - act.w) * 100)}%` } : { left: `${cx * 100}%`, transform: 'translateX(-50%)' };
+          return (
+            <div role="tooltip" className="pointer-events-none absolute z-10 w-max max-w-[72%] rounded-xl border border-gold/80 bg-black/80 px-3 py-2 text-[13px] leading-snug text-white shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-sm"
+              style={{ ...pos, ...(above ? { bottom: `${(1 - act.y) * 100 + 1.5}%` } : { top: `${(act.y + act.h) * 100 + 1.5}%` }) }}>
+              <span className="mb-0.5 block text-[11px] font-semibold text-gold">{(active ?? 0) + 1}. {guide.title}</span>{guide.popup}
+            </div>
+          );
+        })()}
         </div>
       </div>
+      {act && guide && onPick && (
+        <div className="space-y-1.5 border-t border-gold/30 bg-surface-card px-3 py-3 text-[13.5px] leading-snug">
+          <div className="font-semibold"><span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gold font-mono text-[10px] text-charcoal">{(active ?? 0) + 1}</span>{guide.title}</div>
+          {guide.look_at && <p><span aria-hidden>🔍 </span><b>{t('pg.look')}</b> {guide.look_at}</p>}
+          {guide.match && <p><span aria-hidden>✓ </span><b className="text-verified">{t('pg.match')}</b> {guide.match}</p>}
+          {guide.differs && <p><span aria-hidden>⚠ </span><b className="text-review">{t('pg.differs')}</b> {guide.differs}</p>}
+        </div>
+      )}
       {footer && <div className="flex items-center justify-between gap-2 bg-charcoal px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-white/80">{footer}</div>}
     </figure>
   );
@@ -85,7 +107,7 @@ export function PointCards({ points, active, onPick, empty }: { points: Point[];
               className={`flex w-full gap-3 rounded-xl border px-3 py-2.5 text-left transition ${on ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card hover:border-strong'}`}>
               <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold ${on ? 'bg-gold text-charcoal' : 'bg-gold text-charcoal'}`}>{i + 1}</span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-semibold leading-snug">{tx.label}</span>
+                <span className="block text-[15px] font-semibold leading-snug">{guideFor(p.guide_json, locale)?.title || tx.label}</span>
                 {n.check && (
                   <span className="mt-1 flex gap-1.5 text-[13.5px] leading-snug">
                     <span aria-hidden>🔍</span><span><span className="sr-only">{t('pt.check')}: </span>{n.check}</span>
