@@ -177,7 +177,7 @@ export default function Paint() {
   const [mBusy, setMBusy] = useState(false);
   const [mErr, setMErr] = useState('');
   const [follow, setFollow] = useState(false);
-  const [added, setAdded] = useState<Set<number>>(new Set()); // paints ticked off while mixing
+  const [ticked, setTicked] = useState<Set<number>>(new Set()); // paints ticked off while mixing
   const [member, setMember] = useState(false);
   const [guess, setGuess] = useState<LeatherGuess | null>(null);
   const [gBusy, setGBusy] = useState(false);
@@ -193,7 +193,7 @@ export default function Paint() {
     api.get<{ recipes: PaintRecipe[] }>('/api/paint/recipes').then((r) => setRecipes(r.recipes)).catch(() => setRecipes([]));
     api.get<{ products: PaintProduct[] }>('/api/paint/products').then((r) => setProducts(r.products)).catch(() => {});
   }, []);
-  useEffect(() => { setMethod(null); setMErr(''); setMember(false); setAdded(new Set()); }, [leather, finish, chosen]);
+  useEffect(() => { setMethod(null); setMErr(''); setMember(false); setTicked(new Set()); }, [leather, finish, chosen]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [mode, photo]);
 
   const restart = () => {
@@ -258,7 +258,7 @@ export default function Paint() {
     const body = { surface: leather, finish, recipeId: chosen?.id ?? null, colour: !chosen && res ? { hex: res.hex, lab: res.lab, approx: !!res.approx } : null };
     asked.current = JSON.stringify(body);
     setMBusy(true); setMErr(''); setMember(false);
-    try { setMethod(await api.post<Method>('/api/skills/paint', body)); setAdded(new Set()); }
+    try { setMethod(await api.post<Method>('/api/skills/paint', body)); setTicked(new Set()); }
     catch (e) {
       if (isMembershipError(e)) setMember(true);
       else setMErr(e instanceof ApiError && e.status === 429 ? t('skill.tooMany') : e instanceof ApiError && e.body?.error === 'ai_not_configured' ? t('chat.notConfigured') : errText(e));
@@ -349,11 +349,11 @@ export default function Paint() {
             <p className="px-1 text-xs text-muted">👆 {t('pn.tapAdded')}</p>
             <ul className="space-y-2">
               {method.paints.map((p, i) => {
-                const lbl = paintLabel(p, locale), done = added.has(i), pct = sharePercents(method.paints.map((x) => x.parts))[i];
+                const lbl = paintLabel(p, locale), done = ticked.has(i), pct = sharePercents(method.paints.map((x) => x.parts))[i];
                 return (
                   <li key={i}>
                     <button type="button" aria-pressed={done}
-                      onClick={() => setAdded((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                      onClick={() => setTicked((s) => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
                       className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${done ? 'border-gold/60 bg-gold/10' : 'border-transparent bg-surface-low'}`}>
                       <span className="relative h-11 w-11 shrink-0 rounded-full border border-hairline shadow-inner" style={{ background: p.hex ?? 'transparent' }}>
                         {done && <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 text-lg font-bold text-white">✓</span>}
