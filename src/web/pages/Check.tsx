@@ -50,8 +50,9 @@ export default function Check() {
   const [manual, setManual] = useState(false);
   const [needMember, setNeedMember] = useState(false);
   const [zoom, setZoom] = useState<ShotRef | null>(null);
+  const [open, setOpen] = useState<number | null>(null); // which "how to shoot" row is open
   const identify = async (f: File) => {
-    setIdErr(''); setIdent(null); setManual(false); setIdBusy(true);
+    setIdErr(''); setIdent(null); setManual(false); setOpen(null); setIdBusy(true);
     setPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(f); });
     try {
       const fd = new FormData(); fd.append('file', f);
@@ -79,6 +80,11 @@ export default function Check() {
     : undefined;
   const needBrand = () => { setHint(true); pickRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
 
+  // step 2 once the bag is known: recognised by the AI, or picked by hand and confirmed with "Continue"
+  const known = !!brandId && !manual;
+  const brandName = (ident && choice?.brandId === (ident.brandId ?? ident.otherBrandId) ? ident.brandName : null)
+    ?? choice?.brandText ?? tax?.brands.find((b) => b.id === brandId)?.name ?? '';
+  const restart = () => { setIdent(null); setManual(false); setOpen(null); pick(null); setPreview((old) => { if (old) URL.revokeObjectURL(old); return null; }); };
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-4 pb-10 pt-5 md:px-8">
       <AiBusy show={idBusy} stages={['aib.check1', 'aib.check2']} />
@@ -88,6 +94,7 @@ export default function Check() {
       </header>
       {meta && !ai && !meta.telegram && STAFF_ROLES.includes(me.role) && <p className="text-xs text-counterfeit">⚠ {t('vr.noTelegram')}</p>}
 
+      {!known && (<>
       {/* how it works: one dark card, four steps joined by a gold line */}
       <div className="rounded-2xl border border-hairline bg-charcoal px-2 pb-4 pt-5 text-white shadow-sm">
         <ol className="relative grid grid-cols-4">
@@ -103,8 +110,10 @@ export default function Check() {
           ))}
         </ol>
       </div>
+      </>)}
 
       {needMember && <MembershipNeeded />}
+      {!known && (<>
       {/* 1. one photo of the whole bag: AI recognises brand + model */}
       <div ref={pickRef} className={`space-y-3 rounded-2xl border p-4 transition ${hint ? 'border-counterfeit ring-2 ring-counterfeit/30' : 'border-hairline bg-surface-card'}`}>
         <div className="flex items-baseline justify-between gap-2">
@@ -154,52 +163,86 @@ export default function Check() {
         )}
         {!preview && !manual && <button type="button" className="text-xs text-muted underline" onClick={() => setManual(true)}>{t('ck.pickMyself')}</button>}
         {hint && <p className="text-xs text-counterfeit">{t('ck.needBag')}</p>}
+        {manual && brandId && <button type="button" className="btn-primary w-full" onClick={() => { setManual(false); setOpen(null); }}>{t('ck.continue')} →</button>}
       </div>
+      </>)}
 
-      {/* 2. where to photograph next: the AI's list for this exact model (with our original photos to follow), else the
-          standard list. The AI list is only used while the bag is still the one the AI recognised. */}
-      {brandId && (() => {
+      {/* STEP 2 — the bag is known: its photo, brand and model, then the photos to take, then scan or upload */}
+      {known && (() => {
         const aiShots = ident?.shots?.length && choice?.brandId === (ident.brandId ?? ident.otherBrandId) && model.trim() === (ident.modelName ?? '') ? ident.shots : null;
+        const rows: { title: string; hint: string; refs: ShotRef[] }[] = aiShots
+          ? aiShots.map((x) => ({ title: x.title, hint: x.hint, refs: x.refs }))
+          : STEPS.filter((x) => x !== 'extra').map((x) => ({ title: t(`vr.step.${x}`), hint: t(`vr.tip.${x}`), refs: [] }));
+        const sameBag = !!ident && choice?.brandId === (ident.brandId ?? ident.otherBrandId);
         return (
-          <div className="rounded-2xl border border-hairline bg-surface-card p-4">
-            <div className="font-serif text-lg">2. {t('ck.where')}</div>
-            {aiShots ? (
-              <>
-                <p className="mt-0.5 text-[11px] text-muted">✨ {t('ck.shotsAi').replace('{model}', [ident!.brandName, ident!.modelName].filter(Boolean).join(' '))}</p>
-                <ol className="mt-3 space-y-2">
-                  {aiShots.map((s) => (
-                    <li key={s.step} className="flex gap-3 rounded-xl bg-surface-low p-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold font-mono text-xs font-bold text-charcoal">{s.step}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold leading-snug">{s.title}</span>
-                        {s.hint && <span className="mt-0.5 block text-xs leading-relaxed text-muted">{s.hint}</span>}
-                      </span>
-                      {s.refs.length > 0 && (
-                        <span className="flex shrink-0 gap-1.5">
-                          {s.refs.map((r) => (
-                            <button key={r.id} type="button" onClick={() => setZoom(r)} aria-label={t('ck.refOpen')}
-                              className="relative h-14 w-14 overflow-hidden rounded-lg border border-gold/40">
-                              <img src={`/api/assets/${r.id}/image`} alt={r.title ?? ''} loading="lazy" className="h-full w-full object-cover" />
-                              <span className="absolute inset-x-0 bottom-0 bg-black/60 text-center text-[9px] font-semibold text-gold">{t('ck.refTag')}</span>
-                            </button>
-                          ))}
-                        </span>
+          <>
+            <section className="overflow-hidden rounded-2xl border border-gold/40 bg-surface-card">
+              {preview && (
+                <div className="relative flex justify-center bg-charcoal">
+                  <img src={preview} alt="" className="max-h-72 w-full object-contain" />
+                  <span className="absolute left-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-gold">✓ {t('ck.step1Done')}</span>
+                </div>
+              )}
+              <div className="space-y-1 p-4">
+                {sameBag && <div className="text-[11px] font-semibold text-gold">{t('ck.aiSees')}</div>}
+                <div className="font-serif text-2xl leading-tight">{brandName}</div>
+                <div className="text-lg leading-snug">{model.trim() || <span className="text-muted">{t('ck.modelUnknown')}</span>}</div>
+                {sameBag && (ident!.size || ident!.material) && <div className="text-xs text-gold/90">{[ident!.size, ident!.material].filter(Boolean).join(' · ')}</div>}
+                {sameBag && ident!.desc && <p className="pt-1 text-sm leading-relaxed text-muted">{ident!.desc}</p>}
+                {sameBag && <div className="text-[11px] text-muted">{t('ck.confidence')} {Math.round(ident!.confidence * 100)}%</div>}
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <button type="button" className="btn-ghost !py-1.5 text-xs" onClick={() => setManual(true)}>✎ {t('ck.fix')}</button>
+                  <button type="button" className="btn-ghost !py-1.5 text-xs" onClick={restart}>↺ {t('ck.rescan')}</button>
+                </div>
+              </div>
+            </section>
+
+            {/* the photos to take, as short links: tap one to see how to shoot it (and our original photos to follow) */}
+            <section className="rounded-2xl border border-hairline bg-surface-card p-4">
+              <div className="font-serif text-lg">2. {t('ck.where')}</div>
+              {aiShots && <p className="mt-0.5 text-[11px] text-muted">✨ {t('ck.shotsAi').replace('{model}', [ident!.brandName, ident!.modelName].filter(Boolean).join(' '))}</p>}
+              <ol className="mt-3 divide-y divide-hairline">
+                {rows.map((r, k) => {
+                  const on = open === k;
+                  return (
+                    <li key={k}>
+                      <button type="button" aria-expanded={on} onClick={() => setOpen(on ? null : k)} className="flex w-full items-center gap-3 py-2.5 text-left">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold font-mono text-xs font-bold text-charcoal">{k + 1}</span>
+                        <span className="min-w-0 flex-1 text-sm font-semibold leading-snug">{r.title}</span>
+                        {r.refs.length > 0 && <span className="shrink-0 text-[10px] text-gold">🖼 {r.refs.length}</span>}
+                        <span className="shrink-0 text-xs text-gold underline underline-offset-2">{on ? t('ck.hide') : t('ck.howShoot')}</span>
+                      </button>
+                      {on && (
+                        <div className="mb-3 ml-10 space-y-2 rounded-xl bg-surface-low p-3 text-sm">
+                          {r.hint ? <p className="leading-relaxed">📷 {r.hint}</p> : null}
+                          {r.refs.length > 0 && (
+                            <div className="flex gap-2">
+                              {r.refs.map((x) => (
+                                <button key={x.id} type="button" onClick={() => setZoom(x)} aria-label={t('ck.refOpen')} className="relative h-20 w-20 overflow-hidden rounded-lg border border-gold/40">
+                                  <img src={`/api/assets/${x.id}/image`} alt={x.title ?? ''} loading="lazy" className="h-full w-full object-cover" />
+                                  <span className="absolute inset-x-0 bottom-0 bg-black/60 text-center text-[9px] font-semibold text-gold">{t('ck.refTag')}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </li>
-                  ))}
-                </ol>
-                {aiShots.every((s) => !s.refs.length) && <p className="mt-2 text-[11px] text-muted">{t('ck.noRefs')}</p>}
-              </>
-            ) : (
-              <ol className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                {STEPS.filter((s) => s !== 'extra').map((s, i) => (
-                  <li key={s} className="flex items-center gap-2 rounded-xl bg-surface-low px-3 py-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-charcoal font-mono text-[11px] text-gold">{i + 1}</span>{t(`vr.step.${s}`)}
-                  </li>
-                ))}
+                  );
+                })}
               </ol>
-            )}
-          </div>
+              {aiShots && aiShots.every((x) => !x.refs.length) && <p className="mt-2 text-[11px] text-muted">{t('ck.noRefs')}</p>}
+            </section>
+
+            {/* 3. scan or upload the points → straight into the photo steps */}
+            <section className="space-y-2">
+              <div className="px-1 font-serif text-lg">3. {t('ck.verifyNow')}</div>
+              <div className="grid grid-cols-2 gap-3">
+                <Tile id="photo" title={t('check.photo')} help={t(ai ? 'check.photoHelpAi' : 'check.photoHelp')} to={go('scan')} onClick={needBrand} primary />
+                <Tile id="upload" title={t('check.upload')} help={t(ai ? 'check.uploadHelpAi' : 'check.uploadHelp')} to={go('upload')} onClick={needBrand} />
+              </div>
+            </section>
+          </>
         );
       })()}
       {zoom && (
@@ -210,12 +253,6 @@ export default function Check() {
           <button type="button" className="rounded-full border border-white/30 px-5 py-2 text-sm text-white">{t('steps.close')}</button>
         </div>
       )}
-
-      {/* 3. once the bag is known: scan or upload → straight into the photo steps */}
-      {brandId && <div className="grid grid-cols-2 gap-3">
-        <Tile id="photo" title={t('check.photo')} help={t(ai ? 'check.photoHelpAi' : 'check.photoHelp')} to={go('scan')} onClick={needBrand} primary dim={!brandId} />
-        <Tile id="upload" title={t('check.upload')} help={t(ai ? 'check.uploadHelpAi' : 'check.uploadHelp')} to={go('upload')} onClick={needBrand} dim={!brandId} />
-      </div>}
       <p className="rounded-2xl bg-surface-low p-3 text-xs text-muted">{t(ai ? 'pc.disclaimer' : 'ck.noVerdict')} <Link to="/authenticity" className="text-gold underline">{t('ck.learn')}</Link></p>
     </div>
   );
