@@ -469,6 +469,7 @@ const D: Record<string, { km: string; en: string }> = {
   'tr.emptyAdmin': { km: 'ខែនេះមិនទាន់មានទិន្នន័យ — បញ្ចូលម៉ូដលក់ដាច់ (ពីការលក់ ឬទីផ្សារ) ដើម្បីបង្ហាញនៅទីនេះ', en: "No data for this month yet — enter the best-selling models (from your sales or the market) to show them here" },
   'tr.add': { km: 'បញ្ចូលម៉ូដប្រចាំខែ', en: "Add this month's models" },
   'pn.mixTitle': { km: 'ថ្នាំត្រូវលាយ (លេខកូដ)', en: 'Paints to mix (codes)' },
+  'aib.hide': { km: 'បិទផ្ទាំងនេះ (AI នៅបន្តធ្វើការ)', en: 'Hide this (the AI keeps working)' },
   'aib.done': { km: 'រួចរាល់', en: 'Done' },
   'aib.secs': { km: '{n} វិនាទី', en: '{n} s' },
   'aib.wait': { km: 'សូមរង់ចាំបន្តិច កុំបិទ App', en: 'Please wait a moment, keep the app open' },

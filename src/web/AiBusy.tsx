@@ -6,16 +6,18 @@ import { useI18n } from './i18n.tsx';
  * Full-screen wait screen while the AI (or a photo analysis) is working: the page underneath cannot be tapped, so a
  * second request or a changed choice cannot cross the one in flight. It names what is happening (one stage after
  * another), counts seconds, says so if the network is slow, and lifts by itself the moment the answer arrives,
- * with a short "done" tick. Stage texts are i18n keys.
+ * with a short "done" tick. After 45 s it offers to hide (requests have no time limit, so a stuck one must not lock
+ * the app for good). Stage texts are i18n keys.
  */
 export default function AiBusy({ show, stages }: { show: boolean; stages: string[] }) {
   const { t } = useI18n();
   const [secs, setSecs] = useState(0);
   const [phase, setPhase] = useState<'off' | 'on' | 'done'>(show ? 'on' : 'off');
   const was = useRef(show);
+  const [hidden, setHidden] = useState(false); // the person chose to keep working; requests have no time limit
 
   useEffect(() => {
-    if (show) { setPhase('on'); setSecs(0); was.current = true; return; }
+    if (show) { setPhase('on'); setSecs(0); setHidden(false); was.current = true; return; }
     if (!was.current) return;
     was.current = false;
     setPhase('done');
@@ -31,13 +33,13 @@ export default function AiBusy({ show, stages }: { show: boolean; stages: string
 
   // no scrolling the page behind while it is locked
   useEffect(() => {
-    if (phase !== 'on') return;
+    if (phase !== 'on' || hidden) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
-  }, [phase]);
+  }, [phase, hidden]);
 
-  if (phase === 'off') return null;
+  if (phase === 'off' || (hidden && phase === 'on')) return null;
   const stage = stages.length ? stages[Math.min(Math.floor(secs / 4), stages.length - 1)] : 'skill.thinking';
   const done = phase === 'done';
 
@@ -62,6 +64,7 @@ export default function AiBusy({ show, stages }: { show: boolean; stages: string
         {!done && <>
           <p className="mt-2 font-mono text-sm text-white/60">{t('aib.secs').replace('{n}', String(secs))}</p>
           <p className="mt-4 text-xs leading-relaxed text-white/55">{secs >= 20 ? t('aib.slow') : t('aib.wait')}</p>
+          {secs >= 45 && <button type="button" onClick={() => setHidden(true)} className="mt-5 rounded-full border border-white/25 px-5 py-2 text-sm text-white/80">{t('aib.hide')}</button>}
         </>}
       </div>
     </div>,
