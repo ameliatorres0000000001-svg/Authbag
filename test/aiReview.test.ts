@@ -42,6 +42,9 @@ test('customer pre-check hides verdict words and needs a successful review', () 
   const p = customerPrecheck({ suggested_outcome: 'concerns_found', summary_en: 'Looks fake around the logo', summary_km: 'ឡូហ្គោក្លែង',
     findings_json: JSON.stringify([{ step: 'logo', feature_en: 'Logo', feature_km: 'ឡូហ្គោ', status: 'differs', confidence: 0.8, note_en: 'counterfeit font', note_km: 'អក្សរក្លែង' }]) })!;
   assert.equal(p.level, 'concerns');
-  assert.ok(!/fake|counterfeit/i.test(JSON.stringify(p)));
-  assert.ok(!JSON.stringify(p).includes('ក្លែង'));
+  // free texts from the AI never carry verdict words; the verdict itself is computed in code (aiVerdict.ts)
+  const texts = JSON.stringify({ ...p, verdict: undefined });
+  assert.ok(!/fake|counterfeit/i.test(texts));
+  assert.ok(!texts.includes('ក្លែង'));
+  assert.ok(['authentic', 'counterfeit', 'unidentified'].includes(p.verdict.verdict));
 });
