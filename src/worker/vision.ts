@@ -8,7 +8,7 @@ import { parseAppearance, type DateCodeAppearance } from '../shared/datecodeAppe
 import { MAX_CROPS, parseCropRegions, type CropRegion } from '../shared/crop.ts';
 import { matchFoundUrls } from '../shared/urls.ts';
 import { SHOT_PARTS, parseShots, type RequiredShot } from '../shared/shots.ts';
-import { parseGuides, type PointGuide } from '../shared/pointGuide.ts';
+import { cleanGuideText, parseGuides, parseSummary, type PointGuide } from '../shared/pointGuide.ts';
 import { catalogLine, catalogPaint } from '../shared/paintKnowledge.ts';
 
 export interface ObsDef { key: string; value_type: 'enum' | 'number' | 'boolean' | 'text'; enum_json: string | null; label_en: string }
@@ -586,7 +586,7 @@ export interface GuideText { title: string; intro: string; steps: string[] }
 export type ModelGuide = { km: GuideText; en: GuideText };
 
 const cleanGuide = (v: any): GuideText | null => {
-  const s = (x: unknown, max: number) => (typeof x === 'string' ? x.trim().slice(0, max) : '');
+  const s = (x: unknown, max: number) => (typeof x === 'string' ? cleanGuideText(x.trim()).slice(0, max) : '');
   const steps = Array.isArray(v?.steps) ? v.steps.map((x: unknown) => s(x, 240)).filter(Boolean).slice(0, 6) : [];
   const g = { title: s(v?.title, 120), intro: s(v?.intro, 400), steps };
   return g.title && g.steps.length ? g : null;
@@ -601,12 +601,15 @@ export const parseModelGuide = (raw: unknown): ModelGuide | null => {
  * Teaching text only: where to look and what to compare against references — never a verdict.
  */
 export async function writeModelGuide(env: Env, ctx: { brand: string; model: string; points: { part: string | null; label: string; note: string | null }[] }): Promise<ModelGuide | null> {
-  const system = `You are a senior luxury-bag authenticator writing a short study guide for one bag model, for learners reading on a phone. ${NO_VERDICT} ` +
-    'Use only the teaching points provided (they were checked by staff); do not invent features, codes or dates. ' +
-    'Write 3 to 5 steps, in the order an expert inspects the bag (overall shape → logo/stamp → serial/date code → material → hardware → zipper). ' +
-    'Each step is one short line: the part, then exactly what to look at and compare with references. ' +
-    'Write it in English and in natural Khmer (not word for word); keep brand names, codes and stamped words exactly as written. ' +
-    'Reply with JSON only: {"en":{"title":"How to look at <model>","intro":"one sentence","steps":["..."]},"km":{"title":"...","intro":"...","steps":["..."]}}';
+  const system = 'You are a Master Luxury Handbag Authenticator writing a crisp, practical inspection guide for one bag model, in natural Khmer and plain English, for people reading on a phone. ' +
+    'STRICT WRITING RULES: NEVER write "ប្រៀបធៀប... ជាមួយរូបយោង", "compare with references" or "ក្នុងរូបនេះ៖ ឃើញ...". ' +
+    'NEVER use robotic translations (like "ការតម្រឹម", "និមិត្តសញ្ញា C ជាប់គ្នា"); describe the exact original traits in plain Khmer ' +
+    '(e.g. "អក្សរ C ពណ៌មាសក្រាស់ស្មើ ឆ្លាក់មុតច្បាស់", "ស្នាមដេរញឹកស្មើគ្នា មិនមានព្រុយអំបោះ"). ' +
+    'Use only the teaching points provided (checked by staff); do not invent features, codes or dates. ' +
+    'title: "របៀបពិនិត្យ <brand> <model>". intro: 1-2 short sentences summing up the most important points of this model. ' +
+    'steps: 3 to 5, in the order an expert inspects (shape → logo/stamp → serial/date code → material → hardware → zipper); each one short line: ' +
+    'the part, then exactly what the original looks like there. Keep brand names, codes and stamped words exactly as written. ' +
+    'Reply with JSON only: {"km":{"title":"...","intro":"...","steps":["..."]},"en":{"title":"How to check <brand> <model>","intro":"...","steps":["..."]}}';
   const input = JSON.stringify({ brand: ctx.brand, model: ctx.model, points: ctx.points.slice(0, 60) });
   const text = env.GEMINI_API_KEY && !isClaude(aiProvider(env))
     ? await callGemini(env, env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini, system, [], input)
@@ -870,6 +873,41 @@ export async function identifyBag(env: Env, image: VisionImage, brands: { id: st
   };
 }
 
+/** The owner's prompt for reference-photo guides (2026-11-13), used as is; the English fields mirror the Khmer for English viewers. */
+export const GUIDE_SYSTEM_PROMPT = `# ROLE
+You are a Master Luxury Handbag Authenticator writing a crisp, practical inspection guide in natural Khmer.
+
+# STRICT WRITING RULES
+1. NEVER write "ប្រៀបធៀប... ជាមួយរូបយោង" or "ក្នុងរូបនេះ៖ ឃើញ...".
+2. NEVER use robotic translations (like "ការតម្រឹម", "និមិត្តសញ្ញា C ជាប់គ្នា"). Instead, describe exact authentic traits in plain Khmer (e.g., "អក្សរ C ពណ៌មាសក្រាស់ស្មើ ឆ្លាក់មុតច្បាស់", "ស្នាមដេរញឹកស្មើគ្នា មិនមានព្រុយអំបោះ").
+3. For EACH numbered bounding box (1, 2, 3...) on the image, provide:
+   - popup_text_kh: Ultra-short (12–18 words max) to pop up directly on the image when tapped. Tells the user WHERE to look + WHAT original looks like.
+   - where_to_look_kh: Exact spot to inspect.
+   - original_trait_kh: Exact proof of an authentic/original bag.
+   - fake_red_flag_kh: Common mistake on fake bags.
+
+# BOXES
+Numbered boxes were drawn on the photo by staff; each is given as its top-left corner and size in % of the image width/height, with the staff label.
+Look inside that exact area. Only describe what is really visible; keep brand names, stamped words and codes exactly as written.
+
+# OUTPUT FORMAT (JSON ONLY)
+Also give the same content in short plain English in the _en fields (for English-speaking viewers).
+{
+  "model_summary_kh": "សង្ខេបខ្លី ១-២ ឃ្លា ពីចំណុចសំខាន់បំផុតរបស់ម៉ូដែលនេះ។",
+  "model_summary_en": "...",
+  "annotations": [
+    {
+      "box_id": 1,
+      "title_kh": "ឈ្មោះផ្នែកខ្លីៗ",
+      "popup_text_kh": "អត្ថបទខ្លី ១-២ ឃ្លា សម្រាប់លោតលើរូបភាពពេលចុចលើគំនូស",
+      "where_to_look_kh": "មើលត្រង់ណា...",
+      "original_trait_kh": "លក្ខណៈ Original ពិតប្រាកដ...",
+      "fake_red_flag_kh": "ចំណុចប្រយ័ត្នរបស់ក្លែងក្លាយ...",
+      "title_en": "...", "popup_text_en": "...", "where_to_look_en": "...", "original_trait_en": "...", "fake_red_flag_en": "..."
+    }
+  ]
+}`;
+
 /**
  * Teaching guide for the numbered boxes staff drew on an ORIGINAL reference photo (one AI call per photo, stored).
  * For each box: a short title, a popup line shown on the photo (where to look + what the original shows), and below
@@ -879,27 +917,17 @@ export async function identifyBag(env: Env, image: VisionImage, brands: { id: st
 export async function guidePoints(env: Env, image: VisionImage, o: {
   brand: string; model: string | null; part: string | null;
   boxes: { n: number; x: number; y: number; w: number; h: number; label: string; note: string | null; todo: boolean }[];
-}): Promise<Map<number, PointGuide>> {
+}): Promise<{ guides: Map<number, PointGuide>; summary: { km: string; en: string } | null }> {
   const todo = o.boxes.filter((b) => b.todo);
   const pct = (v: number) => `${Math.round(v * 100)}%`;
-  const text = await callVision(env,
-    'You are a master luxury-bag appraiser writing a visual training guide for a REFERENCE photo of an original bag, for staff and customers of a second-hand shop. ' +
-    `${NO_VERDICT} Teach what to compare with this reference; never write that a bag is genuine, authentic, real, fake, counterfeit or replica. ` +
-    'Numbered boxes were drawn on the photo by staff; each box is given as its top-left corner and size in % of the image width/height, with the staff label. ' +
-    'For each box you are asked about, look inside that exact area and write: ' +
-    'title (2–5 words, the detail\'s name); popup (max 18 words, shown on the photo when tapped: where to look + what this original shows); ' +
-    'look_at (what exactly to look at); match (what this original shows there, concrete: shapes, spacing, depth, colour, stitch count); ' +
-    'differs (what a bag that differs from this reference typically shows at this spot — describe the difference, no verdict words). ' +
-    'Khmer: natural, practical shop Khmer, not word-for-word translation (no phrases like "រាងអក្សរ serif"); keep brand names, stamped words and codes exactly as written. ' +
-    'If a box does not show a clear detail, still describe honestly what is visible and keep it short. Only describe what is visible in the photo. ' +
-    'Reply with JSON only: {"annotations":[{"box_id":1,"title_km":"","popup_km":"","look_at_km":"","match_km":"","differs_km":"","title_en":"","popup_en":"","look_at_en":"","match_en":"","differs_en":""}]}',
+  const text = await callVision(env, GUIDE_SYSTEM_PROMPT,
     [image],
     `Brand: ${o.brand}\nModel: ${o.model ?? 'unspecified'}\nPart: ${o.part ?? 'unspecified'}\nBoxes on this photo:\n` +
     o.boxes.map((b) => `${b.n}. left ${pct(b.x)}, top ${pct(b.y)}, width ${pct(b.w)}, height ${pct(b.h)} — staff label: ${b.label}${b.note ? ` (${b.note.split('\n')[0].slice(0, 160)})` : ''}`).join('\n') +
     `\nWrite the guide for boxes: ${todo.map((b) => b.n).join(', ')}`,
-    Math.min(6000, 600 + todo.length * 700), 'medium');
+    Math.min(8000, 800 + todo.length * 900), 'medium');
   const all = parseGuides(text, o.boxes.length);
-  return new Map([...all].filter(([n]) => todo.some((b) => b.n === n)));
+  return { guides: new Map([...all].filter(([n]) => todo.some((b) => b.n === n))), summary: parseSummary(text) };
 }
 
 export interface MarketResearchRow { brand: string; model: string; reason: string; price_min: number | null; price_max: number | null; currency: string | null; sources: string[] }

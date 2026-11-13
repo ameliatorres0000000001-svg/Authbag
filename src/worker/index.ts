@@ -21,6 +21,7 @@ import { LEATHERS, LEATHER_KEYS, isLeather } from '../shared/leathers.ts';
 import { evidenceFor, handleFromInput, profileUrl } from '../shared/leads.ts';
 import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview.ts';
+import { GUIDE_VERSION, guideFor, isCurrentGuide } from '../shared/pointGuide.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -882,38 +883,85 @@ app.delete('/api/reference-points/:id', need(STAFF), async (c) => {
 
 /**
  * AI teaching guide for the numbered boxes on one ORIGINAL reference photo (not the whole-bag photo): written once and
- * stored on each point, so viewers never cost an AI call. Boxes that already have a guide are skipped unless `force`.
- * Numbers are the order the boxes were drawn, as every viewer shows them.
+ * stored on each point, so viewers never cost an AI call. Boxes with a current-format guide are skipped unless `force`.
+ * Numbers are the order the boxes were drawn, as every viewer shows them. Counterfeit-labelled photos are never explained.
  */
-app.post('/api/assets/:id/guide', need(STAFF), async (c) => {
-  const b = await parse(c, z.object({ force: z.boolean().optional() }));
-  const a = await c.env.DB.prepare(`SELECT a.id, a.r2_key, a.component_code, a.label, b.name AS brand, m.name AS model, cp.name_en AS part
+async function writeAssetGuide(env: AppEnv['Bindings'], assetId: string, force: boolean, userId: string | null):
+  Promise<{ ok: true; done: number; boxes: number } | { ok: false; error: string; status: 404 | 409 | 501 | 502; detail?: string }> {
+  const a = await env.DB.prepare(`SELECT a.id, a.r2_key, a.component_code, a.label, b.name AS brand, m.name AS model, cp.name_en AS part
     FROM reference_assets a JOIN brands b ON b.id = a.brand_id LEFT JOIN models m ON m.id = a.model_id LEFT JOIN components cp ON cp.code = a.component_code WHERE a.id = ?`)
-    .bind(c.req.param('id')).first<Record<string, any>>();
-  if (!a) return c.json({ error: 'not_found' }, 404);
-  if (!a.component_code) return c.json({ error: 'whole_bag' }, 409); // the whole-bag photo is not explained
-  if (a.label !== 'authentic') return c.json({ error: 'not_original' }, 409);
-  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
-  const pts = (await c.env.DB.prepare('SELECT id, x, y, w, h, label, note, guide_json FROM reference_points WHERE asset_id = ? ORDER BY created_at').bind(a.id)
+    .bind(assetId).first<Record<string, any>>();
+  if (!a) return { ok: false, error: 'not_found', status: 404 };
+  if (!a.component_code) return { ok: false, error: 'whole_bag', status: 409 }; // the whole-bag photo is not explained
+  if (a.label === 'counterfeit') return { ok: false, error: 'not_original', status: 409 };
+  if (!aiConfigured(env)) return { ok: false, error: 'ai_not_configured', status: 501 };
+  const pts = (await env.DB.prepare('SELECT id, x, y, w, h, label, note, guide_json FROM reference_points WHERE asset_id = ? ORDER BY created_at').bind(a.id)
     .all<{ id: string; x: number; y: number; w: number; h: number; label: string; note: string | null; guide_json: string | null }>()).results;
-  const boxes = pts.map((p, i) => ({ ...p, n: i + 1, todo: !!b.force || !p.guide_json }));
-  if (!boxes.some((x) => x.todo)) return c.json({ done: 0, boxes: boxes.length });
-  const obj = await c.env.VAULT.get(a.r2_key);
-  if (!obj) return c.json({ error: 'not_found' }, 404);
+  const boxes = pts.map((p, i) => ({ ...p, n: i + 1, todo: force || !isCurrentGuide(p.guide_json) }));
+  if (!boxes.some((x) => x.todo)) return { ok: true, done: 0, boxes: boxes.length };
+  const obj = await env.VAULT.get(a.r2_key);
+  if (!obj) return { ok: false, error: 'not_found', status: 404 };
+  const now = nowIso();
+  // mark the attempt, so the refresh job does not retry a failing photo every run
+  for (const x of boxes.filter((y) => y.todo)) await env.DB.prepare('UPDATE reference_points SET guide_at = ? WHERE id = ?').bind(now, x.id).run();
   try {
     const img = { data: await obj.arrayBuffer(), mime: obj.httpMetadata?.contentType ?? 'image/jpeg' };
-    const g = await asFeature('other', () => guidePoints(c.env, img,
-      { brand: a.brand, model: a.model, part: a.part, boxes }));
-    const now = nowIso(), model = aiModel(c.env);
+    const { guides } = await asFeature('other', () => guidePoints(env, img, { brand: a.brand, model: a.model, part: a.part, boxes }));
+    const model = aiModel(env);
     for (const x of boxes) {
-      const v = g.get(x.n);
-      if (v) await c.env.DB.prepare('UPDATE reference_points SET guide_json = ?, guide_model = ?, guide_at = ? WHERE id = ?').bind(JSON.stringify(v), model, now, x.id).run();
+      const v = guides.get(x.n);
+      if (v) await env.DB.prepare('UPDATE reference_points SET guide_json = ?, guide_model = ?, guide_at = ? WHERE id = ?').bind(JSON.stringify(v), model, now, x.id).run();
     }
-    await audit(c.env, c.get('user').id, 'reference_point.ai_guide', 'asset', a.id, { written: g.size, asked: boxes.filter((x) => x.todo).length });
-    return c.json({ done: g.size, boxes: boxes.length });
+    await audit(env, userId, 'reference_point.ai_guide', 'asset', a.id, { written: guides.size, asked: boxes.filter((x) => x.todo).length });
+    return { ok: true, done: guides.size, boxes: boxes.length };
   } catch (e) {
-    return c.json({ error: 'ai_failed', detail: (e as Error).message }, 502);
+    return { ok: false, error: 'ai_failed', status: 502, detail: (e as Error).message };
   }
+}
+
+app.post('/api/assets/:id/guide', need(STAFF), async (c) => {
+  const b = await parse(c, z.object({ force: z.boolean().optional() }));
+  const r = await writeAssetGuide(c.env, c.req.param('id'), !!b.force, c.get('user').id);
+  return r.ok ? c.json({ done: r.done, boxes: r.boxes }) : c.json({ error: r.error, detail: r.detail }, r.status);
+});
+
+// ── Refresh every stored guide to the current format (owner's prompt): button in Admin + a few per cron run ──
+const GUIDE_V = `%"v":${GUIDE_VERSION}%`;
+async function guideBacklog(env: AppEnv['Bindings'], userId: string | null, batch: number) {
+  const retryBefore = new Date(Date.now() - 6 * 3600_000).toISOString();
+  const stale = `a.status <> 'rejected' AND a.label <> 'counterfeit' AND a.component_code IS NOT NULL
+    AND EXISTS (SELECT 1 FROM reference_points p WHERE p.asset_id = a.id AND (p.guide_json IS NULL OR p.guide_json NOT LIKE ?)`;
+  const assets = (await env.DB.prepare(`SELECT a.id FROM reference_assets a WHERE ${stale} AND (p.guide_at IS NULL OR p.guide_at < ?)) ORDER BY a.created_at LIMIT ?`)
+    .bind(GUIDE_V, retryBefore, batch).all<{ id: string }>()).results;
+  let done = 0, failed = 0;
+  for (const x of assets) { const r = await writeAssetGuide(env, x.id, false, userId); if (r.ok) done++; else { failed++; console.error(`guide ${x.id}: ${r.error} ${r.detail ?? ''}`); } }
+  // album study guides, once the photos of the batch are done
+  if (!assets.length) {
+    const models = (await env.DB.prepare(`SELECT DISTINCT a.model_id AS id FROM reference_assets a JOIN reference_points p ON p.asset_id = a.id
+      WHERE a.model_id IS NOT NULL AND a.status <> 'rejected' AND a.label <> 'counterfeit'
+        AND NOT EXISTS (SELECT 1 FROM model_guides g WHERE g.model_id = a.model_id AND (g.i18n_json LIKE ? OR g.updated_at > ?)) LIMIT ?`)
+      .bind(GUIDE_V, retryBefore, batch).all<{ id: string }>()).results;
+    for (const m of models) { const r = await writeAlbumGuide(env, m.id, userId); if (r.ok) done++; else { failed++; console.error(`album guide ${m.id}: ${r.error}`); } }
+  }
+  const left = await env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM reference_assets a WHERE ${stale})) AS photos,
+      (SELECT COUNT(DISTINCT a.model_id) FROM reference_assets a JOIN reference_points p ON p.asset_id = a.id WHERE a.model_id IS NOT NULL AND a.status <> 'rejected' AND a.label <> 'counterfeit'
+        AND NOT EXISTS (SELECT 1 FROM model_guides g WHERE g.model_id = a.model_id AND g.i18n_json LIKE ?)) AS albums`).bind(GUIDE_V, GUIDE_V).first<{ photos: number; albums: number }>();
+  return { done, failed, photos_left: left?.photos ?? 0, albums_left: left?.albums ?? 0 };
+}
+
+/** Staff: one batch of the refresh; the Admin button calls it again until nothing is left. */
+app.post('/api/admin/guides/refresh', need(STAFF), async (c) => {
+  if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
+  return c.json(await guideBacklog(c.env, c.get('user').id, 2));
+});
+app.get('/api/admin/guides/refresh', need(STAFF), async (c) => {
+  const v = await c.env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM reference_assets a WHERE a.status <> 'rejected' AND a.label <> 'counterfeit' AND a.component_code IS NOT NULL
+        AND EXISTS (SELECT 1 FROM reference_points p WHERE p.asset_id = a.id AND (p.guide_json IS NULL OR p.guide_json NOT LIKE ?))) AS photos,
+      (SELECT COUNT(DISTINCT a.model_id) FROM reference_assets a JOIN reference_points p ON p.asset_id = a.id WHERE a.model_id IS NOT NULL AND a.status <> 'rejected' AND a.label <> 'counterfeit'
+        AND NOT EXISTS (SELECT 1 FROM model_guides g WHERE g.model_id = a.model_id AND g.i18n_json LIKE ?)) AS albums`).bind(GUIDE_V, GUIDE_V).first<{ photos: number; albums: number }>();
+  return c.json({ photos_left: v?.photos ?? 0, albums_left: v?.albums ?? 0 });
 });
 
 app.post('/api/assets/:id/points/suggest', need(STAFF), async (c) => {
@@ -1216,25 +1264,32 @@ app.put('/api/albums/:modelId/cover', need(STAFF), async (c) => {
   return c.json({ ok: true });
 });
 
-/** AI drafts the album's study guide from its teaching points (staff). Stored as a draft until approved. */
+/** AI drafts the album's study guide from its teaching points (the photo guides first). Stored as a draft until approved. */
+async function writeAlbumGuide(env: AppEnv['Bindings'], id: string, userId: string | null): Promise<{ ok: true; guide: Record<string, unknown> } | { ok: false; error: string; status: 404 | 409 | 502 }> {
+  const model = await env.DB.prepare('SELECT m.id, m.name, b.name AS brand FROM models m JOIN brands b ON b.id = m.brand_id WHERE m.id = ?').bind(id).first<Record<string, any>>();
+  if (!model) return { ok: false, error: 'not_found', status: 404 };
+  const rows = (await env.DB.prepare(`SELECT p.label, p.note, p.guide_json, cp.name_en AS part FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id
+     LEFT JOIN components cp ON cp.code = a.component_code
+     WHERE a.model_id = ? AND a.status <> 'rejected' AND a.label <> 'counterfeit' ORDER BY a.created_at, p.created_at LIMIT 60`).bind(id).all<{ label: string; note: string | null; guide_json: string | null; part: string | null }>()).results;
+  if (!rows.length) return { ok: false, error: 'no_points_yet', status: 409 };
+  // a point's photo guide (what the original shows there) teaches better than the old note
+  const pts = rows.map((p) => { const g = guideFor(p.guide_json, 'en'), k = guideFor(p.guide_json, 'km');
+    return g && k ? { part: p.part, label: `${g.title} / ${k.title}`, note: `${g.match} | ${k.match}` } : { part: p.part, label: p.label, note: p.note }; });
+  let g;
+  try { g = await writeModelGuide(env, { brand: model.brand, model: model.name, points: pts }); }
+  catch (e) { return { ok: false, error: 'ai_failed', status: 502 }; }
+  if (!g) return { ok: false, error: 'ai_failed', status: 502 };
+  const stored = { ...g, v: GUIDE_VERSION };
+  await env.DB.prepare(`INSERT INTO model_guides (model_id, i18n_json, status, ai_model, updated_by, updated_at) VALUES (?, ?, 'ai_draft', ?, ?, ?)
+    ON CONFLICT(model_id) DO UPDATE SET i18n_json = excluded.i18n_json, status = 'ai_draft', ai_model = excluded.ai_model, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
+    .bind(id, JSON.stringify(stored), aiModel(env), userId, nowIso()).run();
+  await audit(env, userId, 'guide.ai_draft', 'model', id);
+  return { ok: true, guide: { ...stored, status: 'ai_draft' } };
+}
 app.post('/api/albums/:modelId/guide', need(STAFF), async (c) => {
   if (!aiConfigured(c.env)) return c.json({ error: 'ai_not_configured' }, 501);
-  const id = c.req.param('modelId');
-  const model = await c.env.DB.prepare('SELECT m.id, m.name, b.name AS brand FROM models m JOIN brands b ON b.id = m.brand_id WHERE m.id = ?').bind(id).first<Record<string, any>>();
-  if (!model) return c.json({ error: 'not_found' }, 404);
-  const pts = (await c.env.DB.prepare(`SELECT p.label, p.note, cp.name_en AS part FROM reference_points p JOIN reference_assets a ON a.id = p.asset_id
-     LEFT JOIN components cp ON cp.code = a.component_code
-     WHERE a.model_id = ? AND a.status <> 'rejected' AND a.label <> 'counterfeit' ORDER BY a.created_at, p.created_at LIMIT 60`).bind(id).all<{ label: string; note: string | null; part: string | null }>()).results;
-  if (!pts.length) return c.json({ error: 'no_points_yet' }, 409);
-  let g;
-  try { g = await writeModelGuide(c.env, { brand: model.brand, model: model.name, points: pts }); }
-  catch (e) { return c.json({ error: 'ai_failed', detail: String((e as Error).message ?? e).slice(0, 200) }, 502); }
-  if (!g) return c.json({ error: 'ai_failed' }, 502);
-  await c.env.DB.prepare(`INSERT INTO model_guides (model_id, i18n_json, status, ai_model, updated_by, updated_at) VALUES (?, ?, 'ai_draft', ?, ?, ?)
-    ON CONFLICT(model_id) DO UPDATE SET i18n_json = excluded.i18n_json, status = 'ai_draft', ai_model = excluded.ai_model, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
-    .bind(id, JSON.stringify(g), aiModel(c.env), c.get('user').id, nowIso()).run();
-  await audit(c.env, c.get('user').id, 'guide.ai_draft', 'model', id);
-  return c.json({ guide: { ...g, status: 'ai_draft' } });
+  const r = await writeAlbumGuide(c.env, c.req.param('modelId'), c.get('user').id);
+  return r.ok ? c.json({ guide: r.guide }) : c.json({ error: r.error }, r.status);
 });
 
 /** Staff edit and/or approve the guide. */
@@ -3689,6 +3744,8 @@ export default {
   async scheduled(_event: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
     ctx.waitUntil(asFeature('translate', () => translateBacklog(env)));
     ctx.waitUntil(asFeature('precheck', () => aiReviewBacklog(env)));
+    // rewrite old reference guides in the current format, a few per run (Admin has a button to do it all now)
+    ctx.waitUntil(aiConfigured(env) ? guideBacklog(env, null, 2).then((r) => { if (r.done || r.failed) console.log('guide refresh', JSON.stringify(r)); }).catch((e) => console.error('guide refresh:', (e as Error).message)) : Promise.resolve());
     ctx.waitUntil(leadsBacklog(env).catch((e) => console.error('lead search:', (e as Error).message)));
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>;

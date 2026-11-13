@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { guideFor, parseGuides } from '../src/shared/pointGuide.ts';
+import { GUIDE_VERSION, cleanGuideText, guideFor, isCurrentGuide, parseGuides } from '../src/shared/pointGuide.ts';
 
 const one = (n: number, extra: Record<string, string> = {}) => ({
   box_id: n, title_km: 'ពុម្ពអក្សរម៉ាក', popup_km: 'អក្សរ O មូល', look_at_km: 'អក្សរ', match_km: 'O មូល', differs_km: 'O ពងក្រពើ',
@@ -14,10 +14,23 @@ test('guides are matched to box numbers; bad or out-of-range boxes are dropped',
   assert.equal(g.get(2)!.en.differs, 'oval O');
 });
 
-test('verdict words never reach the stored guide', () => {
-  const g = parseGuides(JSON.stringify({ annotations: [one(1, { popup_km: 'កាបូបពិតប្រាកដ មិនមែនក្លែងក្លាយ', differs_en: 'a fake has an oval O', match_en: 'authentic bags show a round O' })] }), 1).get(1)!;
-  assert.doesNotMatch(g.km.popup, /ពិតប្រាកដ|ក្លែង/);
-  assert.doesNotMatch(`${g.en.differs} ${g.en.match}`, /fake|authentic/i);
+test('owner format v2 (_kh fields) is read, versioned, and banned phrases are removed', () => {
+  const g = parseGuides(JSON.stringify({ model_summary_kh: 'ត្រា និងស្នាមដេរ', annotations: [{ box_id: 1, title_kh: 'ត្រាម៉ាក',
+    popup_text_kh: 'ក្នុងរូបនេះ៖ ឃើញ អក្សរ C ក្រាស់ស្មើ', where_to_look_kh: 'ក្រោមគន្លឹះ', original_trait_kh: 'ឆ្លាក់មុតច្បាស់',
+    fake_red_flag_kh: 'អក្សររាក់ ព្រាល', title_en: 'Stamp', popup_text_en: 'Thick even C', where_to_look_en: 'under the clasp',
+    original_trait_en: 'crisp engraving', fake_red_flag_en: 'shallow blurry letters' }] }), 1).get(1)!;
+  assert.equal(g.v, GUIDE_VERSION);
+  assert.equal(g.km.popup, 'អក្សរ C ក្រាស់ស្មើ');
+  assert.equal(g.km.differs, 'អក្សររាក់ ព្រាល');
+  assert.equal(g.en.match, 'crisp engraving');
+  assert.ok(isCurrentGuide(JSON.stringify(g)));
+  assert.ok(!isCurrentGuide(JSON.stringify(parseGuides(JSON.stringify({ annotations: [one(1)] }), 1).get(1)).replace('"v":2,', '')));
+  assert.equal(cleanGuideText('ប្រៀបធៀបលេខ “28002098” ជាមួយរូបយោង។'), 'មើល លេខ “28002098”។');
+});
+
+test('English falls back to Khmer when the AI wrote Khmer only', () => {
+  const g = parseGuides(JSON.stringify({ annotations: [{ box_id: 1, title_kh: 'ថ្នេរ', popup_text_kh: 'ស្នាមដេរញឹកស្មើ' }] }), 1).get(1)!;
+  assert.equal(g.en.title, 'ថ្នេរ');
 });
 
 test('broken answers give nothing; guideFor picks the language', () => {

@@ -26,7 +26,9 @@ export default function AnnotatedPhoto({ src, points, active, onPick, tone = 'ne
 }) {
   const { locale, t } = useI18n();
   const act = active != null && points[active] ? points[active] : null;
-  const guide = act ? guideFor(act.guide_json, locale) : null;
+  // the tooltip: the AI guide when there is one, else the point's own label and first line
+  const guide = act ? guideFor(act.guide_json, locale) ?? (() => { const l = localizePoint(act, locale); const n = splitNote(l.note);
+    return { title: l.label, popup: n.check || n.photo || '', look_at: '', match: '', differs: '' }; })() : null;
   const dot = { genuine: 'bg-verified', counterfeit: 'bg-counterfeit', neutral: 'bg-gold' }[tone];
   return (
     <figure className={`overflow-hidden rounded-xl border border-hairline bg-surface-card ${className}`}>
@@ -38,14 +40,14 @@ export default function AnnotatedPhoto({ src, points, active, onPick, tone = 'ne
       </figcaption>)}
       <div className="flex justify-center overflow-hidden bg-charcoal">
         {/* wrapper is exactly the image size, so % boxes line up; the photo stays a readable size on phones */}
-        <div className={fit ? 'relative inline-block max-w-full' : 'relative w-full'}>
+        <div className={fit ? 'relative inline-block max-w-full' : 'relative w-full'} onClick={onPick ? () => onPick(-1) : undefined}>
         <img src={src} alt="" draggable={false} className={`block h-auto max-w-full select-none ${fit ? 'max-h-[56vh] w-auto' : 'w-full'}`} />
         {points.map((p, i) => {
           const on = active === i;
           return (
             // without onPick the boxes are only drawn (e.g. inside a link that opens the album)
             React.createElement(onPick ? 'button' : 'span', {
-              key: p.id, ...(onPick ? { type: 'button', onClick: () => onPick(i), 'aria-label': `${i + 1}. ${localizePoint(p, locale).label}` } : { 'aria-hidden': true }),
+              key: p.id, ...(onPick ? { type: 'button', onClick: (e: React.MouseEvent) => { e.stopPropagation(); onPick(i); }, 'aria-label': `${i + 1}. ${localizePoint(p, locale).label}` } : { 'aria-hidden': true }),
               className: `absolute rounded-sm border-2 transition ${onPick ? '' : 'pointer-events-none'} ${p.source === 'ai_suggested' ? 'border-dashed' : ''} ${on ? 'border-gold bg-gold/15 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]' : 'border-white/85 hover:border-gold'}`,
               style: { left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: `${p.w * 100}%`, height: `${p.h * 100}%`, zIndex: on ? 2 : 1 },
             }, <span className={`absolute -left-2.5 -top-2.5 flex h-5 w-5 items-center justify-center rounded-full border font-mono text-[10px] font-semibold ${on ? 'border-gold bg-gold text-charcoal' : 'border-white bg-gold text-charcoal'}`}>{i + 1}</span>)
@@ -58,20 +60,12 @@ export default function AnnotatedPhoto({ src, points, active, onPick, tone = 'ne
           return (
             <div role="tooltip" className="pointer-events-none absolute z-10 w-max max-w-[72%] rounded-xl border border-gold/80 bg-black/80 px-3 py-2 text-[13px] leading-snug text-white shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-sm"
               style={{ ...pos, ...(above ? { bottom: `${(1 - act.y) * 100 + 1.5}%` } : { top: `${(act.y + act.h) * 100 + 1.5}%` }) }}>
-              <span className="mb-0.5 block text-[11px] font-semibold text-gold">{(active ?? 0) + 1}. {guide.title}</span>{guide.popup}
+              <span className={`block text-[12px] font-semibold text-gold ${guide.popup ? 'mb-0.5' : ''}`}>{(active ?? 0) + 1}. {guide.title}</span>{guide.popup}
             </div>
           );
         })()}
         </div>
       </div>
-      {act && guide && onPick && (
-        <div className="space-y-1.5 border-t border-gold/30 bg-surface-card px-3 py-3 text-[13.5px] leading-snug">
-          <div className="font-semibold"><span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gold font-mono text-[10px] text-charcoal">{(active ?? 0) + 1}</span>{guide.title}</div>
-          {guide.look_at && <p><span aria-hidden>🔍 </span><b>{t('pg.look')}</b> {guide.look_at}</p>}
-          {guide.match && <p><span aria-hidden>✓ </span><b className="text-verified">{t('pg.match')}</b> {guide.match}</p>}
-          {guide.differs && <p><span aria-hidden>⚠ </span><b className="text-review">{t('pg.differs')}</b> {guide.differs}</p>}
-        </div>
-      )}
       {footer && <div className="flex items-center justify-between gap-2 bg-charcoal px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-white/80">{footer}</div>}
     </figure>
   );
@@ -89,8 +83,8 @@ export function splitNote(note: string | null): { check: string; photo: string |
 }
 
 /**
- * Numbered point cards matching the boxes: the detail's name, one line on what to check (🔍),
- * and one line on what this photo shows (📷) — short and easy to remember.
+ * Numbered point cards matching the boxes: the detail's name, then 🔍 where to look, ✅ what the original shows and
+ * ⚠️ the common red flag (from the AI guide); before a guide exists, the point's own "what to check" line.
  */
 export function PointCards({ points, active, onPick, empty }: { points: Point[]; active?: number | null; onPick?: (i: number) => void; empty: string }) {
   const { locale, t } = useI18n();
@@ -100,6 +94,7 @@ export function PointCards({ points, active, onPick, empty }: { points: Point[];
       {points.map((p, i) => {
         const tx = localizePoint(p, locale);
         const n = splitNote(tx.note);
+        const g = guideFor(p.guide_json, locale);
         const on = active === i;
         return (
           <li key={p.id}>
@@ -107,17 +102,18 @@ export function PointCards({ points, active, onPick, empty }: { points: Point[];
               className={`flex w-full gap-3 rounded-xl border px-3 py-2.5 text-left transition ${on ? 'border-gold bg-gold-light' : 'border-hairline bg-surface-card hover:border-strong'}`}>
               <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-bold ${on ? 'bg-gold text-charcoal' : 'bg-gold text-charcoal'}`}>{i + 1}</span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-semibold leading-snug">{guideFor(p.guide_json, locale)?.title || tx.label}</span>
-                {n.check && (
+                <span className="block text-[15px] font-semibold leading-snug">{g?.title || tx.label}</span>
+                {g ? (
+                  <span className="mt-1 block space-y-1 text-[13.5px] leading-snug">
+                    {g.look_at && <span className="flex gap-1.5"><span aria-hidden>🔍</span><span><b>{t('pg.look')}</b> {g.look_at}</span></span>}
+                    {g.match && <span className="flex gap-1.5"><span aria-hidden>✅</span><span><b className="text-verified">{t('pg.match')}</b> {g.match}</span></span>}
+                    {g.differs && <span className="flex gap-1.5"><span aria-hidden>⚠️</span><span><b className="text-review">{t('pg.differs')}</b> {g.differs}</span></span>}
+                  </span>
+                ) : n.check ? (
                   <span className="mt-1 flex gap-1.5 text-[13.5px] leading-snug">
                     <span aria-hidden>🔍</span><span><span className="sr-only">{t('pt.check')}: </span>{n.check}</span>
                   </span>
-                )}
-                {n.photo && (
-                  <span className="mt-1 flex gap-1.5 rounded-md bg-surface-low px-2 py-1 text-[13px] leading-snug text-muted">
-                    <span aria-hidden>📷</span><span><span className="font-semibold text-ink">{t('pt.photo')}</span> {n.photo}</span>
-                  </span>
-                )}
+                ) : null}
               </span>
             </button>
           </li>
