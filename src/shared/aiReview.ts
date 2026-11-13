@@ -1,10 +1,12 @@
 // Parsing and checking an AI review of a verification request. The AI only compares photos with references and
 // suggests one of the system's four outcomes; words that would read as a verdict are replaced.
 
+import { computeVerdict, type VerdictResult } from './aiVerdict.ts';
+
 export const OUTCOMES = ['consistent_with_references', 'concerns_found', 'insufficient_evidence', 'requires_expert_review'] as const;
 export type Outcome4 = (typeof OUTCOMES)[number];
 export type FindingStatus = 'matches' | 'differs' | 'unclear';
-export interface Finding { step: string; feature_en: string; feature_km: string; status: FindingStatus; confidence: number; note_en: string; note_km: string }
+export interface Finding { step: string; feature_en: string; feature_km: string; status: FindingStatus; confidence: number; score?: number | null; note_en: string; note_km: string }
 export type PhotoQuality = 'clear' | 'soft' | 'unclear';
 /** How clear one customer photo was for the AI. `image` is the 1-based position among the customer photos sent. */
 export interface PhotoCheck { image: number; quality: PhotoQuality; note_en: string; note_km: string }
@@ -31,6 +33,7 @@ export function parseAiReview(text: string): AiReview | null {
     feature_en: noVerdict(txt(f?.feature_en, 80)), feature_km: txt(f?.feature_km, 80),
     status: (['matches', 'differs', 'unclear'] as const).includes(f?.status) ? f.status : 'unclear',
     confidence: clamp01(f?.confidence),
+    score: Number.isFinite(Number(f?.score)) && f?.score !== null && f?.score !== '' ? Math.max(0, Math.min(100, Math.round(Number(f.score)))) : null,
     note_en: noVerdict(txt(f?.note_en, 300)), note_km: txt(f?.note_km, 300),
   })).filter((f: Finding) => f.feature_en || f.feature_km);
   const seen = new Set<number>();
@@ -69,20 +72,25 @@ export function noVerdictKm(s: string): string {
     .replace(/ពិតប្រាកដ/g, 'ស្របនឹងរូបគំរូ');
 }
 
-export interface PrecheckFinding { step: string; feature_en: string; feature_km: string; status: FindingStatus; note_en: string; note_km: string }
+export interface PrecheckFinding { step: string; feature_en: string; feature_km: string; status: FindingStatus; score: number | null; note_en: string; note_km: string }
 export interface PrecheckPhoto { photo_id: string; step: string; quality: PhotoQuality; note_en: string; note_km: string }
-export interface Precheck { level: PrecheckLevel; summary_en: string; summary_km: string; findings: PrecheckFinding[]; photos: PrecheckPhoto[] }
+export interface Precheck { level: PrecheckLevel; summary_en: string; summary_km: string; findings: PrecheckFinding[]; photos: PrecheckPhoto[]; verdict: VerdictResult }
 
 /** Build the customer view from a stored AI review (verify_ai_reviews row). Null when the review failed. */
 export function customerPrecheck(row: { suggested_outcome: string | null; findings_json: string | null; summary_en: string | null; summary_km: string | null; photos_json?: string | null }): Precheck | null {
   if (!row.suggested_outcome) return null;
   let fs: Finding[] = [];
   try { fs = JSON.parse(row.findings_json || '[]'); } catch { fs = []; }
+  const photos = readPhotos(row.photos_json);
   return {
     level: precheckLevel(row.suggested_outcome),
     summary_en: noVerdict(row.summary_en ?? ''), summary_km: noVerdictKm(row.summary_km ?? ''),
-    findings: fs.map((f) => ({ step: f.step, feature_en: noVerdict(f.feature_en), feature_km: noVerdictKm(f.feature_km), status: f.status, note_en: noVerdict(f.note_en), note_km: noVerdictKm(f.note_km) })),
-    photos: readPhotos(row.photos_json),
+    findings: fs.map((f) => ({ step: f.step, feature_en: noVerdict(f.feature_en), feature_km: noVerdictKm(f.feature_km), status: f.status, score: f.score ?? null, note_en: noVerdict(f.note_en), note_km: noVerdictKm(f.note_km) })),
+    photos,
+    // the verdict is computed in code from the AI's per-point scores (see aiVerdict.ts); "insufficient" photos never pass
+    verdict: row.suggested_outcome === 'insufficient_evidence'
+      ? { ...computeVerdict(fs, photos), verdict: 'unidentified', reason: 'retake' }
+      : computeVerdict(fs, photos),
   };
 }
 

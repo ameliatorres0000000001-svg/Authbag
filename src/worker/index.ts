@@ -1469,8 +1469,9 @@ const trialUsed = async (env: AppEnv['Bindings'], userId: string) =>
   (await env.DB.prepare('SELECT COUNT(*) AS n FROM verify_requests WHERE user_id = ? AND free_trial = 1').bind(userId).first<{ n: number }>())?.n ?? 0;
 
 /**
- * The best reference photo for each verification step: same brand and part, the customer's model first,
- * approved and genuine-labelled first, never a counterfeit-labelled photo. Teaching material for the comparison only.
+ * The best reference photo for each verification step, ONLY from the exact model identified for the bag
+ * (same brand, same model, same part). Never a photo of another model, never a counterfeit-labelled photo.
+ * No model match, or no photo of that model → no reference; the AI then compares with the brand's written rules.
  */
 async function verifyRefs(env: AppEnv['Bindings'], brandId: string, modelText: string | null) {
   const model = modelText
@@ -1478,12 +1479,13 @@ async function verifyRefs(env: AppEnv['Bindings'], brandId: string, modelText: s
       .bind(brandId, modelText, `%${modelText}%`, modelText).first<{ id: string }>()
     : null;
   const out: Record<string, { id: string; label: string; status: string; model: string | null; same_model: boolean; r2_key: string }> = {};
+  if (!model) return out;
   for (const [step, comp] of Object.entries(STEP_COMPONENT)) {
-    const r = await env.DB.prepare(`SELECT a.id, a.label, a.status, a.r2_key, a.model_id, m.name AS model FROM reference_assets a LEFT JOIN models m ON m.id = a.model_id
-      WHERE a.brand_id = ? AND a.component_code = ? AND a.status <> 'rejected' AND a.label <> 'counterfeit'
-      ORDER BY (a.model_id IS NOT NULL AND a.model_id = ?) DESC, (a.status = 'approved') DESC, (a.label = 'authentic') DESC, a.created_at DESC LIMIT 1`)
-      .bind(brandId, comp, model?.id ?? '').first<Record<string, any>>();
-    if (r) out[step] = { id: r.id, label: r.label, status: r.status, model: r.model, same_model: !!model && r.model_id === model.id, r2_key: r.r2_key };
+    const r = await env.DB.prepare(`SELECT a.id, a.label, a.status, a.r2_key, a.model_id, m.name AS model FROM reference_assets a JOIN models m ON m.id = a.model_id
+      WHERE a.brand_id = ? AND a.model_id = ? AND a.component_code = ? AND a.status <> 'rejected' AND a.label <> 'counterfeit'
+      ORDER BY (a.status = 'approved') DESC, (a.label = 'authentic') DESC, a.created_at DESC LIMIT 1`)
+      .bind(brandId, model.id, comp).first<Record<string, any>>();
+    if (r) out[step] = { id: r.id, label: r.label, status: r.status, model: r.model, same_model: true, r2_key: r.r2_key };
   }
   return out;
 }

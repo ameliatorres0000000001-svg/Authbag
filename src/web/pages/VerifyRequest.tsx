@@ -402,12 +402,64 @@ function AiReviewCard({ requestId, ai, onChange }: { requestId: string; ai: any 
   );
 }
 
-interface PcFinding { step: string; feature_en: string; feature_km: string; status: 'matches' | 'differs' | 'unclear'; note_en: string; note_km: string }
+interface PcFinding { step: string; feature_en: string; feature_km: string; status: 'matches' | 'differs' | 'unclear'; score?: number | null; note_en: string; note_km: string }
 interface PcPhoto { photo_id: string; step: string; quality: 'clear' | 'soft' | 'unclear'; note_en: string; note_km: string }
-interface Pc { pending: boolean; failed: boolean; refs: number; at: string | null; result: { level: string; summary_en: string; summary_km: string; findings: PcFinding[]; photos?: PcPhoto[] } | null }
+interface Pc { pending: boolean; failed: boolean; refs: number; at: string | null; result: { level: string; summary_en: string; summary_km: string; findings: PcFinding[]; photos?: PcPhoto[]; verdict?: PcVerdict } | null }
+interface PcVerdict { verdict: 'authentic' | 'counterfeit' | 'unidentified'; score: number | null; reason: string; steps: { step: string; score: number | null; status: string; weight: number }[] }
+const VERDICT_UI: Record<string, [string, string]> = {
+  authentic: ['✓', 'bg-verified text-white'], counterfeit: ['✕', 'bg-counterfeit text-white'], unidentified: ['⚠', 'bg-review text-white'],
+};
+const barTone = (n: number | null) => (n === null ? 'bg-surface-high' : n >= 90 ? 'bg-verified' : n > 60 ? 'bg-review' : 'bg-counterfeit');
 const QUALITY: Record<string, [string, string]> = { clear: ['●', 'bg-verified text-white'], soft: ['◐', 'bg-review text-white'], unclear: ['○', 'bg-counterfeit text-white'] };
 const LEVEL_ICON: Record<string, string> = { no_differences_seen: '✓', concerns: '!', more_photos: '📷', unclear: '?' };
 const STATUS_ICON: Record<string, [string, string]> = { matches: ['✓', 'bg-verified-bg text-verified'], differs: ['!', 'bg-counterfeit-bg text-counterfeit'], unclear: ['?', 'bg-surface-high text-muted'] };
+
+/** The AI final verdict: big badge, total AI score, 2-sentence summary, then the score of each part with one line each. */
+function VerdictBlock({ v, summary, notes, km }: { v: PcVerdict; summary: string; notes: PcFinding[]; km: boolean }) {
+  const { t } = useI18n();
+  const [icon, tone] = VERDICT_UI[v.verdict] ?? VERDICT_UI.unidentified;
+  const label = t(`pc.v.${v.verdict}`).replace('{n}', String(v.score ?? '–'));
+  const lineFor = (step: string) => {
+    const fs = notes.filter((f) => f.step === step);
+    const f = fs.find((x) => x.status === 'differs') ?? fs.find((x) => x.status === 'unclear') ?? fs[0];
+    return f ? (km && f.note_km) || f.note_en : '';
+  };
+  return (
+    <div className="space-y-3">
+      <div className={`rounded-2xl p-4 ${tone}`}>
+        <div className="flex items-center gap-3">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/20 text-3xl font-bold" aria-hidden>{icon}</span>
+          <div className="min-w-0">
+            <div className="text-lg font-semibold leading-tight">{label}</div>
+            {v.score !== null && <div className="mt-1 text-[13px] opacity-90">{t('pc.score')}: <b className="text-base">{v.score}%</b></div>}
+          </div>
+        </div>
+        {v.verdict === 'unidentified' && <p className="mt-2 text-[13px] leading-snug opacity-95">{t(v.reason === 'mixed' ? 'pc.why.mixed' : 'pc.why.retake')}</p>}
+      </div>
+      {summary && <p className="rounded-xl bg-surface-low p-3 text-sm leading-relaxed">{summary}</p>}
+      {!!v.steps.length && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">{t('pc.scoresTitle')}</h3>
+          <ul className="space-y-2">
+            {v.steps.map((s) => (
+              <li key={s.step} className="rounded-xl border border-hairline p-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="flex-1 text-sm font-semibold">{t(`pc.part.${s.step}`)}</span>
+                  {s.weight > 0 && <span className="text-[11px] text-muted">{t('pc.weight').replace('{n}', String(s.weight))}</span>}
+                  <span className="min-w-[3rem] text-right text-base font-bold">{s.score === null ? '–' : `${s.score}%`}</span>
+                </div>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-high">
+                  <div className={`h-full rounded-full ${barTone(s.score)}`} style={{ width: `${s.score ?? 0}%` }} />
+                </div>
+                <p className="mt-1.5 text-[13px] leading-snug text-muted">{s.score === null ? t('pc.noScore') : lineFor(s.step)}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * AI pre-check, shown to the customer while expert review is paused: the AI's comparison with our reference
@@ -430,7 +482,6 @@ function PrecheckCard({ id, pc, onChange }: { id: string; pc: Pc; onChange: () =
       <div className="flex items-center gap-2">
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-charcoal text-lg" aria-hidden>🤖</span>
         <h2 className="flex-1 text-lg leading-tight">{t('pc.title')}</h2>
-        {res && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${PRECHECK_TONE[res.level] ?? ''}`}>{t(`pc.lvl.${res.level}`)}</span>}
       </div>
       {pc.pending && <div className="flex items-center gap-3 rounded-xl bg-surface-low p-3 text-sm"><span className="h-3 w-3 animate-pulse rounded-full bg-gold" />{t('pc.working')}</div>}
       {pc.failed && (
@@ -441,15 +492,13 @@ function PrecheckCard({ id, pc, onChange }: { id: string; pc: Pc; onChange: () =
       )}
       {res && (
         <>
-          {/* the level, large: what the AI saw in these photos (never a verdict) */}
-          <div className={`flex items-center gap-3 rounded-2xl p-4 ${PRECHECK_TONE[res.level] ?? PRECHECK_TONE.unclear}`}>
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/10 text-2xl font-bold" aria-hidden>{LEVEL_ICON[res.level] ?? '?'}</span>
-            <div className="min-w-0">
-              <div className="text-lg font-semibold leading-tight">{t(`pc.lvl.${res.level}`)}</div>
-              <p className="mt-0.5 text-[13px] leading-snug opacity-90">{t(`pc.what.${res.level}`)}</p>
+          {res.verdict ? <VerdictBlock v={res.verdict} summary={km ? res.summary_km || res.summary_en : res.summary_en}
+            notes={res.findings} km={km} /> : (
+            <div className={`flex items-center gap-3 rounded-2xl p-4 ${PRECHECK_TONE[res.level] ?? PRECHECK_TONE.unclear}`}>
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/10 text-2xl font-bold" aria-hidden>{LEVEL_ICON[res.level] ?? '?'}</span>
+              <div className="min-w-0 text-lg font-semibold leading-tight">{t(`pc.lvl.${res.level}`)}</div>
             </div>
-          </div>
-          {(km ? res.summary_km : res.summary_en) && <p className="rounded-xl bg-surface-low p-3 text-sm leading-relaxed">{km ? res.summary_km || res.summary_en : res.summary_en}</p>}
+          )}
           {pc.refs === 0 && <Notice tone="warn">{t('pc.noRefs')}</Notice>}
 
           {/* how clear each photo was: retake the ones that were not */}

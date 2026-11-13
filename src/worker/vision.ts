@@ -634,6 +634,15 @@ export async function suggestModelForPhoto(env: Env, image: VisionImage, brand: 
  * the same part; per feature "matches / differs / unclear" with confidence, then ONE suggested outcome from the
  * system's four. The expert decides; the customer never sees this.
  */
+/** Brand standards the scoring engine uses when there is no reference photo of the exact model. Short, well-known rules only. */
+const BRAND_FORENSICS =
+  'Brand standards: LOUIS VUITTON heat stamp — round "O" (not oval), short-tailed "L", the two "T"s nearly touching, "PARIS" centred under the name with even spacing, ' +
+  '"®" small and crisp, letters pressed evenly (not blurred or heavy); monogram canvas symmetrical with the pattern not cut through the LV at the main seams; ' +
+  'even stitches with the same count per tab; engraving on hardware crisp with the same font as the stamp. ' +
+  'CHANEL — the C\'s of the CC interlock with the right C over the left at top and under at bottom; high stitch count on quilting; serial sticker / microchip format of its era. ' +
+  'HERMÈS — stamp lettering thin and even, blind stamp neat; saddle stitching slanted and even. GUCCI / PRADA / DIOR / others — font, spacing and logo proportions ' +
+  'exactly as the brand prints them; hardware engraving crisp; stitching even.';
+
 export async function assessVerification(env: Env, ctx: {
   brand: string; model: string | null;
   photos: { step: string; image: VisionImage }[];
@@ -644,28 +653,38 @@ export async function assessVerification(env: Env, ctx: {
   const lines: string[] = [];
   for (const p of ctx.photos) { images.push(p.image); lines.push(`Image ${images.length}: CUSTOMER photo · step "${p.step}"`); }
   for (const r of ctx.refs) { images.push(r.image); lines.push(`Image ${images.length}: REFERENCE photo (from HENGZ library${r.model ? `, ${r.model}` : ''}) · step "${r.step}"`); }
+  const refSteps = new Set(ctx.refs.map((r) => r.step));
+  const noRef = [...new Set(ctx.photos.map((p) => p.step))].filter((st) => !refSteps.has(st));
   const system =
-    'You are a senior luxury-bag authenticator ASSISTING a human expert at HENGZ AUTHENTIC. The expert makes the decision; you prepare the evidence. ' +
-    'Never write the words authentic, genuine, real, fake, counterfeit or replica, and never state whether the bag is genuine. ' +
-    'For each customer photo, compare the visible features with the reference photo of the same step (stamp lettering and spacing, serial/date code characters and font, ' +
-    'stitch count, angle and colour, hardware engraving, screws and finish, material grain, zipper pull and markings, shape and proportions). ' +
-    'For each feature give status "matches" (consistent with the reference), "differs" (a visible difference from the reference) or "unclear" (not visible enough, ' +
-    'different angle or lighting, or no reference), with your confidence 0..1 in THAT observation. Lighting, angle and resolution often explain differences: say so. ' +
-    'Then suggest ONE outcome: "consistent_with_references" (all key features match), "concerns_found" (one or more clear differences on key features), ' +
-    '"insufficient_evidence" (key photos missing or too unclear) or "requires_expert_review" (mixed or uncertain), with your confidence 0..1 in that suggestion. ' +
+    'You are the micro-forensic SCORING ENGINE of HENGZ AUTHENTIC (Entrupy-style): you inspect the customer photos of one bag and score every checkpoint. ' +
+    'The final verdict is computed by the app from your scores, so score honestly and consistently; never guess a high score for something you cannot see. ' +
+    'Reference photos are ALWAYS of the exact same brand and model as the bag. When a step has no reference photo, compare with the brand\'s own standard ' +
+    '(the brand rules and staff knowledge below), not with another model. ' +
+    `${BRAND_FORENSICS} ` +
+    'For each checkpoint give: status "matches" (consistent with the reference / brand standard), "differs" (a visible deviation from it) or "unclear" ' +
+    '(not visible enough, wrong angle, glare or blur), a SCORE 0..100 (how closely it follows the reference / brand standard: 95-100 exact, 85-94 consistent with ' +
+    'minor photo effects, 61-84 doubtful, 0-60 a clear deviation such as wrong font, wrong spacing, wrong stitch count, wrong colour, wrong engraving), and your ' +
+    'confidence 0..1 in THAT observation. Lighting, angle and resolution often explain small differences: score them as photo effects, not deviations. ' +
+    'Checkpoints and weights used by the app: heat stamp / logo & typography ("logo") 30%, serial / date code ("serial") 25%, canvas / leather texture & pattern ' +
+    'and stitching ("material") 20%, hardware engraving & finish ("hardware") 15%, zipper & pulls ("zipper") 10%; shape ("model") is reported but not weighted. ' +
+    'Then suggest ONE outcome: "consistent_with_references" (all key checkpoints score 90+), "concerns_found" (one or more clear deviations), ' +
+    '"insufficient_evidence" (key photos missing or too unclear) or "requires_expert_review" (mixed or uncertain), with your confidence 0..1. ' +
     `For the serial / date-code photo: ${DATE_CODE_TYPOGRAPHY} Report each of the 4 checks as its own finding (step "serial"). ` +
     'FIRST check every CUSTOMER photo for quality: "clear", "soft" (usable but blurry / dim / a little far) or "unclear" (too blurry, dark, far or cropped to see stitching, ' +
     'engravings or code characters). For a soft or unclear photo say in one short line what to change when retaking (closer, steadier, more light, straight on). ' +
-    'Features in an unclear photo are "unclear"; if a key photo (logo / stamp, serial / date code, hardware) is unclear or missing, suggest "insufficient_evidence". ' +
-    'Write feature names and notes in English and natural, short Khmer a buyer or seller understands at once. Keep brand names and codes exactly as written. ' +
-    'Reply with JSON only: {"suggestion":"…","confidence":0..1,"summary_en":"2-3 sentences","summary_km":"…",' +
+    'Features in an unclear photo are "unclear" with no score; if a key photo (logo / stamp, serial / date code, hardware) is unclear or missing, suggest "insufficient_evidence". ' +
+    'In the texts, describe what you see (e.g. "the O is round, spacing even", "the stitch count differs") and do not write the words authentic, genuine, real, fake, ' +
+    'counterfeit or replica: the app shows the verdict itself. summary_km is exactly 2 short sentences in natural Khmer a buyer or seller understands at once. ' +
+    'Each note is one short line. Keep brand names and codes exactly as written. ' +
+    'Reply with JSON only: {"suggestion":"…","confidence":0..1,"summary_en":"2 sentences","summary_km":"…",' +
     '"photos":[{"image":1,"quality":"clear|soft|unclear","note_en":"…","note_km":"…"}],' +
-    '"findings":[{"step":"model|logo|serial|material|hardware|zipper|extra","feature_en":"…","feature_km":"…","status":"matches|differs|unclear","confidence":0..1,"note_en":"one short line","note_km":"…"}]} ' +
+    '"findings":[{"step":"model|logo|serial|material|hardware|zipper|extra","feature_en":"…","feature_km":"…","status":"matches|differs|unclear","score":0..100,"confidence":0..1,"note_en":"one short line","note_km":"…"}]} ' +
     '— "image" in photos is the Image number of a CUSTOMER photo.';
   const user = [
     `Brand: ${ctx.brand}${ctx.model ? ` · Model: ${ctx.model}` : ''}`,
     ...lines,
-    ctx.skills?.length ? `Shop knowledge approved by staff for this brand / model (checkpoints to compare; it never decides the outcome):\n- ${ctx.skills.join('\n- ')}` : '',
+    noRef.length ? `No reference photo of this model for: ${noRef.join(', ')} — score these against the brand standard.` : '',
+    ctx.skills?.length ? `Shop knowledge approved by staff for this brand / model (checkpoints to compare):\n- ${ctx.skills.join('\n- ')}` : '',
     ctx.knowledge.length ? `What HENGZ experts teach for this brand / model (prefer these checkpoints):\n- ${ctx.knowledge.slice(0, 14).join('\n- ')}` : '',
     ctx.expertNotes.length ? `Notes HENGZ experts wrote on earlier bags of this brand / model (learn what they look at; do not copy their decisions):\n- ${ctx.expertNotes.slice(0, 8).join('\n- ')}` : '',
   ].filter(Boolean).join('\n');
