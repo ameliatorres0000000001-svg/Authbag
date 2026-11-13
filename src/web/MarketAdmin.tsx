@@ -165,7 +165,7 @@ export default function MarketAdmin() {
 }
 
 /** Shrink a photo before upload (max 1600 px); PNG stays PNG so an existing transparent background survives. */
-async function shrink(file: File): Promise<Blob> {
+export async function shrink(file: File): Promise<Blob> {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
   const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
   const cv = document.createElement('canvas');
