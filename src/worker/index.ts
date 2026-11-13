@@ -22,6 +22,7 @@ import { evidenceFor, handleFromInput, profileUrl } from '../shared/leads.ts';
 import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { GUIDE_VERSION, guideFor, isCurrentGuide } from '../shared/pointGuide.ts';
+import { dealerGuideText } from '../shared/dealerGuide.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -3669,9 +3670,10 @@ async function marketContext(env: AppEnv['Bindings']): Promise<string> {
     const period = await latestPeriod(env, country);
     if (!period) continue;
     const rows = await monthRows(env, country, period, 10);
-    out.push(`${country} ${period}: ` + rows.map((r) => `#${r.rank} ${r.brand} ${r.model}${r.price_min != null || r.price_max != null ? ` (${r.price_min ?? '?'}–${r.price_max ?? '?'} ${r.currency ?? ''})` : ''}${r.note ? ` — why it sells: ${r.note}` : ''}`).join('; ') + ` [source: ${rows[0]?.source ?? ''}]`);
+    out.push(`${country} ${period}: ` + rows.map((r) => `#${r.rank} ${r.brand} ${r.model}${r.note ? ` — why it sells: ${r.note}` : ''}`).join('; ') + ` [source: ${rows[0]?.source ?? ''}]`);
   }
   const ups = (await env.DB.prepare('SELECT country, title, body, source, created_at FROM market_updates ORDER BY created_at DESC LIMIT 5').all<Record<string, string | null>>()).results;
+  out.push(dealerGuideText());
   for (const u of ups) out.push(`Update ${u.created_at?.slice(0, 10)} ${u.country ?? ''}: ${u.title}${u.body ? ` — ${String(u.body).slice(0, 300)}` : ''} [source: ${u.source}]`);
   return out.join('\n');
 }

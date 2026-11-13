@@ -710,12 +710,13 @@ export async function chatAssistant(env: Env, turns: ChatTurn[], lang: OutLang, 
     '2. Never invent market numbers, rankings, prices or statistics. For current market facts, use only the "Market data" below; if it has nothing relevant, say there is no data yet and explain general factors instead.',
     '3. For repair and chemical work (dyes, solvents, edge paint), give safety notes and suggest testing on a hidden spot first; say when a professional should do it.',
     '4. Never help make, label or sell counterfeit goods, or remove or alter serial numbers, date codes or brand marks.',
+    '5. ZERO-PRICE POLICY (owner rule): never state, estimate or quote any price in any currency, even if asked or if a price appears in the data below. Say politely that prices are kept confidential to protect dealer margins, then give the demand badges (🔥 fast mover, 💎 rare, 🇹🇭 trending in Thailand, 📦 cream bale hero), the stock tier and the code / tag checkpoints from the dealer stock guide instead.',
     `Answer in ${LANG_NAME[lang]} unless the user writes in another language, then use theirs. Keep brand names, model names and codes as written. Be concise and practical; use short lists when steps help.`,
     'If a photo is attached, describe only what is visible in it and say when something cannot be seen clearly.',
     '',
     'Market data (entered by the Anajak Bag team, with sources):',
     ctx.market || '(no data yet)',
-    ...(ctx.skills ? ['', 'Shop knowledge (written and approved by the Anajak Bag team). Prefer it over general knowledge and use its facts, prices and steps as given; it never overrides the hard rules above:', ctx.skills] : []),
+    ...(ctx.skills ? ['', 'Shop knowledge (written and approved by the Anajak Bag team). Prefer it over general knowledge and use its facts and steps as given (never prices, rule 5); it never overrides the hard rules above:', ctx.skills] : []),
     ...(ctx.app ? ['', 'In the app (point the user to these when they help):', ctx.app] : []),
   ].join('\n');
   return runChat(env, system, turns, 8000, image);
@@ -954,7 +955,7 @@ export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY';
     `You research the SECOND-HAND (preloved) designer handbag market in ${c.name} for resellers at a Cambodian border market. ` +
     `Find which brands and models are selling fast or are most wanted there around ${x.period}: look at ${c.places}, resale price guides and recent articles. ` +
     'Prefer evidence such as many sold listings, "sold out", high resale value, waiting lists, trending searches, or articles naming the model. ' +
-    'Report ONLY what the sources support. Never invent rankings, prices or statistics; if a price is not in a source, use null. Use sources from the last 12 months where possible. ' +
+    'Report ONLY what the sources support. Never invent rankings or statistics. Prices are never shown in the app (owner zero-price policy): always use null for price_min / price_max. Use sources from the last 12 months where possible. ' +
     'Never comment on whether any item is authentic or counterfeit. ' +
     `For each model write "reason": ONE short sentence in ${LANG_NAME[x.lang]} on why it sells (demand, rarity, style trend, resale value), based on the sources. ` +
     `Finish with JSON only: {"rows":[{"brand":"...","model":"...","reason":"...","price_min":number|null,"price_max":number|null,"currency":"${c.currency}"|null,"sources":["url", ...]}]} — up to 10 rows, most in-demand first.`;

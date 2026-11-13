@@ -28,7 +28,10 @@ export function monthLabel(period: string | null, locale: string): string {
   catch { return period; }
 }
 
+/** Owner policy (Nov 2026): zero prices on screen, to protect dealer margins. */
+export const SHOW_PRICES = false;
 export function priceText(r: Pick<TrendRow, 'price_min' | 'price_max' | 'currency'>): string {
+  if (!SHOW_PRICES) return '';
   if (r.price_min == null && r.price_max == null) return '—';
   const f = (n: number) => n.toLocaleString('en-US');
   const cur = r.currency ?? '';
