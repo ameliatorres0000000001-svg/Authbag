@@ -72,6 +72,7 @@ export default function AdminPanel() {
             <>
               <Notice><b>{t('admin.teachTitle')}</b><br />{t('admin.teachBody')}</Notice>
               <UploadForm tax={tax} comps={comps} compName={compName} canAddTaxonomy={admin} onTax={loadTax} onDone={loadLib} />
+              <RefreshGuides />
               <TranslatePoints />
               <DateCodeGuide />
             </>
@@ -407,6 +408,47 @@ function TranslatePoints() {
         {state.msg && <p className="text-xs">{state.msg}</p>}
       </div>
       <button type="button" className="btn-primary shrink-0" disabled={state.busy} onClick={run}>{state.busy ? '…' : t('tr.run')}</button>
+    </div>
+  );
+}
+
+/**
+ * "🔄 Auto-Update AI ទាំងអស់": rewrite every reference-photo guide and album guide in the current format, batch after
+ * batch until nothing is left (the server also does a few every 10 minutes on its own). Old text is overwritten.
+ */
+function RefreshGuides() {
+  const { t } = useI18n();
+  const [left, setLeft] = useState<{ photos_left: number; albums_left: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(0);
+  const [err, setErr] = useState('');
+  const stop = React.useRef(false);
+  useEffect(() => { api.get<{ photos_left: number; albums_left: number }>('/api/admin/guides/refresh').then(setLeft).catch(() => setLeft(null)); }, []);
+  const run = async () => {
+    setBusy(true); setErr(''); setDone(0); stop.current = false;
+    let total = 0, idle = 0;
+    try {
+      while (!stop.current) {
+        const r = await api.post<{ done: number; failed: number; photos_left: number; albums_left: number }>('/api/admin/guides/refresh');
+        total += r.done; setDone(total); setLeft(r);
+        if (r.photos_left + r.albums_left === 0) break;
+        idle = r.done + r.failed === 0 ? idle + 1 : 0;
+        if (idle >= 2) { setErr(t('gr.stuck')); break; } // what is left failed recently; the server retries later
+      }
+    } catch (e) { setErr(errText(e)); }
+    setBusy(false);
+  };
+  const n = left ? left.photos_left + left.albums_left : null;
+  return (
+    <div className="card space-y-2">
+      <h2 className="text-lg">🔄 {t('gr.title')}</h2>
+      <p className="text-xs text-muted">{t('gr.help')}</p>
+      {left && <p className="text-sm">{n === 0 ? `✓ ${t('gr.allDone')}` : t('gr.left').replace('{p}', String(left.photos_left)).replace('{a}', String(left.albums_left))}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="btn-primary" disabled={busy || n === 0} onClick={run}>{busy ? `⏳ ${t('gr.busy').replace('{n}', String(done))}` : `🔄 ${t('gr.button')}`}</button>
+        {busy && <button type="button" className="btn-ghost text-xs" onClick={() => { stop.current = true; }}>{t('gr.stop')}</button>}
+      </div>
+      {err && <Notice tone="warn">{err}</Notice>}
     </div>
   );
 }

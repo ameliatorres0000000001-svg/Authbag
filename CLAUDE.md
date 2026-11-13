@@ -7,3 +7,4 @@
 - No demo/fake data. Empty states say "no data".
 - UI strings go in `src/web/i18n.tsx` (km + en). Design tokens: `tailwind.config.js` (Haute Verification); references in `design-reference/stitch`.
 - Commands: `npm test` (engine), `npm run typecheck`, `npm run build`, `npx wrangler dev`.
+- Reference-photo guides (owner prompt, 2026-11-13, `GUIDE_SYSTEM_PROMPT` in `src/worker/vision.ts`): per box `popup_text` / `where_to_look` / `original_trait` / `fake_red_flag`, versioned (`GUIDE_VERSION`). They teach about the original reference model and common copy mistakes; they never judge a customer's bag. Counterfeit-labelled photos are never explained. Old guides are rewritten by the refresh job (Admin button + cron).
