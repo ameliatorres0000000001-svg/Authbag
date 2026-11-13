@@ -120,7 +120,8 @@ const anthropicClient = (env: Env, p: AiProvider | null = aiProvider(env)): Anth
   }
   const gw = gatewayUrl(env), key = cleanKey(env.ANTHROPIC_API_KEY);
   // a gateway may read the key from either header (laalaa asks for "Authorization: Bearer"), so send both there
-  return new Anthropic({ apiKey: key, ...(gw ? { baseURL: gw, defaultHeaders: { authorization: `Bearer ${key}` } } : {}) });
+  // through a gateway, retry once only: when its upstream is down every retry fails too, and the backup AI should take over quickly
+  return new Anthropic({ apiKey: key, ...(gw ? { baseURL: gw, maxRetries: 1, defaultHeaders: { authorization: `Bearer ${key}` } } : {}) });
 };
 
 /** Drawing teaching points is the hardest vision task: it uses the strongest Claude model unless AI_MODEL pins one. */

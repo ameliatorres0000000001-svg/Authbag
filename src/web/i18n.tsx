@@ -544,7 +544,8 @@ const D: Record<string, { km: string; en: string }> = {
   'aib.done': { km: 'រួចរាល់', en: 'Done' },
   'aib.secs': { km: '{n} វិនាទី', en: '{n} s' },
   'aib.wait': { km: 'សូមរង់ចាំបន្តិច កុំបិទ App', en: 'Please wait a moment, keep the app open' },
-  'aib.slow': { km: 'Internet យឺត ចម្លើយកំពុងមក សូមរង់ចាំ…', en: 'Slow connection, the answer is on its way…' },
+  'err.aiDown': { km: 'សេវា AI កំពុងខូចបណ្ដោះអាសន្ន (មិនមែន Internet របស់អ្នកទេ) — សូមសាកម្ដងទៀតបន្តិចក្រោយ។', en: 'The AI service is temporarily unavailable (not your connection) — please try again a little later.' },
+  'aib.slow': { km: 'AI ឆ្លើយយឺតជាងធម្មតា ឬកំពុងសាក AI បម្រុង — សូមរង់ចាំបន្តិច…', en: 'The AI is slower than usual or trying the backup AI — please wait a little…' },
   'aib.measure': { km: 'កំពុងវាស់ពណ៌កាបូប…', en: 'Measuring the bag colour…' },
   'aib.leather': { km: 'AI កំពុងមើលប្រភេទស្បែក…', en: 'The AI is looking at the leather…' },
   'aib.mix': { km: 'AI កំពុងរៀបថ្នាំត្រូវលាយ…', en: 'The AI is choosing the paints…' },
@@ -1669,3 +1670,9 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   return <I18n.Provider value={value}>{children}</I18n.Provider>;
 }
 export const useI18n = () => useContext(I18n);
+
+/** Translate outside React (e.g. error helpers): uses the page language set by the provider. */
+export function tPlain(k: string): string {
+  const l = (typeof document !== 'undefined' ? document.documentElement.lang : 'km') as Locale;
+  return (l === 'km' || l === 'en' ? D[k]?.[l] : MORE[k]?.[l]) ?? D[k]?.en ?? k;
+}

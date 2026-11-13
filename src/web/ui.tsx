@@ -1,5 +1,5 @@
 import React from 'react';
-import { useI18n } from './i18n.tsx';
+import { tPlain, useI18n } from './i18n.tsx';
 
 export function Badge({ tone = 'muted', children }: { tone?: 'ok' | 'warn' | 'bad' | 'info' | 'muted'; children: React.ReactNode }) {
   const c = { ok: 'bg-verified-bg text-verified', warn: 'bg-review-bg text-review', bad: 'bg-counterfeit-bg text-counterfeit', info: 'bg-telemetry-bg text-telemetry', muted: 'bg-surface-high text-muted' }[tone];
@@ -46,5 +46,11 @@ export function Empty({ children }: { children?: React.ReactNode }) {
 
 export function errText(e: unknown): string {
   const any = e as { body?: { error?: string; detail?: string }; message?: string };
-  return any?.body?.detail ?? any?.body?.error ?? any?.message ?? 'error';
+  const raw = any?.body?.detail ?? any?.body?.error ?? any?.message ?? 'error';
+  // every AI is down or out of quota: say so plainly instead of the provider's error code
+  if (/ai_http_(5\d\d|429)|upstream_unavailable|no available account|overloaded/i.test(raw)) return aiDownText();
+  return raw;
 }
+
+/** The AI services (main and backup) are unavailable for now — not the user's network, not the user's mistake. */
+export const aiDownText = () => tPlain('err.aiDown');
