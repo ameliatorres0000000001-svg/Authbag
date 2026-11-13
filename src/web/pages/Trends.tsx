@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
-import { Page } from '../ui.tsx';
+import { Page, errText } from '../ui.tsx';
+import { MeContext } from '../App.tsx';
+import { shrink } from '../MarketAdmin.tsx';
 import { COUNTRIES, FLAG, TrendTable, monthLabel, type Country, type TrendRow } from '../Market.tsx';
 import { BADGE_ICON, BALE_CHECKS, CREAM_BRANDS, DEALER_ITEMS, EVEN_TON, SOURCE, searchDealer, searchNames, type DealerItem, type Tier } from '../../shared/dealerGuide.ts';
 
@@ -38,8 +40,6 @@ export default function TrendsPage() {
 
   const pick = (c: Country) => setSp({ country: c });
   const searching = q.trim().length > 0;
-  const lc = q.trim().toLowerCase();
-  const rowHit = (r: TrendRow) => !searching || `${r.brand} ${r.model} ${r.note ?? ''}`.toLowerCase().includes(lc);
 
   return (
     <Page title={t('market.title')} subtitle={t('market.sub')}>
@@ -55,15 +55,8 @@ export default function TrendsPage() {
         ))}
       </div>
 
-      {(searching || tab === 'dealer') && <DealerList items={searchDealer(q)} searching={searching} />}
+      {(searching || tab === 'dealer') && <BestSellers q={q} searching={searching} />}
       {(searching || tab === 'bale') && <BaleLists q={q} searching={searching} />}
-      {searching && d && d.rows.some(rowHit) && (
-        <section className="mb-6"><h2 className="mb-2 text-lg">🔥 {t('market.month')}</h2>
-          <TrendTable country={country} period={d.period} rows={d.rows.filter(rowHit)} /></section>
-      )}
-      {searching && searchDealer(q).length === 0 && searchNames(q, [...CREAM_BRANDS, ...EVEN_TON]).length === 0 && !(d?.rows.some(rowHit)) && (
-        <p className="rounded-2xl bg-surface-low px-4 py-6 text-center text-sm text-muted">{t('noData')}</p>
-      )}
 
       {!searching && tab === 'market' && <>
       <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
@@ -77,8 +70,8 @@ export default function TrendsPage() {
 
       {!d && <div className="grid gap-4 md:grid-cols-2"><div className="h-80 animate-pulse rounded-2xl bg-surface-low" /><div className="h-80 animate-pulse rounded-2xl bg-surface-low" /></div>}
       {d && (
-        <div className="grid gap-6 md:grid-cols-2">
-          <section aria-labelledby="month-h">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-2">
+          <section aria-labelledby="month-h" className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 id="month-h" className="text-lg">🔥 {t('market.month')}</h2>
               {d.periods.length > 1 && (
@@ -91,7 +84,7 @@ export default function TrendsPage() {
             <TrendTable country={country} period={d.period} rows={d.rows} />
           </section>
 
-          <section aria-labelledby="year-h">
+          <section aria-labelledby="year-h" className="min-w-0">
             <div className="mb-2 flex items-baseline justify-between gap-2">
               <h2 id="year-h" className="text-lg">⭐ {t('market.year')}{d.year ? ` ${d.year.year}` : ''}</h2>
               {d.year && <span className="text-[11px] text-muted">{t('market.yearNote')}: {d.year.months} {t('market.monthsOnFile')}</span>}
@@ -135,42 +128,105 @@ export default function TrendsPage() {
   );
 }
 
-/** One dealer card per model: coloured band (rank, model, tier, badges), the checkpoints, then the dealer tip. */
-function DealerList({ items, searching }: { items: DealerItem[]; searching: boolean }) {
+interface BsRow { country: Country; period: string; rank: number; brand: string; model: string; note: string | null; source: string }
+interface BsImage { id: string; brand_key: string; model_key: string; created_at: string }
+interface BsModel { brand: string; model: string; places: { country: Country; rank: number }[]; notes: string[]; sources: string[]; guide: DealerItem | null; owner: boolean }
+const key = (b: string, m: string) => `${b.trim().toLowerCase()}|${m.trim().toLowerCase()}`;
+
+/**
+ * 🏆 This month's best sellers: every model of every country's latest month, merged into one card each (photo, brand,
+ * model, flags with ranks), then the owner's own Nov notes not already listed. Admins upload the photo on the card.
+ */
+function BestSellers({ q, searching }: { q: string; searching: boolean }) {
   const { t, locale } = useI18n();
+  const me = useContext(MeContext);
+  const admin = !!me && ['owner', 'lead_authenticator'].includes(me.role);
+  const [data, setData] = useState<{ rows: BsRow[]; images: BsImage[] } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [busy, setBusy] = useState(''); const [err, setErr] = useState('');
+  const load = () => api.get<{ rows: BsRow[]; images: BsImage[] }>('/api/market/best-sellers').then(setData).catch(() => setData({ rows: [], images: [] }));
+  useEffect(() => { load(); }, []);
+  if (!data) return <div className="mb-6 grid grid-cols-2 gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="h-56 animate-pulse rounded-2xl bg-surface-low" />)}</div>;
+
   const L = (x: { en: string; km: string }) => (locale === 'km' ? x.km : x.en);
-  if (!items.length) return searching ? null : <p className="text-center text-sm text-muted">{t('noData')}</p>;
+  const guides = new Map(DEALER_ITEMS.map((g) => [key(g.brand, g.model), g]));
+  const byKey = new Map<string, BsModel>();
+  for (const r of data.rows) {
+    const k = key(r.brand, r.model);
+    const m = byKey.get(k) ?? { brand: r.brand, model: r.model, places: [], notes: [], sources: [], guide: guides.get(k) ?? null, owner: false };
+    m.places.push({ country: r.country, rank: r.rank });
+    if (r.note && !m.notes.includes(r.note)) m.notes.push(r.note);
+    if (!m.sources.includes(r.source)) m.sources.push(r.source);
+    byKey.set(k, m);
+  }
+  for (const g of DEALER_ITEMS) {
+    const k = key(g.brand, g.model);
+    if (!byKey.has(k)) byKey.set(k, { brand: g.brand, model: g.model, places: [], notes: [], sources: [SOURCE], guide: g, owner: true });
+  }
+  const best = (m: BsModel) => (m.places.length ? Math.min(...m.places.map((p) => p.rank)) : 99);
+  let list = [...byKey.values()].sort((a, b) => Number(a.owner) - Number(b.owner) || best(a) - best(b) || b.places.length - a.places.length);
+  if (searching) { const hits = new Set(searchDealer(q).map((g) => key(g.brand, g.model))); const lc = q.trim().toLowerCase();
+    list = list.filter((m) => hits.has(key(m.brand, m.model)) || `${m.brand} ${m.model}`.toLowerCase().includes(lc)); }
+  const img = new Map(data.images.map((i) => [`${i.brand_key}|${i.model_key}`, i]));
+  if (searching && !list.length) return null;
+
+  const upload = async (m: BsModel, f: File) => {
+    const k = key(m.brand, m.model); setBusy(k); setErr('');
+    try {
+      const fd = new FormData(); fd.append('brand', m.brand); fd.append('model', m.model);
+      fd.append('file', new File([await shrink(f)], 'photo', { type: f.type === 'image/png' ? 'image/png' : 'image/jpeg' }));
+      await api.post('/api/admin/market/images', fd); await load();
+    } catch (e) { setErr(errText(e)); } finally { setBusy(''); }
+  };
+
   return (
-    <section className="mb-6 space-y-3">
-      {searching && <h2 className="text-lg">📋 {t('dl.tab.dealer')}</h2>}
-      {items.map((it) => (
-        <article key={it.rank} className="overflow-hidden rounded-2xl border border-hairline bg-surface-card">
-          <header className={`${TIER_TONE[it.tier]} px-4 py-3 text-white`}>
-            <div className="flex items-baseline gap-2">
-              <span className="font-serif text-2xl leading-none text-[#f2ca50]">#{it.rank}</span>
-              <div className="min-w-0">
-                <div className="text-[11px] font-semibold uppercase tracking-wide opacity-80">{it.brand}</div>
-                <h3 className="text-base font-semibold leading-snug">{it.model}</h3>
-              </div>
-            </div>
-            <div className="mt-1 text-[12px] opacity-90">{L(it.era)}</div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold">{t(`dl.tier.${it.tier}`)}</span>
-              {it.badges.map((b) => <span key={b} className="rounded-full bg-black/25 px-2 py-0.5 text-[11px]">{BADGE_ICON[b]} {t(`dl.badge.${b}`)}</span>)}
-            </div>
-          </header>
-          <div className="space-y-2 p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-gold">{t('dl.checks')}</div>
-            <ul className="space-y-1.5">
-              {it.checks.map((c, i) => (
-                <li key={i} className="flex gap-2 rounded-xl bg-surface-low px-3 py-2 text-[13.5px] leading-snug"><span className="text-gold" aria-hidden>›</span><span>{L(c)}</span></li>
-              ))}
-            </ul>
-            <p className="flex gap-2 text-[13.5px] leading-snug"><span aria-hidden>💡</span><span><b>{t('dl.tip')}</b> {L(it.tip)}</span></p>
-          </div>
-        </article>
-      ))}
-      <p className="text-[11px] text-muted">{t('market.source')}: {SOURCE}</p>
+    <section className="mb-6">
+      <h2 className="mb-1 text-lg">🏆 {t('bs.title')}</h2>
+      <p className="mb-3 text-[12px] text-muted">{t('bs.help')}{admin ? ` ${t('bs.adminHelp')}` : ''}</p>
+      {err && <p className="mb-2 rounded-xl bg-counterfeit/15 px-3 py-2 text-sm">{err}</p>}
+      {!list.length && <p className="rounded-2xl bg-surface-low px-4 py-6 text-center text-sm text-muted">{t('noData')}</p>}
+      <ul className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        {list.map((m) => {
+          const k = key(m.brand, m.model); const pic = img.get(k); const on = open === k;
+          return (
+            <li key={k} className={`overflow-hidden rounded-2xl border bg-surface-card ${on ? 'col-span-2 border-gold md:col-span-3' : 'border-hairline'}`}>
+              <button type="button" className="block w-full text-left" onClick={() => setOpen(on ? null : k)} aria-expanded={on}>
+                <div className={`relative flex items-center justify-center bg-white ${on ? 'h-60' : 'aspect-square'}`}>
+                  {pic ? <img src={`/api/market/images/${pic.id}?v=${encodeURIComponent(pic.created_at)}`} alt={`${m.brand} ${m.model}`} className="h-full w-full object-contain p-2" loading="lazy" />
+                    : <span className="text-center text-[12px] text-[#8a8494]"><span className="block text-3xl" aria-hidden>📷</span>{t('bs.noPhoto')}</span>}
+                  {m.places.length > 0 && <span className="absolute left-2 top-2 rounded-full bg-charcoal/85 px-2 py-0.5 font-serif text-sm text-gold">#{best(m)}</span>}
+                </div>
+                <div className="p-3">
+                  <div className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted">{m.brand}</div>
+                  <div className={`text-sm font-semibold leading-snug ${on ? '' : 'line-clamp-2'}`}>{m.model}</div>
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {m.places.map((p) => <span key={p.country} className="rounded-full bg-surface-low px-2 py-0.5 text-[11px]">{FLAG[p.country]} #{p.rank}</span>)}
+                    {m.owner && <span className="rounded-full bg-surface-low px-2 py-0.5 text-[11px]">📝 {t('bs.ownerNotes')}</span>}
+                    {m.guide?.badges.map((b) => <span key={b} className="rounded-full bg-surface-low px-2 py-0.5 text-[11px]" title={t(`dl.badge.${b}`)}>{BADGE_ICON[b]}{on ? ` ${t(`dl.badge.${b}`)}` : ''}</span>)}
+                  </div>
+                </div>
+              </button>
+              {on && (
+                <div className="space-y-2 border-t border-hairline p-3 text-[13.5px] leading-snug">
+                  {m.notes.map((n, i) => <p key={i}>💬 {n}</p>)}
+                  {m.guide && <>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-gold">{t('dl.checks')}</div>
+                    <ul className="space-y-1">{m.guide.checks.map((c, i) => <li key={i} className="flex gap-2"><span className="text-gold" aria-hidden>›</span>{L(c)}</li>)}</ul>
+                    <p>💡 <b>{t('dl.tip')}</b> {L(m.guide.tip)}</p>
+                  </>}
+                  <p className="text-[11px] text-muted">{t('market.source')}: {m.sources.join(' · ')}</p>
+                </div>
+              )}
+              {admin && (
+                <label className={`flex cursor-pointer items-center justify-center gap-1.5 border-t border-hairline px-3 py-2 text-[12px] font-semibold ${pic ? 'text-muted' : 'text-gold'}`}>
+                  <input type="file" accept="image/*" className="sr-only" disabled={!!busy} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(m, f); }} />
+                  {busy === k ? `⏳ ${t('bs.uploading')}` : pic ? `🔄 ${t('bs.replace')}` : `⬆️ ${t('bs.upload')}`}
+                </label>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

@@ -2197,6 +2197,14 @@ app.get('/api/market/trends', async (c) => {
   return c.json({ country, period, periods, rows, year: year ? { year, months: yearMonths, rows: yearRows } : null });
 });
 
+/** This month's best sellers: every model in each country's latest month, merged (flags + ranks), and every model photo. */
+app.get('/api/market/best-sellers', async (c) => {
+  const rows = (await c.env.DB.prepare(`SELECT t.country, t.period, t.rank, t.brand, t.model, t.note, t.source FROM market_trends t
+    WHERE t.period = (SELECT MAX(period) FROM market_trends x WHERE x.country = t.country) ORDER BY t.rank, t.country`).all<Record<string, any>>()).results;
+  const images = (await c.env.DB.prepare('SELECT id, brand_key, model_key, created_at FROM market_model_images').all()).results;
+  return c.json({ rows, images });
+});
+
 /** Every country's latest month (top N) and the newest market updates: for the install screen and the home screen. */
 app.get('/api/market/overview', async (c) => {
   const top = Math.min(20, Math.max(1, Number(c.req.query('top')) || 10));
