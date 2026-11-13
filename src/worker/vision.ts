@@ -46,7 +46,8 @@ export const bedrockRegion = (env: Env): string => env.AWS_REGION?.trim() || 'us
  */
 export const aiProvider = (env: Env): AiProvider | null => {
   const forced = env.AI_PROVIDER?.trim().toLowerCase();
-  if (forced === 'anthropic' || forced === 'bedrock' || forced === 'openai' || forced === 'gemini') return forced;
+  // a forced OpenAI-compatible API without its key / model yet is ignored, so the app keeps working until the secret is set
+  if (forced === 'anthropic' || forced === 'bedrock' || forced === 'gemini' || (forced === 'openai' && openaiConfigured(env))) return forced;
   const a = cleanKey(env.ANTHROPIC_API_KEY);
   if (a.startsWith('sk-ant-')) return 'anthropic';
   if (bedrockKey(env) || awsKeys(env)) return 'bedrock';
@@ -60,6 +61,10 @@ export const openaiBase = (env: Env): string => {
   const u = env.OPENAI_BASE_URL?.trim() || 'https://api.openai.com/v1';
   try { const p = new URL(u); return p.protocol === 'https:' ? (p.origin + p.pathname).replace(/\/$/, '') : 'https://api.openai.com/v1'; } catch { return 'https://api.openai.com/v1'; }
 };
+/** Web search runs on Claude (direct or through the gateway): available whenever an Anthropic key is set, even if another AI is the main one. */
+const webClaude = (env: Env) => configured(env).anthropic;
+/** The Claude model for web-search features: AI_MODEL when Claude is the main AI, else Claude's default. */
+const webModel = (env: Env) => modelFor(env, 'anthropic');
 /** Which providers have credentials: the main one first, then the others as backups (tried in this order). */
 const configured = (env: Env): Record<AiProvider, boolean> => {
   const a = cleanKey(env.ANTHROPIC_API_KEY);
@@ -508,8 +513,8 @@ export interface StyleIdentification {
  * Needs the Anthropic provider (web search is a Claude server tool).
  */
 export async function identifyStyleCode(env: Env, brand: string, code: string, hint: string, lang: OutLang = 'km'): Promise<StyleIdentification> {
-  if (aiProvider(env) !== 'anthropic') throw new Error('web_search_needs_claude');
-  const client = anthropicClient(env);
+  if (!webClaude(env)) throw new Error('web_search_needs_claude');
+  const client = anthropicClient(env, 'anthropic');
   const system =
     `You identify luxury-goods products from their style / article code. ${NO_VERDICT} ` +
     'Search the web for the exact code. Prefer the brand\'s official site, then large resellers. ' +
@@ -522,7 +527,7 @@ export async function identifyStyleCode(env: Env, brand: string, code: string, h
   for (let i = 0; i < 3; i++) {
     try {
       msg = await client.messages.create({
-        model: aiModel(env)!, max_tokens: 16000, output_config: { effort: 'medium' }, system, messages,
+        model: webModel(env), max_tokens: 16000, output_config: { effort: 'medium' }, system, messages,
         tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }],
       });
       await recordUsage(env, msg.model, msg.usage);
@@ -784,9 +789,9 @@ export interface PaintResearch { info: string; sources: { title: string; url: st
  * each call allows at most 5 searches.
  */
 export async function researchPaintProduct(env: Env, x: { brand: string; name: string; kind: string; lang: OutLang }): Promise<PaintResearch> {
-  if (aiProvider(env) !== 'anthropic') throw new Error('ai_web_not_configured');
-  const model = aiModel(env)!;
-  const client = anthropicClient(env);
+  if (!webClaude(env)) throw new Error('ai_web_not_configured');
+  const model = webModel(env);
+  const client = anthropicClient(env, 'anthropic');
   const system =
     'You research leather paints, dyes, edge paints and finishers for people who restore second-hand bags in Cambodia and Thailand. ' +
     'Use web search to find the manufacturer\'s own pages and reliable guides about THIS exact product. ' +
@@ -947,10 +952,10 @@ const COUNTRY_NAME: Record<string, { name: string; currency: string; places: str
  * source shows them. Staff read it, edit, and save it as that month's ranking (with the sources).
  */
 export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY'; period: string; lang: OutLang }): Promise<MarketResearch> {
-  if (aiProvider(env) !== 'anthropic') throw new Error('ai_web_not_configured');
+  if (!webClaude(env)) throw new Error('ai_web_not_configured');
   const c = COUNTRY_NAME[x.country];
-  const model = aiModel(env)!;
-  const client = anthropicClient(env);
+  const model = webModel(env);
+  const client = anthropicClient(env, 'anthropic');
   const system =
     `You research the SECOND-HAND (preloved) designer handbag market in ${c.name} for resellers at a Cambodian border market. ` +
     `Find which brands and models are selling fast or are most wanted there around ${x.period}: look at ${c.places}, resale price guides and recent articles. ` +
@@ -1019,10 +1024,10 @@ const LEAD_QUERIES: Record<'TH' | 'MY' | 'ID', { name: string; lang: string; que
  * the search really returned belongs to it (see evidenceFor). Business info only; never personal details.
  */
 export async function findTiktokSellers(env: Env, x: { country: 'TH' | 'MY' | 'ID'; lang: OutLang; known: string[]; topic?: string | null; offer?: string | null }): Promise<{ rows: LeadFound[]; found: Map<string, string>; model: string }> {
-  if (aiProvider(env) !== 'anthropic') throw new Error('ai_web_not_configured');
+  if (!webClaude(env)) throw new Error('ai_web_not_configured');
   const c = LEAD_QUERIES[x.country];
-  const model = aiModel(env)!;
-  const client = anthropicClient(env);
+  const model = webModel(env);
+  const client = anthropicClient(env, 'anthropic');
   const system =
     `You help a second-hand designer-bag wholesaler at the Cambodia–Thailand border market (Aran / Rong Kluea) find new business customers in ${c.name}. ` +
     `Search TikTok (the search is limited to tiktok.com) for accounts in ${c.name} that SELL second-hand / preloved designer bags, especially by TikTok LIVE, ` +
@@ -1298,10 +1303,10 @@ export async function readPaintTube(env: Env, image: VisionImage, x: { lang: Out
 /** Admin check: one tiny Claude web search (1 search) — used by the TikTok customer finder, market and paint research. */
 export async function testWebSearch(env: Env): Promise<{ ok: boolean; ms: number; error?: string }> {
   const t = Date.now();
-  if (aiProvider(env) !== 'anthropic') return { ok: false, ms: 0, error: aiProvider(env) === 'bedrock' ? 'not available on Amazon Bedrock (web search needs an Anthropic API key)' : 'needs ANTHROPIC_API_KEY' };
+  if (!webClaude(env)) return { ok: false, ms: 0, error: aiProvider(env) === 'bedrock' ? 'not available on Amazon Bedrock (web search needs an Anthropic API key)' : 'needs ANTHROPIC_API_KEY' };
   try {
-    const r = await anthropicClient(env).beta.messages.create({
-      model: aiModel(env)!, max_tokens: 2000, output_config: { effort: 'low' },
+    const r = await anthropicClient(env, 'anthropic').beta.messages.create({
+      model: webModel(env), max_tokens: 2000, output_config: { effort: 'low' },
       betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
       tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 1 }],
       messages: [{ role: 'user', content: 'Search the web once for "leather paint" and reply with the single word: ok' }],

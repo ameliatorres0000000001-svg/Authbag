@@ -24,7 +24,10 @@
   "triggers": { "crons": ["*/10 * * * *"] },
   // ANTHROPIC_BASE_URL: the Claude gateway the shop's key was bought from (not a secret). Set it to "" to use a
   // key from platform.claude.com directly.
-  "vars": { "AI_MODEL": "", "AZURE_SPEECH_REGION": "southeastasia", "ANTHROPIC_BASE_URL": "https://api.laalaa.me" }
+  // Main AI = GPT through the same laalaa gateway (owner, 2026-11-14): needs the secret OPENAI_API_KEY (the laalaa key).
+  // Until that secret is set, AI_PROVIDER is ignored and Claude stays the main AI. Claude and Gemini back GPT up; web search stays on Claude.
+  "vars": { "AI_MODEL": "", "AZURE_SPEECH_REGION": "southeastasia", "ANTHROPIC_BASE_URL": "https://api.laalaa.me",
+    "AI_PROVIDER": "openai", "OPENAI_MODEL": "gpt-5.5", "OPENAI_BASE_URL": "https://api.laalaa.me/v1" }
   // Optional secrets (set with `wrangler secret put NAME`, never committed):
   //   AZURE_SPEECH_KEY  – Azure AI Speech key for Khmer voice (text-to-speech); region is the var above
   //   ENTRUPY_API_KEY   – only after Entrupy approves your business account
