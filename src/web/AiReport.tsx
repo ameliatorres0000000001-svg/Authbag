@@ -46,7 +46,7 @@ export default function AiReportCard(p: AiReportProps) {
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const [err, setErr] = useState('');
   const tone = REPORT_TONE[p.verdict] ?? REPORT_TONE.unidentified;
-  const no = `AR-${p.requestId.replace(/^vr_/, '').slice(0, 8).toUpperCase()}`;
+  const no = `AIC-${p.requestId.replace(/^vr_/, '').slice(0, 8).toUpperCase()}`;
   const date = toDate(p.analysedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   const item = [p.brand, p.model].filter(Boolean).join(' · ');
   const label = t(`pc.v.${p.verdict}`).replace('{n}', String(p.score ?? '–'));
@@ -58,10 +58,10 @@ export default function AiReportCard(p: AiReportProps) {
     const get = async (url: string | null) => { if (!url) return null; try { const r = await fetch(url, { credentials: 'same-origin' }); return r.ok ? await r.blob() : null; } catch { return null; } };
     const [photo, logo] = await Promise.all([get(photoSrc), get('/icons/icon-192.png')]);
     return renderReportPng({
-      brandName: 'HENGZ AUTHENTIC', title: t('rp.title'), subtitle: locale === 'km' ? 'AI INSPECTION REPORT' : 'របាយការណ៍ពិនិត្យដោយ AI',
+      brandName: 'ANAJAK BAG', title: t('rp.title'), subtitle: locale === 'km' ? 'CERTIFICATE OF AI VERIFICATION' : 'វិញ្ញាបនបត្រផ្ទៀងផ្ទាត់ដោយ AI',
       no, noLabel: t('rp.no'), date, dateLabel: t('rp.date'), itemLabel: t('rp.item'), item,
       brand: p.brand, model: p.model ?? '', kvBrand: t('rp.brand'), kvModel: t('rp.model'), kvScore: t('pc.score'),
-      statementTitle: t('rp.statementTitle'), statement: t('rp.statement'), noticeTitle: t('rp.noticeTitle'), notice: t('rp.notice'),
+      statementTitle: t(p.verdict === 'authentic' ? 'rp.statementTitle' : 'rp.statementOther'), statement: t(`rp.statement.${p.verdict}`), noticeTitle: t('rp.noticeTitle'), notice: t('rp.notice'),
       signName: t('rp.sign'), signRole: t('rp.signRole'), analysisTitle: t('rp.analysis'), summaryTitle: t('rp.summary'),
       methodTitle: t('rp.method'), method: [t('rp.m1'), t('rp.m2'), t('rp.m3')], limit: t('rp.limit'), page1: t('rp.p1'), page2: t('rp.p2'),
       verdict: p.verdict, verdictLabel: label, score: p.score, scoreLabel: t('pc.score'), why,
@@ -92,7 +92,7 @@ export default function AiReportCard(p: AiReportProps) {
       <Paper label={t('rp.title')}>
         <header className="text-center">
           <img src="/icons/icon-192.png" alt="" width={48} height={48} className="mx-auto rounded-xl" />
-          <div className="mt-2 font-serif text-[22px] tracking-[0.14em]">HENGZ <span style={{ color: GOLD }}>AUTHENTIC</span></div>
+          <div className="mt-2 font-serif text-[22px] tracking-[0.14em]">ANAJAK <span style={{ color: GOLD }}>BAG</span></div>
           <div className="mx-auto my-2 h-px w-16" style={{ background: GOLD }} />
           <h2 className="font-serif text-[17px] font-medium uppercase tracking-[0.12em]">{t('rp.title')}</h2>
         </header>
@@ -114,9 +114,9 @@ export default function AiReportCard(p: AiReportProps) {
           </dl>
         </div>
         <div className="border p-3 text-center" style={{ borderColor: `${GOLD}99`, borderLeft: `5px solid ${tone.color}` }}>
-          <div className="font-serif text-[12px] uppercase tracking-[0.1em]" style={{ color: GOLD }}>{t('rp.statementTitle')}</div>
+          <div className="font-serif text-[12px] uppercase tracking-[0.1em]" style={{ color: GOLD }}>{t(p.verdict === 'authentic' ? 'rp.statementTitle' : 'rp.statementOther')}</div>
           <div className="mt-1 text-[15px] font-bold leading-snug" style={{ color: tone.color }}>{label}</div>
-          <p className="mt-1.5 text-[12.5px] leading-snug">{t('rp.statement')}</p>
+          <p className="mt-1.5 text-[12.5px] leading-snug">{t(`rp.statement.${p.verdict}`)}</p>
           {why && <p className="mt-1.5 text-[12px] leading-snug" style={{ color: tone.color }}>{why}</p>}
         </div>
         <div>
@@ -137,7 +137,7 @@ export default function AiReportCard(p: AiReportProps) {
       {/* page 2: analysis */}
       <Paper label={t('rp.analysis')}>
         <header className="text-center">
-          <div className="font-serif text-[20px] tracking-[0.14em]">HENGZ <span style={{ color: GOLD }}>AUTHENTIC</span></div>
+          <div className="font-serif text-[20px] tracking-[0.14em]">ANAJAK <span style={{ color: GOLD }}>BAG</span></div>
           <div className="mx-auto my-2 h-px w-16" style={{ background: GOLD }} />
           <h2 className="font-serif text-[17px] font-medium uppercase tracking-[0.12em]">{t('rp.analysis')}</h2>
           <div className="mt-0.5 text-[12px] text-[#6b665a]">{item}</div>
