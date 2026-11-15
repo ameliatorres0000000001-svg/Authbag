@@ -8,6 +8,8 @@ import Timeline from '../Timeline.tsx';
 import { LeadsHome } from '../Leads.tsx';
 import TrendShowcase from '../TrendShowcase.tsx';
 import Galaxy from '../Galaxy.tsx';
+import { SCENES, SCENE_PIC, useHomeScene } from '../homeTheme.ts';
+import Icon from '../Icon.tsx';
 
 export interface StudioModel {
   id: string; name: string; brand: string; brand_id: string;
@@ -38,6 +40,8 @@ const Svg = ({ d, className = 'h-5 w-5' }: { d: string; className?: string }) =>
 export default function Dashboard() {
   const { t } = useI18n();
   const [market, setMarket] = useState<Overview | null>(null);
+  const [scene, setScene] = useHomeScene();
+  const [pickOpen, setPickOpen] = useState(false);
   useEffect(() => {
     let on = true;
     api.get<Overview>('/api/market/overview?top=5').then((r) => on && setMarket(r)).catch(() => on && setMarket({ countries: [], updates: [] }));
@@ -46,7 +50,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <Galaxy calm />
+      <Galaxy calm scene={scene} />
       <div className="home-glass relative mx-auto max-w-5xl space-y-6 px-4 pb-8 pt-4 md:px-8">
         {/* hero: the logo on a breathing gold halo and the line of what the app is (ink / muted, so it also reads on the ivory light theme) */}
         <header className="hz-rise-in relative overflow-hidden rounded-3xl border border-gold/25 p-4 pr-3"
@@ -64,6 +68,25 @@ export default function Dashboard() {
               <p className="mt-1 text-xs leading-snug text-muted">{t('home.sub')}</p>
             </div>
           </div>
+          {/* background picker: the choice is kept on this phone only */}
+          <button type="button" aria-label={t('bg.title')} aria-expanded={pickOpen} onClick={() => setPickOpen((v) => !v)}
+            className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full border border-gold/40 bg-black/25 text-gold backdrop-blur">
+            <Icon name="palette" size={16} />
+          </button>
+          {pickOpen && (
+            <div className="relative mt-3 border-t border-gold/20 pt-3">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{t('bg.title')}</div>
+              <div className="grid grid-cols-4 gap-2">
+                {SCENES.map((k) => (
+                  <button key={k} type="button" onClick={() => { setScene(k); setPickOpen(false); }} aria-pressed={scene === k}
+                    className={`overflow-hidden rounded-xl border-2 text-center ${scene === k ? 'border-gold' : 'border-transparent'}`}>
+                    <span className="block h-16 bg-cover bg-center" style={{ backgroundImage: `url(${SCENE_PIC[k]})` }} />
+                    <span className="block bg-black/40 py-1 text-[11px] text-white">{t(`bg.${k}`)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </header>
 
         {/* this month's fast sellers first: what vendors look at every day */}

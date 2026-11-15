@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { SCENE_PIC, type HomeScene } from './homeTheme.ts';
 
 /** Weak phones (few cores / little memory / data saver) get a lighter sky: fewer stars, still clouds, no sparkles or blur. */
 const detectLite = (): boolean => {
@@ -17,7 +18,7 @@ const detectLite = (): boolean => {
  * Battery: the animation pauses while the tab is hidden, clouds are plain gradients (no blur filter), layers are GPU
  * transforms, and weak phones get the lighter sky above (also sets <html data-fx="lite"> so cards drop their glass blur).
  */
-export default function Galaxy({ calm = false }: { calm?: boolean }) {
+export default function Galaxy({ calm = false, scene = 'galaxy' }: { calm?: boolean; scene?: HomeScene }) {
   const root = useRef<HTMLDivElement>(null);
   const lite = useMemo(detectLite, []);
   useEffect(() => {
@@ -51,9 +52,12 @@ export default function Galaxy({ calm = false }: { calm?: boolean }) {
   ];
   // shooting stars: top, left, cycle seconds, delay seconds
   const meteorsAll: [string, string, number, number][] = [['8%', '70%', 9, 1.5], ['22%', '95%', 13, 6], ['40%', '60%', 17, 11]];
-  const meteors = lite ? [] : calm ? meteorsAll.slice(1, 2) : meteorsAll;
+  // scenes (home only): galaxy = clouds + milky way; aurora = stars + a shooting star over the curtains; marble / silk = the picture plus one light sweep
+  const space = !calm || scene === 'galaxy';
+  const starry = space || scene === 'aurora';
+  const meteors = lite || !starry ? [] : calm ? meteorsAll.slice(1, 2) : meteorsAll;
   const sparklesAll: [string, string, number, number][] = [['12%', '22px', 26, 0], ['78%', '16px', 22, 4], ['64%', '18px', 30, 14], ['88%', '12px', 24, 2], ['35%', '14px', 28, 9]];
-  const sparkles = calm || lite ? [] : sparklesAll;
+  const sparkles = lite ? [] : calm ? (scene === 'marble' ? sparklesAll.slice(0, 3) : []) : sparklesAll;
   // the star gradients are long strings: build them once, not on every re-render of the page above
   const sky = useMemo(() => layers.map(([n0, size, seed]) => stars(calm || lite ? Math.round(n0 / (lite ? 3 : 2)) : n0, size, seed)), [calm, lite]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
@@ -66,6 +70,7 @@ export default function Galaxy({ calm = false }: { calm?: boolean }) {
         @keyframes hz-stars { from { transform: translateY(0) } to { transform: translateY(-100vh) } }
         @keyframes hz-meteor { 0% { transform: translate(0,0) rotate(-35deg); opacity: 0 } 2% { opacity: 1 } 9% { transform: translate(-60vmin,42vmin) rotate(-35deg); opacity: 0 } 100% { opacity: 0 } }
         @keyframes hz-rise { 0% { transform: translateY(0) rotate(0deg); opacity: 0 } 10% { opacity: .55 } 90% { opacity: .55 } 100% { transform: translateY(-110vh) rotate(180deg); opacity: 0 } }
+        @keyframes hz-sheen { from { transform: translateX(-70%) skewX(-18deg) } to { transform: translateX(70%) skewX(-18deg) } }
         @keyframes hz-spin { to { transform: rotate(360deg) } }
         @keyframes hz-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
         @keyframes hz-pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.07) } }
@@ -75,13 +80,13 @@ export default function Galaxy({ calm = false }: { calm?: boolean }) {
         @media (prefers-reduced-motion: reduce) { .hz-anim, .hz-rise-in { animation: none !important } }
       `}</style>
       {/* home: a real picture of the Milky Way (85 KB) drifting very slowly; the clouds, stars and meteors below stay live on top of it */}
-      {calm && <div className="hz-anim absolute" style={{ inset: '-6%', backgroundImage: 'url(/galaxy/home-bg.webp)', backgroundSize: 'cover', backgroundPosition: 'center', willChange: lite ? undefined : 'transform', animation: lite ? 'none' : 'hz-pan 90s ease-in-out infinite alternate' }} />}
-      {(calm ? clouds.slice(0, 2) : clouds).map(([c, size, left, top, anim], i) => (
+      {calm && <div key={scene} className="hz-anim absolute" style={{ inset: '-6%', backgroundImage: `url(${SCENE_PIC[scene]})`, backgroundSize: 'cover', backgroundPosition: 'center', willChange: lite ? undefined : 'transform', animation: lite ? 'none' : 'hz-pan 90s ease-in-out infinite alternate' }} />}
+      {space && (calm ? clouds.slice(0, 2) : clouds).map(([c, size, left, top, anim], i) => (
         <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 70%)`, willChange: lite ? undefined : 'transform, opacity', animation: lite ? 'none' : anim }} />
       ))}
       {/* the Milky Way: one faint tilted band of light across the sky (static, costs nothing to draw) */}
-      <div className="absolute" style={{ left: '-25%', top: '22%', width: '150%', height: '42vmin', transform: 'rotate(-24deg)', background: 'radial-gradient(ellipse at center, rgba(200,180,255,0.15), rgba(255,226,170,0.07) 42%, transparent 70%)' }} />
-      {layers.map(([, , , drift, tw], i) => { return (
+      {space && <div className="absolute" style={{ left: '-25%', top: '22%', width: '150%', height: '42vmin', transform: 'rotate(-24deg)', background: 'radial-gradient(ellipse at center, rgba(200,180,255,0.15), rgba(255,226,170,0.07) 42%, transparent 70%)' }} />}
+      {starry && layers.map(([, , , drift, tw], i) => { return (
         // 200vh tall, the same star tile twice: moving it up by 100vh loops without a seam
         <div key={i} className="hz-anim absolute inset-x-0 top-0 h-[200vh]" style={{ animation: `hz-stars ${drift}s linear infinite`, willChange: 'transform' }}>
           <div className="hz-anim h-full w-full" style={{ backgroundImage: sky[i], backgroundSize: '100% 100vh', animation: tw }} />
@@ -93,6 +98,9 @@ export default function Galaxy({ calm = false }: { calm?: boolean }) {
       {sparkles.map(([left, size, dur, delay], i) => (
         <span key={i} className="hz-anim absolute bottom-[-40px]" style={{ left, fontSize: size, color: '#f2ca50', textShadow: '0 0 12px rgba(242,202,80,0.6)', animation: `hz-rise ${dur}s linear ${delay}s infinite`, opacity: 0 }}>✦</span>
       ))}
+      {calm && !lite && (scene === 'marble' || scene === 'silk') && (
+        <div aria-hidden className="hz-anim absolute inset-y-0 left-0 w-full" style={{ background: scene === 'marble' ? 'linear-gradient(100deg, transparent 38%, rgba(255,222,140,0.10) 50%, transparent 62%)' : 'linear-gradient(100deg, transparent 38%, rgba(255,170,160,0.12) 50%, transparent 62%)', willChange: 'transform', animation: 'hz-sheen 16s ease-in-out infinite alternate' }} />
+      )}
       {calm && <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.18) 55%, rgba(0,0,0,0.5))' }} />}
     </div>
   );
