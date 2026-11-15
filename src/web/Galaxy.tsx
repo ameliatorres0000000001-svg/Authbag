@@ -57,8 +57,9 @@ export default function Galaxy({ calm = false }: { calm?: boolean }) {
   // the star gradients are long strings: build them once, not on every re-render of the page above
   const sky = useMemo(() => layers.map(([n0, size, seed]) => stars(calm || lite ? Math.round(n0 / (lite ? 3 : 2)) : n0, size, seed)), [calm, lite]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div ref={root} aria-hidden className={`pointer-events-none fixed inset-0 overflow-hidden ${calm ? 'galaxy-calm' : ''}`} style={{ zIndex: calm ? -1 : undefined, contain: 'strict', background: 'radial-gradient(130% 90% at 50% 0%, #120c22 0%, #06050c 45%, #000 100%)' }}>
+    <div ref={root} aria-hidden className={`pointer-events-none fixed inset-0 overflow-hidden ${calm ? 'galaxy-calm' : ''}`} style={{ contain: 'strict', background: 'radial-gradient(130% 90% at 50% 0%, #120c22 0%, #06050c 45%, #000 100%)' }}>
       <style>{`
+        @keyframes hz-pan { from { transform: scale(1) translate(0,0) } to { transform: scale(1.14) translate(-2.5%,-3.5%) } }
         @keyframes hz-glow { from { opacity: .55; transform: scale(.95) } to { opacity: 1; transform: scale(1.05) } }
         @keyframes hz-drift { from { transform: translate(0,0) scale(1) } to { transform: translate(12vmin,-8vmin) scale(1.15) } }
         @keyframes hz-twinkle { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
@@ -73,7 +74,9 @@ export default function Galaxy({ calm = false }: { calm?: boolean }) {
         .hz-paused .hz-anim { animation-play-state: paused !important }
         @media (prefers-reduced-motion: reduce) { .hz-anim, .hz-rise-in { animation: none !important } }
       `}</style>
-      {clouds.map(([c, size, left, top, anim], i) => (
+      {/* home: a real picture of the Milky Way (85 KB) drifting very slowly; the clouds, stars and meteors below stay live on top of it */}
+      {calm && <div className="hz-anim absolute" style={{ inset: '-6%', backgroundImage: 'url(/galaxy/home-bg.webp)', backgroundSize: 'cover', backgroundPosition: 'center', willChange: lite ? undefined : 'transform', animation: lite ? 'none' : 'hz-pan 90s ease-in-out infinite alternate' }} />}
+      {(calm ? clouds.slice(0, 2) : clouds).map(([c, size, left, top, anim], i) => (
         <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 70%)`, willChange: lite ? undefined : 'transform, opacity', animation: lite ? 'none' : anim }} />
       ))}
       {/* the Milky Way: one faint tilted band of light across the sky (static, costs nothing to draw) */}
@@ -90,7 +93,7 @@ export default function Galaxy({ calm = false }: { calm?: boolean }) {
       {sparkles.map(([left, size, dur, delay], i) => (
         <span key={i} className="hz-anim absolute bottom-[-40px]" style={{ left, fontSize: size, color: '#f2ca50', textShadow: '0 0 12px rgba(242,202,80,0.6)', animation: `hz-rise ${dur}s linear ${delay}s infinite`, opacity: 0 }}>✦</span>
       ))}
-      {calm && <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.55))' }} />}
+      {calm && <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.18) 55%, rgba(0,0,0,0.5))' }} />}
     </div>
   );
 }
