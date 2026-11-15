@@ -22,12 +22,12 @@
   "observability": { "enabled": true },
   // background jobs: translate teaching points still missing Khmer + English
   "triggers": { "crons": ["*/10 * * * *"] },
-  // ANTHROPIC_BASE_URL: the Claude gateway the shop's key was bought from (not a secret). Set it to "" to use a
-  // key from platform.claude.com directly.
-  // Main AI = GPT through the same laalaa gateway (owner, 2026-11-14): needs the secret OPENAI_API_KEY (the laalaa key).
-  // Until that secret is set, AI_PROVIDER is ignored and Claude stays the main AI. Claude and Gemini back GPT up; web search stays on Claude.
-  "vars": { "AI_MODEL": "", "AZURE_SPEECH_REGION": "southeastasia", "ANTHROPIC_BASE_URL": "https://api.laalaa.me",
-    "AI_PROVIDER": "openai", "OPENAI_MODEL": "gpt-5.5", "OPENAI_BASE_URL": "https://api.laalaa.me/v1" }
+  // Main AI = Claude through Anthropic's official API (owner, 2026-11-15): needs the secret ANTHROPIC_API_KEY (a key from
+  // platform.claude.com, sk-ant-api…). ANTHROPIC_BASE_URL is "" so calls go to api.anthropic.com directly (set a gateway URL
+  // there only to route through a reseller). The laalaa GPT settings below stay as a BACKUP: it is used only when
+  // OPENAI_API_KEY is set and the main AI fails. Gemini backs up too when GEMINI_API_KEY is set; web search stays on Claude.
+  "vars": { "AI_MODEL": "", "AZURE_SPEECH_REGION": "southeastasia", "ANTHROPIC_BASE_URL": "",
+    "AI_PROVIDER": "anthropic", "OPENAI_MODEL": "gpt-5.5", "OPENAI_BASE_URL": "https://api.laalaa.me/v1" }
   // Optional secrets (set with `wrangler secret put NAME`, never committed):
   //   AZURE_SPEECH_KEY  – Azure AI Speech key for Khmer voice (text-to-speech); region is the var above
   //   ENTRUPY_API_KEY   – only after Entrupy approves your business account
