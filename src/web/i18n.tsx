@@ -881,6 +881,8 @@ const D: Record<string, { km: string; en: string }> = {
   'check.s4ai': { km: 'លទ្ធផល', en: 'Result' },
   'check.s4aib': { km: 'មួយចំណុចៗ', en: 'point by point' },
   'pc.title': { km: 'លទ្ធផល AI', en: 'AI verdict' },
+  'pc.yourBag': { km: 'កាបូបរបស់អ្នក', en: 'Your bag' },
+  'pc.refModel': { km: 'ម៉ូដែលយោង', en: 'Reference model' },
   'pc.working': { km: 'AI កំពុងប្រៀបធៀបរូបរបស់អ្នកជាមួយរូបគំរូ…', en: 'The AI is comparing your photos with our references…' },
   'pc.failed': { km: 'AI មិនអាចវិភាគបានលើកនេះ។', en: 'The AI could not analyse it this time.' },
   'pc.retry': { km: 'សាកម្ដងទៀត', en: 'Try again' },

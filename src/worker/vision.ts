@@ -175,7 +175,9 @@ async function aiCall(env: Env, o: CallOpts): Promise<string> {
 async function claudeCall(env: Env, p: AiProvider, model: string, o: CallOpts): Promise<string> {
   const lastIdx = o.turns.length - 1;
   try {
-    const msg = await anthropicClient(env, p).messages.create({
+    // Streamed: bytes flow from the first second, so a gateway / Cloudflare in front of Claude does not cut a long
+    // image analysis with HTTP 524 (origin silent for ~100 s). The full message is assembled here as before.
+    const msg = await anthropicClient(env, p).messages.stream({
       // Thinking is on by default for current Claude models and counts toward max_tokens.
       model, max_tokens: o.maxTokens, output_config: { effort: o.effort }, system: o.system,
       messages: o.turns.map((t, i) => (o.images.length && i === lastIdx && t.role === 'user'
@@ -183,7 +185,7 @@ async function claudeCall(env: Env, p: AiProvider, model: string, o: CallOpts): 
           ...o.images.map((im) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: toImageMime(im.mime), data: b64(im.data) } })),
           { type: 'text' as const, text: t.content }] }
         : { role: t.role, content: t.content })),
-    });
+    }).finalMessage();
     await recordUsage(env, model, msg.usage);
     if (msg.stop_reason === 'refusal') throw new Error('ai_refused');
     return msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
@@ -192,9 +194,11 @@ async function claudeCall(env: Env, p: AiProvider, model: string, o: CallOpts): 
       const why = apiErrorText(e);
       // the stronger model may not be available on this account: try the provider's default model once
       const fallback = modelFor(env, p);
-      if (model !== fallback && (e.status === 404 || e.status === 403 || /model/i.test(why))) {
+      // …or when the stronger model is too slow / overloaded (524 gateway timeout, 504, 502, 408, 429, 5xx, no status = dropped)
+      const slow = !e.status || [408, 429, 500, 502, 503, 504, 520, 522, 524, 529].includes(e.status);
+      if (model !== fallback && (e.status === 404 || e.status === 403 || slow || /model/i.test(why))) {
         console.error(`ai: ${model} failed (${why}); using ${fallback}`);
-        return claudeCall(env, p, fallback, o);
+        return claudeCall(env, p, fallback, slow && o.effort === 'high' ? { ...o, effort: 'medium' } : o);
       }
       console.error(`ai: ${model} failed: ${why}`);
       throw new Error(`ai_http_${e.status ?? 0}: ${why}`);
