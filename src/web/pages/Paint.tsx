@@ -15,6 +15,8 @@ import AiWorkspace from '../AiWorkspace.tsx';
 import AiBusy from '../AiBusy.tsx';
 import { minutesIn } from '../../shared/stepMinutes.ts';
 import { paintLabel } from '../../shared/paintKnowledge.ts';
+import PaintHistory from '../PaintHistory.tsx';
+import { saveHistory } from '../paintHistory.ts';
 import { inkOn, sharePercents } from '../../shared/mixShares.ts';
 
 export interface PaintPart { id: string; brand: string; name: string; kind: string; color_hex: string | null; parts: number; has_photo: boolean; updated_at: string }
@@ -97,7 +99,7 @@ export interface TubeRead {
   colour: string; hex: string | null; transparent: boolean | null; confidence: number; label: string;
   uses: string[]; mixes: { with: string; makes: string }[]; leather_tip: string; inShop: { id: string } | null;
 }
-type Source = 'bag' | 'tube' | 'recipe';
+type Source = 'bag' | 'tube' | 'recipe' | 'history';
 type Finish = 'matte' | 'satin' | 'gloss';
 
 /** What the AI read on a paint tube, what it is good for and what to mix it with. */
@@ -188,6 +190,7 @@ export default function Paint() {
   const [tErr, setTErr] = useState('');
   const picked = useRef({ leather: false, finish: false });
   const seq = useRef(0);
+  const scanId = useRef(''); // one id per bag photo: the history entry is updated as the match and the mix arrive
 
   useEffect(() => {
     api.get<{ recipes: PaintRecipe[] }>('/api/paint/recipes').then((r) => setRecipes(r.recipes)).catch(() => setRecipes([]));
@@ -204,6 +207,7 @@ export default function Paint() {
   /** A new bag photo: the AI looks at the leather while the colour is measured on the phone. */
   const onBagPhoto = async (f: File) => {
     restart(); setMode('bag'); setPhoto(f); setGBusy(true);
+    scanId.current = (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
       const fd = new FormData(); fd.append('file', f);
       const g = await api.post<LeatherGuess>('/api/skills/paint/leather', fd);
@@ -265,6 +269,17 @@ export default function Paint() {
     } finally { setMBusy(false); }
   };
   const match = res?.matches.find((x) => x.recipe.id === chosen?.id);
+  // every measured bag colour goes into the history on this phone (hex, leather, finish, recipe, mix)
+  useEffect(() => {
+    if (mode !== 'bag' || !res || !scanId.current || issues.length > 0 || !/^#[0-9a-f]{6}$/i.test(res.hex)) return;
+    saveHistory({
+      id: scanId.current, at: new Date().toISOString(), hex: res.hex, approx: !!res.approx,
+      name: guess?.colour || t('paint.yourColor'), leather, finish,
+      recipeId: chosen?.id ?? null, recipeName: chosen ? chosen.name_km : null,
+      paints: (method?.paints ?? []).map((p) => { const l = paintLabel(p, locale); return { name: l.main, code: l.code, hex: p.hex, parts: p.parts }; }),
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [res, chosen, leather, finish, method, guess, mode, issues]);
   // the result comes by itself: once the colour (or a recipe) and the leather are known, ask the AI (once per change)
   useEffect(() => {
     if (!leather || gBusy || mBusy || method || mErr || member) return;
@@ -457,7 +472,7 @@ export default function Paint() {
 
             <div className="space-y-2">
               <div className="px-1 text-xs font-semibold text-muted">{t('pn.other')}</div>
-              {([['recipe', 'palette', 'pw.recipe', 'pw.recipeSub']] as const).map(([k, icon, title, sub]) => (
+              {([['history', 'history', 'ph.title', 'ph.sub']] as const).map(([k, icon, title, sub]) => (
                 <button key={k} type="button" onClick={() => { restart(); setMode(k); }}
                   className="flex w-full items-center gap-3 rounded-2xl border border-hairline bg-surface-card p-3.5 text-left hover:border-gold">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-low text-gold" aria-hidden><Icon name={icon} /></span>
@@ -560,6 +575,13 @@ export default function Paint() {
               </>
             )}
           </>
+        )}
+
+        {/* colour history (on this phone) */}
+        {mode === 'history' && (
+          <PaintHistory
+            onPickRecipe={() => setMode('recipe')}
+            onUseRecipe={(rid) => { const r = recipes?.find((x) => x.id === rid); if (!r) return; setChosen(r); setLeather(r.surface === 'other' ? null : r.surface as Leather); setShowPicker(r.surface === 'other'); setFinish(r.finish as Finish); setMode('recipe'); }} />
         )}
 
         {/* pick a recipe */}
