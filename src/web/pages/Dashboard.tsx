@@ -29,7 +29,6 @@ const ICON = {
 const Svg = ({ d, className = 'h-5 w-5' }: { d: string; className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
 );
-interface Stats { paintRecipes: number; careLessons: number; authLessons: number; referencePhotos: number; brands: number; marketMonths: number }
 
 /**
  * Anajak Bag: an AI work assistant for second-hand bag vendors (Aran / Rong Kluea).
@@ -39,11 +38,9 @@ interface Stats { paintRecipes: number; careLessons: number; authLessons: number
 export default function Dashboard() {
   const { t } = useI18n();
   const [market, setMarket] = useState<Overview | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
   useEffect(() => {
     let on = true;
     api.get<Overview>('/api/market/overview?top=5').then((r) => on && setMarket(r)).catch(() => on && setMarket({ countries: [], updates: [] }));
-    api.get<Stats>('/api/stats/public').then((r) => on && setStats(r)).catch(() => {});
     return () => { on = false; };
   }, []);
 
@@ -51,16 +48,23 @@ export default function Dashboard() {
     <>
       <Galaxy calm />
       <div className="home-glass relative mx-auto max-w-5xl space-y-6 px-4 pb-8 pt-4 md:px-8">
-        <header className="flex items-center gap-3">
-          <span className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-            <span aria-hidden className="absolute inset-0 rounded-2xl" style={{ background: 'radial-gradient(circle, rgba(242,202,80,0.45), transparent 70%)', filter: 'blur(8px)' }} />
-            <img src="/icons/icon-192.png" alt="" width={44} height={44} className="relative rounded-xl" />
-          </span>
-          <h1 className="font-sans text-base font-normal leading-snug text-white/85">{t('home.headline')}</h1>
+        {/* hero: the logo on a breathing gold halo and the line of what the app is (ink / muted, so it also reads on the ivory light theme) */}
+        <header className="hz-rise-in relative overflow-hidden rounded-3xl border border-gold/25 p-4 pr-3"
+          style={{ background: 'linear-gradient(135deg, rgba(242,202,80,0.14), rgba(255,255,255,0.04) 55%, rgba(108,64,170,0.12))', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>
+          <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full" style={{ background: 'radial-gradient(circle, rgba(242,202,80,0.28), transparent 68%)' }} />
+          <div className="relative flex items-center gap-3.5">
+            <span className="relative flex h-16 w-16 shrink-0 items-center justify-center">
+              <span aria-hidden className="hz-anim absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle, rgba(242,202,80,0.55), transparent 70%)', animation: 'hz-pulse 3.6s ease-in-out infinite' }} />
+              <span aria-hidden className="hz-anim absolute inset-[3px] rounded-[1.1rem] border border-gold/50" style={{ animation: 'hz-float 5s ease-in-out infinite' }} />
+              <img src="/icons/icon-192.png" alt="" width={52} height={52} className="relative rounded-2xl shadow-[0_6px_20px_-4px_rgba(242,202,80,0.6)]" />
+            </span>
+            <div className="min-w-0">
+              <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">Anajak Bag</div>
+              <h1 className="mt-0.5 font-serif text-[21px] font-medium leading-snug text-ink">{t('home.headline')}</h1>
+              <p className="mt-1 text-xs leading-snug text-muted">{t('home.sub')}</p>
+            </div>
+          </div>
         </header>
-
-        {/* what the app already has for the vendor (real counts only; nothing is shown while a count is 0) */}
-        <StatStrip stats={stats} />
 
         {/* this month's fast sellers first: what vendors look at every day */}
         <TrendShowcase market={market} />
@@ -82,28 +86,6 @@ export default function Dashboard() {
         </section>
       </div>
     </>
-  );
-}
-
-/** Real counts of what the app holds, as gold-tinted glass chips that scroll sideways on a phone. Zero counts are left out. */
-function StatStrip({ stats }: { stats: Stats | null }) {
-  const { t } = useI18n();
-  if (!stats) return null;
-  const items: [string, number][] = [
-    ['stats.photos', stats.referencePhotos], ['stats.brands', stats.brands], ['stats.authLessons', stats.authLessons],
-    ['stats.recipes', stats.paintRecipes], ['stats.careLessons', stats.careLessons], ['stats.market', stats.marketMonths],
-  ];
-  const shown = items.filter(([, n]) => n > 0);
-  if (!shown.length) return null;
-  return (
-    <section aria-label={t('stats.title')} className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
-      {shown.map(([k, n], i) => (
-        <div key={k} style={{ animationDelay: `${i * 60}ms` }} className="home-stat hz-rise-in shrink-0 snap-start rounded-2xl border border-gold/20 bg-surface-card px-4 py-2.5">
-          <div className="font-serif text-2xl leading-none text-gold">{n.toLocaleString()}</div>
-          <div className="mt-1 text-[11px] leading-tight text-muted">{t(k)}</div>
-        </div>
-      ))}
-    </section>
   );
 }
 
