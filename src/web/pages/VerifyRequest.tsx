@@ -64,7 +64,7 @@ export default function VerifyRequest() {
         <p className="font-mono text-[11px] text-muted">{r.id} · {new Date(r.created_at).toLocaleString()}</p>
       </header>
 
-      {data.precheck && <PrecheckCard id={r.id} pc={data.precheck} onChange={load} />}
+      {data.precheck && <PrecheckCard id={r.id} pc={data.precheck} onChange={load} refs={data.refs ?? {}} photos={data.photos} model={r.model_text || null} />}
 
       <div className={`rounded-2xl border border-hairline bg-surface-card p-4 ${paused && r.status !== 'answered' ? 'hidden' : ''}`}>
         <div className="flex flex-wrap items-center gap-2">
@@ -461,11 +461,31 @@ function VerdictBlock({ v, summary, notes, km }: { v: PcVerdict; summary: string
   );
 }
 
+/** The model the AI compared with: our reference photo of that exact model beside the customer's own photo. */
+function ModelPicture({ refs, photos, model }: { refs: Record<string, Ref>; photos: { id: string; step: string }[]; model: string | null }) {
+  const { t } = useI18n();
+  const ref = refs.model ?? Object.values(refs)[0];
+  if (!ref) return null;
+  const mine = photos.find((p) => p.step === 'model') ?? photos[0];
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <figure className="overflow-hidden rounded-xl border border-hairline bg-surface-low">
+        {mine && <img src={`/api/verify/photos/${mine.id}/image`} alt="" className="aspect-square w-full object-cover" />}
+        <figcaption className="px-2 py-1 text-[11px] font-semibold">{t('pc.yourBag')}</figcaption>
+      </figure>
+      <figure className="overflow-hidden rounded-xl border border-gold bg-surface-low">
+        <img src={assetImg(ref.id)} alt="" className="aspect-square w-full object-cover" />
+        <figcaption className="px-2 py-1 text-[11px] font-semibold">{t('pc.refModel')}{ref.model || model ? ` · ${ref.model || model}` : ''}</figcaption>
+      </figure>
+    </div>
+  );
+}
+
 /**
  * AI pre-check, shown to the customer while expert review is paused: the AI's comparison with our reference
  * photos, point by point, and a capped summary. Never a verdict, never a certificate.
  */
-function PrecheckCard({ id, pc, onChange }: { id: string; pc: Pc; onChange: () => void }) {
+function PrecheckCard({ id, pc, onChange, refs, photos, model }: { id: string; pc: Pc; onChange: () => void; refs: Record<string, Ref>; photos: { id: string; step: string }[]; model: string | null }) {
   const { t, locale } = useI18n();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -492,6 +512,7 @@ function PrecheckCard({ id, pc, onChange }: { id: string; pc: Pc; onChange: () =
       )}
       {res && (
         <>
+          <ModelPicture refs={refs} photos={photos} model={model} />
           {res.verdict ? <VerdictBlock v={res.verdict} summary={km ? res.summary_km || res.summary_en : res.summary_en}
             notes={res.findings} km={km} /> : (
             <div className={`flex items-center gap-3 rounded-2xl p-4 ${PRECHECK_TONE[res.level] ?? PRECHECK_TONE.unclear}`}>
