@@ -9,6 +9,7 @@ import { PRECHECK_TONE, STATUS_TONE, money, shrink, type Plan } from './Verify.t
 import AnnotatedPhoto, { PointCards, type Point } from '../AnnotatedPhoto.tsx';
 import { assetImg } from '../studio.ts';
 import ContactInfo from '../ContactInfo.tsx';
+import AiReportCard from '../AiReport.tsx';
 
 type Offer = { id: string; from_side: 'hengz' | 'customer'; amount_cents: number; currency: string; note: string | null; status: string; created_at: string; responded_at: string | null; by_name: string };
 type Ref = { id: string; label: string; status: string; model: string | null; same_model: boolean; points: Point[] };
@@ -64,7 +65,7 @@ export default function VerifyRequest() {
         <p className="font-mono text-[11px] text-muted">{r.id} · {new Date(r.created_at).toLocaleString()}</p>
       </header>
 
-      {data.precheck && <PrecheckCard id={r.id} pc={data.precheck} onChange={load} refs={data.refs ?? {}} photos={data.photos} model={r.model_text || null} />}
+      {data.precheck && <PrecheckCard id={r.id} pc={data.precheck} onChange={load} photos={data.photos} brand={r.brand} model={r.model_text || null} />}
 
       <div className={`rounded-2xl border border-hairline bg-surface-card p-4 ${paused && r.status !== 'answered' ? 'hidden' : ''}`}>
         <div className="flex flex-wrap items-center gap-2">
@@ -406,86 +407,22 @@ interface PcFinding { step: string; feature_en: string; feature_km: string; stat
 interface PcPhoto { photo_id: string; step: string; quality: 'clear' | 'soft' | 'unclear'; note_en: string; note_km: string }
 interface Pc { pending: boolean; failed: boolean; refs: number; at: string | null; result: { level: string; summary_en: string; summary_km: string; findings: PcFinding[]; photos?: PcPhoto[]; verdict?: PcVerdict } | null }
 interface PcVerdict { verdict: 'authentic' | 'counterfeit' | 'unidentified'; score: number | null; reason: string; steps: { step: string; score: number | null; status: string; weight: number }[] }
-const VERDICT_UI: Record<string, [string, string]> = {
-  authentic: ['✓', 'bg-verified text-white'], counterfeit: ['✕', 'bg-counterfeit text-white'], unidentified: ['⚠', 'bg-review text-white'],
-};
-const barTone = (n: number | null) => (n === null ? 'bg-surface-high' : n >= 90 ? 'bg-verified' : n > 60 ? 'bg-review' : 'bg-counterfeit');
 const QUALITY: Record<string, [string, string]> = { clear: ['●', 'bg-verified text-white'], soft: ['◐', 'bg-review text-white'], unclear: ['○', 'bg-counterfeit text-white'] };
 const LEVEL_ICON: Record<string, string> = { no_differences_seen: '✓', concerns: '!', more_photos: '📷', unclear: '?' };
 const STATUS_ICON: Record<string, [string, string]> = { matches: ['✓', 'bg-verified-bg text-verified'], differs: ['!', 'bg-counterfeit-bg text-counterfeit'], unclear: ['?', 'bg-surface-high text-muted'] };
 
-/** The AI final verdict: big badge, total AI score, 2-sentence summary, then the score of each part with one line each. */
-function VerdictBlock({ v, summary, notes, km }: { v: PcVerdict; summary: string; notes: PcFinding[]; km: boolean }) {
-  const { t } = useI18n();
-  const [icon, tone] = VERDICT_UI[v.verdict] ?? VERDICT_UI.unidentified;
-  const label = t(`pc.v.${v.verdict}`).replace('{n}', String(v.score ?? '–'));
-  const lineFor = (step: string) => {
-    const fs = notes.filter((f) => f.step === step);
-    const f = fs.find((x) => x.status === 'differs') ?? fs.find((x) => x.status === 'unclear') ?? fs[0];
-    return f ? (km && f.note_km) || f.note_en : '';
-  };
-  return (
-    <div className="space-y-3">
-      <div className={`rounded-2xl p-4 ${tone}`}>
-        <div className="flex items-center gap-3">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/20 text-3xl font-bold" aria-hidden>{icon}</span>
-          <div className="min-w-0">
-            <div className="text-lg font-semibold leading-tight">{label}</div>
-            {v.score !== null && <div className="mt-1 text-[13px] opacity-90">{t('pc.score')}: <b className="text-base">{v.score}%</b></div>}
-          </div>
-        </div>
-        {v.verdict === 'unidentified' && <p className="mt-2 text-[13px] leading-snug opacity-95">{t(v.reason === 'mixed' ? 'pc.why.mixed' : 'pc.why.retake')}</p>}
-      </div>
-      {summary && <p className="rounded-xl bg-surface-low p-3 text-sm leading-relaxed">{summary}</p>}
-      {!!v.steps.length && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold">{t('pc.scoresTitle')}</h3>
-          <ul className="space-y-2">
-            {v.steps.map((s) => (
-              <li key={s.step} className="rounded-xl border border-hairline p-3">
-                <div className="flex items-baseline gap-2">
-                  <span className="flex-1 text-sm font-semibold">{t(`pc.part.${s.step}`)}</span>
-                  {s.weight > 0 && <span className="text-[11px] text-muted">{t('pc.weight').replace('{n}', String(s.weight))}</span>}
-                  <span className="min-w-[3rem] text-right text-base font-bold">{s.score === null ? '–' : `${s.score}%`}</span>
-                </div>
-                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-high">
-                  <div className={`h-full rounded-full ${barTone(s.score)}`} style={{ width: `${s.score ?? 0}%` }} />
-                </div>
-                <p className="mt-1.5 text-[13px] leading-snug text-muted">{s.score === null ? t('pc.noScore') : lineFor(s.step)}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The model the AI compared with: our reference photo of that exact model beside the customer's own photo. */
-function ModelPicture({ refs, photos, model }: { refs: Record<string, Ref>; photos: { id: string; step: string }[]; model: string | null }) {
-  const { t } = useI18n();
-  const ref = refs.model ?? Object.values(refs)[0];
-  if (!ref) return null;
-  const mine = photos.find((p) => p.step === 'model') ?? photos[0];
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      <figure className="overflow-hidden rounded-xl border border-hairline bg-surface-low">
-        {mine && <img src={`/api/verify/photos/${mine.id}/image`} alt="" className="aspect-square w-full object-cover" />}
-        <figcaption className="px-2 py-1 text-[11px] font-semibold">{t('pc.yourBag')}</figcaption>
-      </figure>
-      <figure className="overflow-hidden rounded-xl border border-gold bg-surface-low">
-        <img src={assetImg(ref.id)} alt="" className="aspect-square w-full object-cover" />
-        <figcaption className="px-2 py-1 text-[11px] font-semibold">{t('pc.refModel')}{ref.model || model ? ` · ${ref.model || model}` : ''}</figcaption>
-      </figure>
-    </div>
-  );
+/** One line per scored part: the first thing that differs, else unclear, else the first note for that step. */
+function partNote(notes: PcFinding[], step: string, km: boolean): string {
+  const fs = notes.filter((f) => f.step === step);
+  const f = fs.find((x) => x.status === 'differs') ?? fs.find((x) => x.status === 'unclear') ?? fs[0];
+  return f ? (km && f.note_km) || f.note_en : '';
 }
 
 /**
  * AI pre-check, shown to the customer while expert review is paused: the AI's comparison with our reference
  * photos, point by point, and a capped summary. Never a verdict, never a certificate.
  */
-function PrecheckCard({ id, pc, onChange, refs, photos, model }: { id: string; pc: Pc; onChange: () => void; refs: Record<string, Ref>; photos: { id: string; step: string }[]; model: string | null }) {
+function PrecheckCard({ id, pc, onChange, photos, brand, model }: { id: string; pc: Pc; onChange: () => void; photos: { id: string; step: string }[]; brand: string; model: string | null }) {
   const { t, locale } = useI18n();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -512,9 +449,11 @@ function PrecheckCard({ id, pc, onChange, refs, photos, model }: { id: string; p
       )}
       {res && (
         <>
-          <ModelPicture refs={refs} photos={photos} model={model} />
-          {res.verdict ? <VerdictBlock v={res.verdict} summary={km ? res.summary_km || res.summary_en : res.summary_en}
-            notes={res.findings} km={km} /> : (
+          {/* the result as a standard report sheet that can be saved as a PNG: the customer's own bag only, never a reference photo */}
+          {res.verdict ? <AiReportCard requestId={id} brand={brand} model={model} analysedAt={pc.at} photoId={(photos.find((x) => x.step === 'model') ?? photos[0])?.id ?? null}
+            verdict={res.verdict.verdict} score={res.verdict.score} reason={res.verdict.reason}
+            summary={km ? res.summary_km || res.summary_en : res.summary_en}
+            parts={res.verdict.steps.map((x) => ({ step: x.step, score: x.score, weight: x.weight, note: partNote(res.findings, x.step, km) }))} /> : (
             <div className={`flex items-center gap-3 rounded-2xl p-4 ${PRECHECK_TONE[res.level] ?? PRECHECK_TONE.unclear}`}>
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/10 text-2xl font-bold" aria-hidden>{LEVEL_ICON[res.level] ?? '?'}</span>
               <div className="min-w-0 text-lg font-semibold leading-tight">{t(`pc.lvl.${res.level}`)}</div>
