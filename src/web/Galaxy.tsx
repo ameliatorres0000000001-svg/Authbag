@@ -1,11 +1,33 @@
+import { useEffect, useMemo, useRef } from 'react';
+
+/** Weak phones (few cores / little memory / data saver) get a lighter sky: fewer stars, still clouds, no sparkles or blur. */
+const detectLite = (): boolean => {
+  try {
+    const n = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+    return !!n.connection?.saveData || (!!n.deviceMemory && n.deviceMemory <= 2) || (!!n.hardwareConcurrency && n.hardwareConcurrency <= 4);
+  } catch { return false; }
+};
+
 /**
  * Live galaxy background: drifting violet / blue / gold nebula clouds, three layers of stars that twinkle and
  * slowly drift (parallax), shooting stars every few seconds, a breathing gold glow behind the logo and gold
  * sparkles rising. Pure CSS, fixed behind the scrolling page; all motion stops for users who prefer reduced motion.
  * Also defines the keyframes used by the country cards (hz-spin, hz-pulse, hz-rise-in) and the AI wait screen.
  * `calm` (home screen, seen every day): half the stars, one shooting star, no rising sparkles, a darker veil so text reads well.
+ * Battery: the animation pauses while the tab is hidden, clouds are plain gradients (no blur filter), layers are GPU
+ * transforms, and weak phones get the lighter sky above (also sets <html data-fx="lite"> so cards drop their glass blur).
  */
 export default function Galaxy({ calm = false }: { calm?: boolean }) {
+  const root = useRef<HTMLDivElement>(null);
+  const lite = useMemo(detectLite, []);
+  useEffect(() => {
+    const el = root.current;
+    const sync = () => el?.classList.toggle('hz-paused', document.hidden);
+    document.addEventListener('visibilitychange', sync);
+    sync();
+    document.documentElement.dataset.fx = lite ? 'lite' : 'full';
+    return () => { document.removeEventListener('visibilitychange', sync); delete document.documentElement.dataset.fx; };
+  }, [lite]);
   const stars = (n: number, size: number, seed: number) => {
     let x = seed;
     const r = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
@@ -29,11 +51,13 @@ export default function Galaxy({ calm = false }: { calm?: boolean }) {
   ];
   // shooting stars: top, left, cycle seconds, delay seconds
   const meteorsAll: [string, string, number, number][] = [['8%', '70%', 9, 1.5], ['22%', '95%', 13, 6], ['40%', '60%', 17, 11]];
-  const meteors = calm ? meteorsAll.slice(1, 2) : meteorsAll;
+  const meteors = lite ? [] : calm ? meteorsAll.slice(1, 2) : meteorsAll;
   const sparklesAll: [string, string, number, number][] = [['12%', '22px', 26, 0], ['78%', '16px', 22, 4], ['64%', '18px', 30, 14], ['88%', '12px', 24, 2], ['35%', '14px', 28, 9]];
-  const sparkles = calm ? [] : sparklesAll;
+  const sparkles = calm || lite ? [] : sparklesAll;
+  // the star gradients are long strings: build them once, not on every re-render of the page above
+  const sky = useMemo(() => layers.map(([n0, size, seed]) => stars(calm || lite ? Math.round(n0 / (lite ? 3 : 2)) : n0, size, seed)), [calm, lite]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div aria-hidden className={`pointer-events-none fixed inset-0 overflow-hidden ${calm ? 'galaxy-calm' : ''}`} style={{ zIndex: calm ? -1 : undefined, background: 'radial-gradient(130% 90% at 50% 0%, #120c22 0%, #06050c 45%, #000 100%)' }}>
+    <div ref={root} aria-hidden className={`pointer-events-none fixed inset-0 overflow-hidden ${calm ? 'galaxy-calm' : ''}`} style={{ zIndex: calm ? -1 : undefined, contain: 'strict', background: 'radial-gradient(130% 90% at 50% 0%, #120c22 0%, #06050c 45%, #000 100%)' }}>
       <style>{`
         @keyframes hz-glow { from { opacity: .55; transform: scale(.95) } to { opacity: 1; transform: scale(1.05) } }
         @keyframes hz-drift { from { transform: translate(0,0) scale(1) } to { transform: translate(12vmin,-8vmin) scale(1.15) } }
@@ -46,15 +70,18 @@ export default function Galaxy({ calm = false }: { calm?: boolean }) {
         @keyframes hz-pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.07) } }
         @keyframes hz-in { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
         .hz-rise-in { animation: hz-in .7s cubic-bezier(.2,.7,.2,1) both }
+        .hz-paused .hz-anim { animation-play-state: paused !important }
         @media (prefers-reduced-motion: reduce) { .hz-anim, .hz-rise-in { animation: none !important } }
       `}</style>
       {clouds.map(([c, size, left, top, anim], i) => (
-        <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 65%)`, filter: 'blur(50px)', animation: anim }} />
+        <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 70%)`, willChange: lite ? undefined : 'transform, opacity', animation: lite ? 'none' : anim }} />
       ))}
-      {layers.map(([n0, size, seed, drift, tw], i) => { const n = calm ? Math.round(n0 / 2) : n0; return (
+      {/* the Milky Way: one faint tilted band of light across the sky (static, costs nothing to draw) */}
+      <div className="absolute" style={{ left: '-25%', top: '22%', width: '150%', height: '42vmin', transform: 'rotate(-24deg)', background: 'radial-gradient(ellipse at center, rgba(200,180,255,0.15), rgba(255,226,170,0.07) 42%, transparent 70%)' }} />
+      {layers.map(([, , , drift, tw], i) => { return (
         // 200vh tall, the same star tile twice: moving it up by 100vh loops without a seam
-        <div key={i} className="hz-anim absolute inset-x-0 top-0 h-[200vh]" style={{ animation: `hz-stars ${drift}s linear infinite` }}>
-          <div className="hz-anim h-full w-full" style={{ backgroundImage: stars(n, size, seed), backgroundSize: '100% 100vh', animation: tw }} />
+        <div key={i} className="hz-anim absolute inset-x-0 top-0 h-[200vh]" style={{ animation: `hz-stars ${drift}s linear infinite`, willChange: 'transform' }}>
+          <div className="hz-anim h-full w-full" style={{ backgroundImage: sky[i], backgroundSize: '100% 100vh', animation: tw }} />
         </div>
       ); })}
       {meteors.map(([top, left, cycle, delay], i) => (
