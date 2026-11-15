@@ -136,6 +136,22 @@ export const pointsModel = (env: Env): string | null => {
   return p === 'bedrock' ? `anthropic.${POINTS_MODEL}` : POINTS_MODEL;
 };
 
+/**
+ * The photo check (assessVerification) is the biggest token user (many images). It uses AI_REVIEW_MODEL if set, else the
+ * provider's normal model (e.g. Sonnet) with medium thinking; set AI_REVIEW_MODEL=claude-opus-5-5 and AI_REVIEW_EFFORT=high
+ * for the most careful (and about twice as expensive) check.
+ */
+export const reviewModel = (env: Env): string | null => {
+  const m = env.AI_REVIEW_MODEL?.trim();
+  const p = aiProvider(env);
+  if (m) return p === 'bedrock' && !m.startsWith('anthropic.') ? `anthropic.${m}` : m;
+  return aiModel(env);
+};
+const reviewEffort = (env: Env): 'low' | 'medium' | 'high' => {
+  const e = env.AI_REVIEW_EFFORT?.trim().toLowerCase();
+  return e === 'low' || e === 'high' ? e : 'medium';
+};
+
 type ImageMime = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 const toImageMime = (m: string): ImageMime => (['image/png', 'image/gif', 'image/webp'].includes(m) ? m as ImageMime : 'image/jpeg');
 
@@ -700,7 +716,7 @@ export async function assessVerification(env: Env, ctx: {
     ctx.knowledge.length ? `What HENGZ experts teach for this brand / model (prefer these checkpoints):\n- ${ctx.knowledge.slice(0, 14).join('\n- ')}` : '',
     ctx.expertNotes.length ? `Notes HENGZ experts wrote on earlier bags of this brand / model (learn what they look at; do not copy their decisions):\n- ${ctx.expertNotes.slice(0, 8).join('\n- ')}` : '',
   ].filter(Boolean).join('\n');
-  return callVision(env, system, images, user, 16000, 'high', pointsModel(env) ?? undefined);
+  return callVision(env, system, images, user, 16000, reviewEffort(env), reviewModel(env) ?? undefined);
 }
 
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }

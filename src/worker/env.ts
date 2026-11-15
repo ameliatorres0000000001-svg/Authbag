@@ -24,6 +24,10 @@ export interface Env {
   AI_PROVIDER?: string;
   GEMINI_API_KEY?: string;
   AI_MODEL?: string;
+  /** Model for the photo check (default: the provider's normal model, cheaper than the drawing-points model) */
+  AI_REVIEW_MODEL?: string;
+  /** Thinking effort for the photo check: low | medium (default) | high */
+  AI_REVIEW_EFFORT?: string;
   /** Gemini model used for text translation when GEMINI_API_KEY is set (default gemini-3.8-flash) */
   GEMINI_MODEL?: string;
   /** Telegram bot for expert review: bot token, the experts' group chat id, and the webhook secret token */

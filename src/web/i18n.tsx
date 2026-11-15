@@ -764,6 +764,7 @@ const D: Record<string, { km: string; en: string }> = {
   'sk.ah.paint': { km: 'Skill លាបពណ៌ប្រើ — ឧ. វិធីលាបលើ suede, ថ្នាំ និងសមាមាត្រដែលហាងប្រើ។ ដាក់ពាក្យគន្លឹះ (ឧ. suede) ដើម្បីប្រើតែស្បែកនោះ។', en: 'Used by the paint skill — e.g. how to paint suede, the products you use. Add keywords (e.g. suede) to use it for that leather only.' },
   'sk.ah.repair': { km: 'Skill ជួសជុលប្រើ — ឧ. វិធីលុបផ្សិត, ជួសជុលជ្រុងរហែក។', en: 'Used by the repair skill — e.g. removing mould, fixing worn corners.' },
   'us.f.paint_skill': { km: 'Skill លាបពណ៌', en: 'Paint skill' },
+  'us.f.guide_refresh': { km: 'សរសេរមគ្គុទ្ទេសក៍ឡើងវិញ (ផ្ទៃខាងក្រោយ)', en: 'Guide refresh (background)' },
   'us.f.repair_skill': { km: 'Skill ជួសជុល', en: 'Repair skill' },
   'admin.tab.leads': { km: 'ស្វែងរកម៉ូយ', en: 'Find customers' },
   'us.f.lead_message': { km: 'សារទាក់ទងម៉ូយ', en: 'Customer first messages' },

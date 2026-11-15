@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, pointsModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
+import { assessVerification, reviewModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
 import { checkMeasurement, checkQuick, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab, quickLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2042,11 +2042,11 @@ async function runAiReview(env: AppEnv['Bindings'], requestId: string): Promise<
     // photo quality, tied to the stored photo (the AI numbers the customer photos 1..n in the order sent)
     const quality = a.photos.filter((q) => photos[q.image - 1]).map((q) => ({ photo_id: photos[q.image - 1].id, step: photos[q.image - 1].step, quality: q.quality, note_en: q.note_en, note_km: q.note_km }));
     await env.DB.prepare(`INSERT INTO verify_ai_reviews (id, request_id, model, suggested_outcome, confidence, findings_json, summary_en, summary_km, photos_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(id, r.id, pointsModel(env), a.suggestion, a.confidence, JSON.stringify(a.findings), a.summary_en || null, a.summary_km || null, quality.length ? JSON.stringify(quality).slice(0, 6000) : null).run();
+      .bind(id, r.id, reviewModel(env), a.suggestion, a.confidence, JSON.stringify(a.findings), a.summary_en || null, a.summary_km || null, quality.length ? JSON.stringify(quality).slice(0, 6000) : null).run();
     return { ok: true };
   } catch (e) {
     const msg = String((e as Error).message ?? e).slice(0, 300);
-    await env.DB.prepare('INSERT INTO verify_ai_reviews (id, request_id, model, error) VALUES (?, ?, ?, ?)').bind(id, r.id, pointsModel(env), msg).run();
+    await env.DB.prepare('INSERT INTO verify_ai_reviews (id, request_id, model, error) VALUES (?, ?, ?, ?)').bind(id, r.id, reviewModel(env), msg).run();
     return { ok: false, error: msg };
   }
 }
@@ -3755,7 +3755,7 @@ export default {
     ctx.waitUntil(asFeature('translate', () => translateBacklog(env)));
     ctx.waitUntil(asFeature('precheck', () => aiReviewBacklog(env)));
     // rewrite old reference guides in the current format, a few per run (Admin has a button to do it all now)
-    ctx.waitUntil(aiConfigured(env) ? guideBacklog(env, null, 2).then((r) => { if (r.done || r.failed) console.log('guide refresh', JSON.stringify(r)); }).catch((e) => console.error('guide refresh:', (e as Error).message)) : Promise.resolve());
-    ctx.waitUntil(leadsBacklog(env).catch((e) => console.error('lead search:', (e as Error).message)));
+    ctx.waitUntil(aiConfigured(env) ? asFeature('guide_refresh', () => guideBacklog(env, null, 2)).then((r) => { if (r.done || r.failed) console.log('guide refresh', JSON.stringify(r)); }).catch((e) => console.error('guide refresh:', (e as Error).message)) : Promise.resolve());
+    ctx.waitUntil(asFeature('lead_search', () => leadsBacklog(env)).catch((e) => console.error('lead search:', (e as Error).message)));
   },
 } satisfies ExportedHandler<AppEnv['Bindings']>;
