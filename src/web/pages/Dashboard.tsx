@@ -59,6 +59,9 @@ export default function Dashboard() {
           <h1 className="font-sans text-base font-normal leading-snug text-white/85">{t('home.headline')}</h1>
         </header>
 
+        {/* what the app already has for the vendor (real counts only; nothing is shown while a count is 0) */}
+        <StatStrip stats={stats} />
+
         {/* this month's fast sellers first: what vendors look at every day */}
         <TrendShowcase market={market} />
 
@@ -69,9 +72,9 @@ export default function Dashboard() {
         <section aria-labelledby="tools-h" className="space-y-2">
           <h2 id="tools-h" className="px-1 text-sm font-semibold text-muted">{t('home.more')}</h2>
           <div className="grid grid-cols-2 gap-3">
-            {([['/datecode', 'home.datecode', ICON.shield], ['/verify', 'nav.verify', ICON.trend]] as const).map(([to, title, icon]) => (
-              <Link key={to} to={to} className="flex flex-col gap-3 rounded-2xl border border-gold/20 bg-surface-card p-4 transition hover:border-gold/60">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold"><Svg d={icon} className="h-5 w-5" /></span>
+            {([['/datecode', 'home.datecode', ICON.shield], ['/verify', 'nav.verify', ICON.trend]] as const).map(([to, title, icon], i) => (
+              <Link key={to} to={to} style={{ animationDelay: `${i * 90}ms` }} className="hz-rise-in flex flex-col gap-3 rounded-2xl border border-gold/20 bg-surface-card p-4 transition hover:border-gold/60">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold shadow-[0_0_18px_-4px_rgba(242,202,80,0.55)]"><Svg d={icon} className="h-5 w-5" /></span>
                 <span className="flex items-center justify-between text-sm font-semibold">{t(title)}<span aria-hidden className="text-gold">→</span></span>
               </Link>
             ))}
@@ -79,6 +82,28 @@ export default function Dashboard() {
         </section>
       </div>
     </>
+  );
+}
+
+/** Real counts of what the app holds, as gold-tinted glass chips that scroll sideways on a phone. Zero counts are left out. */
+function StatStrip({ stats }: { stats: Stats | null }) {
+  const { t } = useI18n();
+  if (!stats) return null;
+  const items: [string, number][] = [
+    ['stats.photos', stats.referencePhotos], ['stats.brands', stats.brands], ['stats.authLessons', stats.authLessons],
+    ['stats.recipes', stats.paintRecipes], ['stats.careLessons', stats.careLessons], ['stats.market', stats.marketMonths],
+  ];
+  const shown = items.filter(([, n]) => n > 0);
+  if (!shown.length) return null;
+  return (
+    <section aria-label={t('stats.title')} className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden">
+      {shown.map(([k, n], i) => (
+        <div key={k} style={{ animationDelay: `${i * 60}ms` }} className="home-stat hz-rise-in shrink-0 snap-start rounded-2xl border border-gold/20 bg-surface-card px-4 py-2.5">
+          <div className="font-serif text-2xl leading-none text-gold">{n.toLocaleString()}</div>
+          <div className="mt-1 text-[11px] leading-tight text-muted">{t(k)}</div>
+        </div>
+      ))}
+    </section>
   );
 }
 
