@@ -5,7 +5,7 @@ import { MeContext } from './App.tsx';
 import { ADMIN_ROLES } from './studio.ts';
 import { COUNTRIES, Movement, modelImageUrl, monthLabel, priceText, type Country, type Overview, type TrendRow } from './Market.tsx';
 
-/** A model photo on a soft gold glow (cut-out photos float on it); the brand initial when there is no photo. */
+/** A model photo on a soft gold glow (cut-out photos float on it); a plain bag outline when there is no photo (never a letter). */
 function Shot({ r, size }: { r: TrendRow; size: 'lg' | 'sm' }) {
   const url = modelImageUrl(r);
   const box = size === 'lg' ? 'h-[88px] w-[88px] rounded-2xl' : 'h-9 w-9 rounded-lg';
@@ -13,9 +13,20 @@ function Shot({ r, size }: { r: TrendRow; size: 'lg' | 'sm' }) {
     <span className={`relative flex shrink-0 items-center justify-center overflow-hidden ${box}`}
       style={{ background: 'radial-gradient(circle at 50% 40%, rgba(212,175,95,0.35), rgba(212,175,95,0.06) 60%, transparent 75%), rgb(var(--c-surface-canvas))' }}>
       {url ? <img src={url} alt="" loading="lazy" className={`h-full w-full ${r.image_cutout ? 'object-contain p-1.5 drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]' : 'object-cover'}`} />
-        : <span className={`font-serif text-gold ${size === 'lg' ? 'text-4xl' : 'text-base'}`} aria-hidden>{r.brand.slice(0, 1)}</span>}
+        : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className={`text-gold/70 ${size === 'lg' ? 'h-12 w-12' : 'h-5 w-5'}`} aria-hidden><path d="M5 9h14l1 11H4z" /><path d="M9 9V7a3 3 0 0 1 6 0v2" /></svg>}
     </span>
   );
+}
+
+/** Short tags from real data only: top-3 rank this month and the staff-entered movement. No made-up percentages. */
+function Tags({ r }: { r: TrendRow }) {
+  const { t } = useI18n();
+  const tags: string[] = [];
+  if (r.rank <= 3) tags.push(`🔥 ${t('tr.tagTop')}`);
+  if (r.movement === 'up') tags.push(`📈 ${t('tr.tagUp')}`);
+  if (r.movement === 'new') tags.push(`✨ ${t('tr.tagNew')}`);
+  if (!tags.length) return null;
+  return <div className="mt-1 flex flex-wrap gap-1">{tags.map((x) => <span key={x} className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-[10px] leading-4 text-gold">{x}</span>)}</div>;
 }
 
 /**
@@ -72,7 +83,7 @@ export default function TrendShowcase({ market }: { market: Overview | null }) {
               </div>
               <div className="truncate font-serif text-[22px] leading-tight">{first.model}</div>
               <div className="text-xs font-semibold text-gold">{priceText(first)}</div>
-              {first.note && <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">{first.note}</p>}
+              <Tags r={first} />
             </div>
           </Link>
         )}
