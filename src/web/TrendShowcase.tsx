@@ -6,14 +6,14 @@ import { ADMIN_ROLES } from './studio.ts';
 import { COUNTRIES, Movement, modelImageUrl, monthLabel, priceText, type Country, type Overview, type TrendRow } from './Market.tsx';
 
 /** A model photo on a soft gold glow (cut-out photos float on it); a plain bag outline when there is no photo (never a letter). */
-function Shot({ r, size }: { r: TrendRow; size: 'lg' | 'sm' }) {
+function Shot({ r, size }: { r: TrendRow; size: 'lg' | 'sm' | 'fill' }) {
   const url = modelImageUrl(r);
-  const box = size === 'lg' ? 'h-[88px] w-[88px] rounded-2xl' : 'h-9 w-9 rounded-lg';
+  const box = size === 'fill' ? 'aspect-square w-full rounded-xl' : size === 'lg' ? 'h-[88px] w-[88px] rounded-2xl' : 'h-9 w-9 rounded-lg';
   return (
     <span className={`relative flex shrink-0 items-center justify-center overflow-hidden ${box}`}
       style={{ background: 'radial-gradient(circle at 50% 40%, rgba(212,175,95,0.35), rgba(212,175,95,0.06) 60%, transparent 75%), rgb(var(--c-surface-canvas))' }}>
       {url ? <img src={url} alt="" loading="lazy" className={`h-full w-full ${r.image_cutout ? 'object-contain p-1.5 drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]' : 'object-cover'}`} />
-        : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className={`text-gold/70 ${size === 'lg' ? 'h-12 w-12' : 'h-5 w-5'}`} aria-hidden><path d="M5 9h14l1 11H4z" /><path d="M9 9V7a3 3 0 0 1 6 0v2" /></svg>}
+        : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className={`text-gold/70 ${size === 'sm' ? 'h-5 w-5' : 'h-12 w-12'}`} aria-hidden><path d="M5 9h14l1 11H4z" /><path d="M9 9V7a3 3 0 0 1 6 0v2" /></svg>}
     </span>
   );
 }
@@ -73,34 +73,25 @@ export default function TrendShowcase({ market }: { market: Overview | null }) {
         </div>
         {!market && <div className="h-40 animate-pulse" />}
         {market && !first && <p className="p-4 text-sm text-muted">{t('noData')}</p>}
+        {/* only the top two, side by side and large: the rest is one tap away under "see all" */}
         {first && (
-          <Link to={`/trends?country=${cc}`} className="flex items-center gap-3.5 px-3.5 py-3.5" style={{ background: 'linear-gradient(110deg, rgba(242,202,80,0.18), rgba(242,202,80,0.04) 55%, transparent)' }}>
-            <Shot r={first} size="lg" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted">
-                <span className="rounded-full bg-gradient-to-b from-[#F2D58A] to-[#C29846] px-2 font-mono text-[10px] font-bold leading-4 text-charcoal shadow-[0_0_12px_rgba(242,202,80,0.7)]">★ #1</span>
-                <span className="truncate">{first.brand}</span><Movement m={first.movement} />
-              </div>
-              <div className="truncate font-serif text-[22px] leading-tight">{first.model}</div>
-              <div className="text-xs font-semibold text-gold">{priceText(first)}</div>
-              <Tags r={first} />
-            </div>
-          </Link>
-        )}
-        {rest.length > 0 && (
-          <ol className="divide-y divide-hairline border-t border-hairline">
-            {rest.slice(0, 4).map((r, i) => (
-              <li key={r.id} className="hz-rise-in" style={{ animationDelay: `${120 + i * 70}ms` }}>
-                <Link to={`/trends?country=${cc}`} className="flex items-center gap-2.5 px-3.5 py-2">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gold/45 font-serif text-[13px] leading-none text-gold">{r.rank}</span>
-                  <Shot r={r} size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-[13px]"><span className="text-[10px] uppercase tracking-wider text-muted">{r.brand}</span> {r.model}</span>
-                  <span className="shrink-0 text-[11px] text-muted">{priceText(r)}</span>
-                  <Movement m={r.movement} />
-                </Link>
-              </li>
+          <div className="grid grid-cols-2 gap-2.5 p-2.5">
+            {[first, ...rest.slice(0, 1)].map((r, i) => (
+              <Link key={r.id} to={`/trends?country=${cc}`} className="hz-rise-in relative flex flex-col rounded-2xl border border-gold/25 p-2"
+                style={{ animationDelay: `${i * 90}ms`, background: i === 0 ? 'linear-gradient(165deg, rgba(242,202,80,0.16), rgba(242,202,80,0.03) 60%)' : 'rgba(255,255,255,0.03)' }}>
+                <div className="relative">
+                  <Shot r={r} size="fill" />
+                  <span className={`absolute left-1.5 top-1.5 rounded-full px-2 font-mono text-[10px] font-bold leading-5 ${i === 0 ? 'bg-gradient-to-b from-[#F2D58A] to-[#C29846] text-charcoal shadow-[0_0_12px_rgba(242,202,80,0.7)]' : 'border border-gold/50 bg-black/55 text-gold'}`}>{i === 0 ? '★ ' : ''}#{r.rank}</span>
+                  {r.movement && <span className="absolute right-1.5 top-1.5 rounded-full bg-black/55 px-1.5 text-[11px] leading-5"><Movement m={r.movement} /></span>}
+                </div>
+                <div className="mt-2 min-w-0 px-0.5">
+                  <div className="truncate text-[10px] uppercase tracking-wider text-muted">{r.brand}</div>
+                  <div className="line-clamp-2 min-h-[2.5rem] font-serif text-[16px] leading-tight">{r.model}</div>
+                  <Tags r={r} />
+                </div>
+              </Link>
             ))}
-          </ol>
+          </div>
         )}
       </div>
     </section>
