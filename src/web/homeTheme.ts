@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /** The Home screen's moving background. The choice stays on this phone only (localStorage), like a theme. */
-export const SCENES = ['galaxy', 'aurora', 'marble', 'silk'] as const;
+export const SCENES = ['galaxy', 'obsidian', 'aurora', 'marble', 'silk'] as const;
 export type HomeScene = (typeof SCENES)[number];
 export const SCENE_PIC: Record<HomeScene, string> = {
-  galaxy: '/galaxy/home-bg.webp', aurora: '/galaxy/aurora.webp', marble: '/galaxy/marble.webp', silk: '/galaxy/silk.webp',
+  galaxy: '/galaxy/home-bg.webp', obsidian: '/galaxy/obsidian.webp', aurora: '/galaxy/aurora.webp', marble: '/galaxy/marble.webp', silk: '/galaxy/silk.webp',
 };
 const KEY = 'hz_bg';
 
