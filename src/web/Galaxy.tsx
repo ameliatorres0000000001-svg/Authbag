@@ -80,7 +80,7 @@ export default function Galaxy({ calm = false, scene = 'galaxy' }: { calm?: bool
         @media (prefers-reduced-motion: reduce) { .hz-anim, .hz-rise-in { animation: none !important } }
       `}</style>
       {/* home: a real picture of the Milky Way (85 KB) drifting very slowly; the clouds, stars and meteors below stay live on top of it */}
-      {calm && <div key={scene} className="hz-anim absolute" style={{ inset: '-6%', backgroundImage: `url(${SCENE_PIC[scene]})`, backgroundSize: 'cover', backgroundPosition: 'center', willChange: lite ? undefined : 'transform', animation: lite || scene === 'obsidian' ? 'none' : 'hz-pan 90s ease-in-out infinite alternate' }} />}
+      {calm && <div key={scene} className="hz-anim absolute" style={{ inset: '-6%', backgroundImage: `url(${SCENE_PIC[scene]})`, backgroundSize: 'cover', backgroundPosition: 'center', willChange: lite ? undefined : 'transform', animation: lite ? 'none' : 'hz-pan 90s ease-in-out infinite alternate' }} />}
       {space && (calm ? clouds.slice(0, 2) : clouds).map(([c, size, left, top, anim], i) => (
         <div key={i} className="hz-anim absolute rounded-full" style={{ width: size, height: size, left, top, background: `radial-gradient(circle, ${c}, transparent 70%)`, willChange: lite ? undefined : 'transform, opacity', animation: lite ? 'none' : anim }} />
       ))}

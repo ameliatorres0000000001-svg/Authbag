@@ -103,8 +103,7 @@
 :root:not([data-theme='light']) .home-glass a.bg-surface-card:active { box-shadow: 0 0 0 1px rgba(242, 202, 80, 0.35), 0 10px 30px -12px rgba(242, 202, 80, 0.35); }
 :root:not([data-theme='light']) .home-glass .bg-surface-card,
 :root:not([data-theme='light']) .home-glass .from-surface-card {
-  background: linear-gradient(165deg, rgba(24, 24, 28, 0.78), rgba(24, 24, 28, 0.62));
-  border-color: rgba(212, 175, 55, 0.25);
+  background: linear-gradient(165deg, rgba(242, 202, 80, 0.09), rgba(255, 255, 255, 0.045) 45%, rgba(255, 255, 255, 0.03));
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
