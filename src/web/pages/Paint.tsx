@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
+import StrapPanel from '../StrapPanel.tsx';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
@@ -23,7 +24,7 @@ export interface PaintPart { id: string; brand: string; name: string; kind: stri
 export interface PaintRecipe {
   id: string; name_km: string; name_en: string | null; surface: string; finish: string; lab_l: number; lab_a: number; lab_b: number;
   hex: string; method: string | null; status: 'draft' | 'published'; has_photo: boolean; updated_at: string; parts: PaintPart[];
-  mix_text: string | null; mix_audio: boolean; steps: PaintStep[];
+  mix_text: string | null; mix_audio: boolean; steps: PaintStep[]; strap_safe?: number; fast_soak?: number;
 }
 export interface PaintStep { id: string; sort: number; text: string; icon: StepIcon | null; minutes: number | null; has_photo: boolean; audio: 'voice' | 'tts' | null; updated_at: string }
 export interface PaintProduct {
@@ -185,6 +186,7 @@ export default function Paint() {
   const [gBusy, setGBusy] = useState(false);
   const [gNote, setGNote] = useState<'member' | 'failed' | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [part, setPart] = useState<'body' | 'strap'>('body');
   const [tube, setTube] = useState<TubeRead | null>(null);
   const [tBusy, setTBusy] = useState(false);
   const [tErr, setTErr] = useState('');
@@ -446,6 +448,13 @@ export default function Paint() {
         {/* start: one photo */}
         {!mode && (
           <>
+            {/* which part of the bag: the strap has its own anti-crack colours and steps */}
+            <div role="tablist" className="grid grid-cols-2 gap-1.5 rounded-full border border-gold/30 bg-surface-card p-1 text-sm">
+              {(['body', 'strap'] as const).map((k) => (
+                <button key={k} type="button" role="tab" aria-selected={part === k} onClick={() => setPart(k)}
+                  className={`rounded-full px-3 py-2 font-semibold transition ${part === k ? 'bg-gold text-charcoal' : 'text-muted'}`}>{k === 'body' ? '👜' : '🎗️'} {t(`strap.part.${k}`)}</button>
+              ))}
+            </div>
             <section className="space-y-4 rounded-3xl border border-gold/40 bg-surface-card p-5">
               <div className="flex items-center gap-3">
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gold text-charcoal" aria-hidden><Icon name="camera" size={28} /></span>
@@ -469,6 +478,8 @@ export default function Paint() {
                 </details>
               </div>
             </section>
+
+            {part === 'strap' && <StrapPanel recipes={recipes} />}
 
             <div className="space-y-2">
               <div className="px-1 text-xs font-semibold text-muted">{t('pn.other')}</div>
