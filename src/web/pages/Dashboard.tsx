@@ -53,7 +53,7 @@ export default function Dashboard() {
   return (
     <>
       <Galaxy calm scene={scene} />
-      <div className="home-glass relative mx-auto max-w-5xl space-y-6 px-4 pb-8 pt-4 md:px-8">
+      <div className="home-glass relative mx-auto max-w-5xl space-y-5 px-4 pb-8 pt-4 md:px-8">
         {!bento && (<>
         {/* hero: the logo on a breathing gold halo and the line of what the app is (ink / muted, so it also reads on the ivory light theme) */}
         <header className="hz-rise-in relative overflow-hidden rounded-3xl border border-gold/25 p-3.5 pr-3"
@@ -67,7 +67,7 @@ export default function Dashboard() {
             </span>
             <div className="min-w-0">
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">Anajak Bag</div>
-              <h1 className="mt-0.5 font-serif text-[21px] font-medium leading-snug text-ink">{t('home.headline')}</h1>
+              <h1 className="mt-0.5 font-serif text-[19px] font-medium leading-snug text-ink">{t('home.headline')}</h1>
               <p className="mt-1 text-xs leading-snug text-muted">{t('home.sub')}</p>
             </div>
           </div>
@@ -171,9 +171,9 @@ export default function Dashboard() {
           <h2 id="tools-h" className="px-1 text-sm font-semibold text-muted">{t('home.more')}</h2>
           <div className="grid grid-cols-2 gap-3">
             {([['/datecode', 'home.datecode', ICON.shield], ['/verify', 'nav.verify', ICON.trend]] as const).map(([to, title, icon], i) => (
-              <Link key={to} to={to} style={{ animationDelay: `${i * 90}ms` }} className="hz-rise-in flex flex-col gap-3 rounded-2xl border border-gold/20 bg-surface-card p-4 transition hover:border-gold/60">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold shadow-[0_0_18px_-4px_rgba(242,202,80,0.55)]"><Svg d={icon} className="h-5 w-5" /></span>
-                <span className="flex items-center justify-between text-sm font-semibold">{t(title)}<span aria-hidden className="text-gold">→</span></span>
+              <Link key={to} to={to} style={{ animationDelay: `${i * 90}ms` }} className="hz-rise-in flex items-center gap-3 rounded-2xl border border-gold/20 bg-surface-card p-3.5 transition hover:border-gold/60">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold shadow-[0_0_18px_-4px_rgba(242,202,80,0.55)]"><Svg d={icon} className="h-5 w-5" /></span>
+                <span className="flex min-w-0 flex-1 items-center justify-between gap-1 text-[13px] font-semibold leading-snug">{t(title)}<span aria-hidden className="text-gold">→</span></span>
               </Link>
             ))}
           </div>

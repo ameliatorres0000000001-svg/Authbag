@@ -68,7 +68,7 @@ export default function TrendShowcase({ market, carousel = false }: { market: Ov
         <div className="grid grid-cols-3 gap-1.5 border-b border-hairline p-1.5 text-xs" role="tablist">
           {COUNTRIES.map((k) => (
             <button key={k} type="button" role="tab" aria-selected={cc === k} onClick={() => setCc(k)}
-              className={`rounded-full px-2 py-1.5 transition ${cc === k ? 'bg-gradient-to-b from-[#E8CA82] to-[#C29846] font-semibold text-charcoal shadow-[0_6px_16px_-8px_rgba(242,202,80,0.9)]' : 'text-muted'}`}>{t(`market.country.${k}`)}</button>
+              className={`rounded-full border border-transparent px-2 py-1.5 transition ${cc === k ? 'border border-gold/50 bg-gold/15 font-semibold text-gold' : 'text-muted'}`}>{t(`market.country.${k}`)}</button>
           ))}
         </div>
         {!market && <div className="h-40 animate-pulse" />}
