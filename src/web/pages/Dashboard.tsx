@@ -8,7 +8,7 @@ import Timeline from '../Timeline.tsx';
 import { LeadsHome } from '../Leads.tsx';
 import TrendShowcase from '../TrendShowcase.tsx';
 import Galaxy from '../Galaxy.tsx';
-import { SCENES, SCENE_PIC, useHomeScene } from '../homeTheme.ts';
+import { SCENES, SCENE_PIC, useHomeScene, useHomeLayout } from '../homeTheme.ts';
 import Icon from '../Icon.tsx';
 
 export interface StudioModel {
@@ -42,6 +42,8 @@ export default function Dashboard() {
   const [market, setMarket] = useState<Overview | null>(null);
   const [scene, setScene] = useHomeScene();
   const [pickOpen, setPickOpen] = useState(false);
+  const [layout, setLayout] = useHomeLayout();
+  const bento = layout === 'bento';
   useEffect(() => {
     let on = true;
     api.get<Overview>('/api/market/overview?top=5').then((r) => on && setMarket(r)).catch(() => on && setMarket({ countries: [], updates: [] }));
@@ -51,22 +53,32 @@ export default function Dashboard() {
   return (
     <>
       <Galaxy calm scene={scene} />
-      <div className="home-glass relative mx-auto max-w-5xl space-y-6 px-4 pb-8 pt-4 md:px-8">
+      <div className="home-glass relative mx-auto max-w-5xl space-y-5 px-4 pb-8 pt-4 md:px-8">
+        {!bento && (<>
         {/* hero: the logo on a breathing gold halo and the line of what the app is (ink / muted, so it also reads on the ivory light theme) */}
-        <header className="hz-rise-in relative overflow-hidden rounded-3xl border border-gold/25 p-4 pr-3"
+        <header className="hz-rise-in relative overflow-hidden rounded-3xl border border-gold/25 p-3.5 pr-3"
           style={{ background: 'linear-gradient(135deg, rgba(242,202,80,0.14), rgba(255,255,255,0.04) 55%, rgba(108,64,170,0.12))', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)' }}>
           <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full" style={{ background: 'radial-gradient(circle, rgba(242,202,80,0.28), transparent 68%)' }} />
           <div className="relative flex items-center gap-3.5">
-            <span className="relative flex h-16 w-16 shrink-0 items-center justify-center">
+            <span className="relative flex h-14 w-14 shrink-0 items-center justify-center">
               <span aria-hidden className="hz-anim absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle, rgba(242,202,80,0.55), transparent 70%)', animation: 'hz-pulse 3.6s ease-in-out infinite' }} />
               <span aria-hidden className="hz-anim absolute inset-[3px] rounded-[1.1rem] border border-gold/50" style={{ animation: 'hz-float 5s ease-in-out infinite' }} />
-              <img src="/icons/icon-192.png" alt="" width={52} height={52} className="relative rounded-2xl shadow-[0_6px_20px_-4px_rgba(242,202,80,0.6)]" />
+              <img src="/icons/icon-192.png" alt="" width={46} height={46} className="relative rounded-2xl shadow-[0_6px_20px_-4px_rgba(242,202,80,0.6)]" />
             </span>
             <div className="min-w-0">
               <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">Anajak Bag</div>
-              <h1 className="mt-0.5 font-serif text-[21px] font-medium leading-snug text-ink">{t('home.headline')}</h1>
+              <h1 className="mt-0.5 font-serif text-[19px] font-medium leading-snug text-ink">{t('home.headline')}</h1>
               <p className="mt-1 text-xs leading-snug text-muted">{t('home.sub')}</p>
             </div>
+          </div>
+          {/* quick actions: straight into the two things vendors do most */}
+          <div className="relative mt-3 flex flex-wrap gap-2">
+            <Link to="/verify" className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-[#E8CA82] to-[#C29846] px-3.5 py-1.5 text-xs font-semibold text-charcoal shadow-[0_6px_16px_-8px_rgba(242,202,80,0.9)]">
+              <Icon name="camera" size={14} />{t('home.pillScan')}
+            </Link>
+            <Link to="/paint" className="inline-flex items-center gap-1.5 rounded-full border border-gold/45 px-3.5 py-1.5 text-xs font-semibold text-gold">
+              <Icon name="palette" size={14} />{t('home.pillPaint')}
+            </Link>
           </div>
           {/* background picker: the choice is kept on this phone only */}
           <button type="button" aria-label={t('bg.title')} aria-expanded={pickOpen} onClick={() => setPickOpen((v) => !v)}
@@ -76,7 +88,7 @@ export default function Dashboard() {
           {pickOpen && (
             <div className="relative mt-3 border-t border-gold/20 pt-3">
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{t('bg.title')}</div>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-1.5">
                 {SCENES.map((k) => (
                   <button key={k} type="button" onClick={() => { setScene(k); setPickOpen(false); }} aria-pressed={scene === k}
                     className={`overflow-hidden rounded-xl border-2 text-center ${scene === k ? 'border-gold' : 'border-transparent'}`}>
@@ -85,28 +97,87 @@ export default function Dashboard() {
                   </button>
                 ))}
               </div>
+              <div className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wider text-muted">{t('lay.title')}</div>
+              <div className="grid grid-cols-2 gap-2">
+                {(['classic', 'bento'] as const).map((k) => (
+                  <button key={k} type="button" onClick={() => { setLayout(k); setPickOpen(false); }} aria-pressed={layout === k}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${layout === k ? 'border-gold bg-gold text-charcoal' : 'border-gold/40 text-gold'}`}>{t(`lay.${k}`)}</button>
+                ))}
+              </div>
             </div>
           )}
         </header>
+        </>)}
+        {bento && (
+          <>
+            {/* bento: a slim title bar, then one big scan tile and small tiles */}
+            <header className="hz-rise-in flex items-center gap-3 px-1">
+              <img src="/icons/icon-192.png" alt="" width={40} height={40} className="rounded-xl shadow-[0_6px_20px_-4px_rgba(242,202,80,0.6)]" />
+              <div className="min-w-0 flex-1">
+                <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-gold">Anajak Bag</div>
+                <h1 className="truncate font-serif text-[18px] leading-snug text-ink">{t('home.headline')}</h1>
+              </div>
+              <button type="button" aria-label={t('bg.title')} aria-expanded={pickOpen} onClick={() => setPickOpen((v) => !v)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gold/40 bg-black/25 text-gold backdrop-blur"><Icon name="palette" size={16} /></button>
+            </header>
+            {pickOpen && (
+              <div className="rounded-2xl border border-gold/25 bg-surface-card p-3">
+                <div className="grid grid-cols-5 gap-1.5">
+                  {SCENES.map((k) => (
+                    <button key={k} type="button" onClick={() => { setScene(k); setPickOpen(false); }} aria-pressed={scene === k}
+                      className={`overflow-hidden rounded-xl border-2 text-center ${scene === k ? 'border-gold' : 'border-transparent'}`}>
+                      <span className="block h-14 bg-cover bg-center" style={{ backgroundImage: `url(${SCENE_PIC[k]})` }} />
+                      <span className="block bg-black/40 py-1 text-[10px] text-white">{t(`bg.${k}`)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wider text-muted">{t('lay.title')}</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['classic', 'bento'] as const).map((k) => (
+                    <button key={k} type="button" onClick={() => { setLayout(k); setPickOpen(false); }} aria-pressed={layout === k}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${layout === k ? 'border-gold bg-gold text-charcoal' : 'border-gold/40 text-gold'}`}>{t(`lay.${k}`)}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <Link to="/verify" className="hz-rise-in col-span-2 flex items-center gap-4 rounded-3xl border border-gold/40 p-5 shadow-[0_14px_44px_-20px_rgba(242,202,80,0.55)]"
+                style={{ background: 'linear-gradient(120deg, rgba(242,202,80,0.30), rgba(242,202,80,0.06) 70%)' }}>
+                <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-b from-[#E8CA82] to-[#C29846] text-charcoal"><Svg d={ICON.scan} className="h-8 w-8" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-serif text-[20px] leading-tight text-ink">{t('home.pillScan')}</span>
+                  <span className="mt-0.5 block text-xs text-muted">{t('home.tileScanSub')}</span>
+                </span>
+                <span aria-hidden className="text-xl text-gold">→</span>
+              </Link>
+              {([['/paint', 'home.pillPaint', ICON.brush], ['/datecode', 'home.datecode', ICON.shield], ['/chat', 'home.tileChat', ICON.chat], ['/repair', 'home.tileRepair', ICON.wrench]] as const).map(([to, title, icon], i) => (
+                <Link key={to} to={to} style={{ animationDelay: `${(i + 1) * 80}ms` }} className="hz-rise-in flex min-h-[112px] flex-col justify-between rounded-2xl border border-gold/25 bg-surface-card p-4">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/15 text-gold"><Svg d={icon} className="h-5 w-5" /></span>
+                  <span className="text-sm font-semibold leading-snug">{t(title)}</span>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* this month's fast sellers first: what vendors look at every day */}
-        <TrendShowcase market={market} />
+        <TrendShowcase market={market} carousel={bento} />
 
         {/* staff: customers found on TikTok */}
         <LeadsHome />
 
         {/* only what has no tab at the bottom */}
-        <section aria-labelledby="tools-h" className="space-y-2">
+        {!bento && <section aria-labelledby="tools-h" className="space-y-2">
           <h2 id="tools-h" className="px-1 text-sm font-semibold text-muted">{t('home.more')}</h2>
           <div className="grid grid-cols-2 gap-3">
             {([['/datecode', 'home.datecode', ICON.shield], ['/verify', 'nav.verify', ICON.trend]] as const).map(([to, title, icon], i) => (
-              <Link key={to} to={to} style={{ animationDelay: `${i * 90}ms` }} className="hz-rise-in flex flex-col gap-3 rounded-2xl border border-gold/20 bg-surface-card p-4 transition hover:border-gold/60">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gold/15 text-gold shadow-[0_0_18px_-4px_rgba(242,202,80,0.55)]"><Svg d={icon} className="h-5 w-5" /></span>
-                <span className="flex items-center justify-between text-sm font-semibold">{t(title)}<span aria-hidden className="text-gold">→</span></span>
+              <Link key={to} to={to} style={{ animationDelay: `${i * 90}ms` }} className="hz-rise-in flex items-center gap-3 rounded-2xl border border-gold/20 bg-surface-card p-3.5 transition hover:border-gold/60">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold shadow-[0_0_18px_-4px_rgba(242,202,80,0.55)]"><Svg d={icon} className="h-5 w-5" /></span>
+                <span className="flex min-w-0 flex-1 items-center justify-between gap-1 text-[13px] font-semibold leading-snug">{t(title)}<span aria-hidden className="text-gold">→</span></span>
               </Link>
             ))}
           </div>
-        </section>
+        </section>}
       </div>
     </>
   );
