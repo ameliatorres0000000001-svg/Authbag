@@ -240,6 +240,7 @@ function Recipes({ products }: { products: PaintProduct[] }) {
 function RecipeEditor({ r, products, onChanged }: { r: PaintRecipe; products: PaintProduct[]; onChanged: () => void }) {
   const { t } = useI18n();
   const [f, setF] = useState({ name_km: r.name_km, name_en: r.name_en ?? '', surface: r.surface, finish: r.finish, method: r.method ?? '' });
+  const [tags, setTags] = useState({ strap_safe: !!r.strap_safe, fast_soak: !!r.fast_soak });
   const [parts, setParts] = useState(r.parts.map((p) => ({ product_id: p.id, parts: p.parts })));
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -253,7 +254,7 @@ function RecipeEditor({ r, products, onChanged }: { r: PaintRecipe; products: Pa
     const ps = parts.filter((p) => p.product_id && p.parts > 0).map((p) => { const pr = products.find((x) => x.id === p.product_id)!; return { id: pr.id, brand: pr.brand, name: pr.name, color_hex: pr.color_hex, parts: p.parts, kind: pr.kind, has_photo: false, updated_at: '' }; });
     return ps.length ? mixSentence({ ...r, parts: ps }, t) : null;
   };
-  const save = () => run(() => api.put(`/api/admin/paint/recipes/${r.id}`, { ...f, name_en: f.name_en || null, method: f.method || null, parts: parts.filter((p) => p.product_id && p.parts > 0), mix_text: mixText() }), t('madm.saved'));
+  const save = () => run(() => api.put(`/api/admin/paint/recipes/${r.id}`, { ...f, ...tags, name_en: f.name_en || null, method: f.method || null, parts: parts.filter((p) => p.product_id && p.parts > 0), mix_text: mixText() }), t('madm.saved'));
 
   return (
     <div className="mt-2 space-y-2 rounded-lg border border-hairline p-3">
@@ -276,6 +277,10 @@ function RecipeEditor({ r, products, onChanged }: { r: PaintRecipe; products: Pa
           </div>
         ))}
         <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" onClick={() => setParts([...parts, { product_id: '', parts: 1 }])}>{t('padm.addPart')}</button>
+      </div>
+      <div className="flex flex-wrap gap-4 text-sm">
+        <label className="flex items-center gap-2"><input type="checkbox" checked={tags.strap_safe} onChange={(e) => setTags({ ...tags, strap_safe: e.target.checked })} />🛡️ {t('strap.tagSafe')}</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={tags.fast_soak} onChange={(e) => setTags({ ...tags, fast_soak: e.target.checked })} />⚡ {t('strap.tagFast')}</label>
       </div>
       <StepsEditor r={r} onChanged={onChanged} />
       {r.steps.length === 0 && <Field label={t('padm.method')}><textarea className="input min-h-[100px]" maxLength={3000} value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })} /></Field>}

@@ -2575,7 +2575,7 @@ const productOut = ({ photo_key, sources_json, ...p }: PaintProduct & Record<str
 
 /** Recipes with their parts (paint, brand, ratio). Public: published only. */
 async function paintRecipes(env: AppEnv['Bindings'], all: boolean) {
-  const recipes = (await env.DB.prepare(`SELECT id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, method, status, photo_key, updated_at, mix_text, mix_tts_key FROM paint_recipes
+  const recipes = (await env.DB.prepare(`SELECT id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, method, status, photo_key, updated_at, mix_text, mix_tts_key, strap_safe, fast_soak FROM paint_recipes
     ${all ? '' : "WHERE status = 'published'"} ORDER BY lab_l DESC`).all<Record<string, any>>()).results;
   const parts = (await env.DB.prepare(`SELECT pp.recipe_id, pp.parts, pp.sort, p.id, p.brand, p.code, p.name, p.kind, p.color_hex, p.photo_key, p.updated_at
     FROM paint_recipe_parts pp JOIN paint_products p ON p.id = pp.product_id ORDER BY pp.sort`).all<Record<string, any>>()).results;
@@ -2753,11 +2753,11 @@ app.post('/api/admin/paint/recipes', need(ADMINS), async (c) => {
 });
 
 app.put('/api/admin/paint/recipes/:id', need(ADMINS), async (c) => {
-  const b = await parse(c, recipeFields.extend({ parts: z.array(z.object({ product_id: z.string(), parts: z.number().positive().max(100) })).max(8), mix_text: z.string().trim().max(500).nullable().optional() }));
+  const b = await parse(c, recipeFields.extend({ parts: z.array(z.object({ product_id: z.string(), parts: z.number().positive().max(100) })).max(8), mix_text: z.string().trim().max(500).nullable().optional(), strap_safe: z.boolean().optional(), fast_soak: z.boolean().optional() }));
   const ids = new Set(b.parts.map((p) => p.product_id));
   if (ids.size !== b.parts.length) return c.json({ error: 'duplicate_product' }, 400);
-  const r = await c.env.DB.prepare(`UPDATE paint_recipes SET name_km = ?, name_en = ?, surface = ?, finish = ?, method = ?, mix_text = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
-    .bind(b.name_km, b.name_en ?? null, b.surface, b.finish, b.method ?? null, b.mix_text || null, c.req.param('id')).run();
+  const r = await c.env.DB.prepare(`UPDATE paint_recipes SET name_km = ?, name_en = ?, surface = ?, finish = ?, method = ?, mix_text = ?, strap_safe = COALESCE(?, strap_safe), fast_soak = COALESCE(?, fast_soak), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`)
+    .bind(b.name_km, b.name_en ?? null, b.surface, b.finish, b.method ?? null, b.mix_text || null, b.strap_safe === undefined ? null : Number(b.strap_safe), b.fast_soak === undefined ? null : Number(b.fast_soak), c.req.param('id')).run();
   if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
   await c.env.DB.batch([
     c.env.DB.prepare('DELETE FROM paint_recipe_parts WHERE recipe_id = ?').bind(c.req.param('id')),
