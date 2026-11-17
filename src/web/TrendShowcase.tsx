@@ -33,12 +33,12 @@ function Tags({ r }: { r: TrendRow }) {
  * Home, top: this month's fast-selling models for one country at a time (staff-entered, with source).
  * #1 large with its photo and why it sells, then #2–#5. Empty months say "no data".
  */
-export default function TrendShowcase({ market, carousel = false }: { market: Overview | null; carousel?: boolean }) {
+export default function TrendShowcase({ market }: { market: Overview | null }) {
   const { t, locale } = useI18n();
   const [cc, setCc] = useState<Country>(locale === 'id' ? 'ID' : 'TH');
   const m = market?.countries.find((x) => x.country === cc);
   const rows = m?.rows ?? [];
-  const [first, ...rest] = rows;
+  const first = rows[0];
   const me = useContext(MeContext);
   const admin = !!me && ADMIN_ROLES.includes(me.role);
   // nothing entered for any country: hide the block for vendors; show admins how to fill it
@@ -73,14 +73,16 @@ export default function TrendShowcase({ market, carousel = false }: { market: Ov
         </div>
         {!market && <div className="h-40 animate-pulse" />}
         {market && !first && <p className="p-4 text-sm text-muted">{t('noData')}</p>}
-        {first && carousel && (
-          /* bento: all five models in one row you swipe sideways */
-          <div className="-mx-px flex snap-x gap-2.5 overflow-x-auto p-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {rows.slice(0, 5).map((r) => (
-              <Link key={r.id} to={`/trends?country=${cc}`} className="relative w-[44%] shrink-0 snap-start rounded-2xl border border-gold/25 bg-white/[0.03] p-2">
+        {first && (
+          /* the top five in one row: swipe left and right (the next card peeks in so it is clear there is more) */
+          <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-px-2.5 p-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {rows.slice(0, 5).map((r, i) => (
+              <Link key={r.id} to={`/trends?country=${cc}`} className="relative w-[46%] shrink-0 snap-start rounded-2xl border border-gold/25 p-2"
+                style={{ background: i === 0 ? 'linear-gradient(165deg, rgba(226,190,112,0.16), rgba(226,190,112,0.03) 60%)' : 'rgba(255,255,255,0.03)' }}>
                 <div className="relative">
                   <Shot r={r} size="fill" />
                   <span className={`absolute left-1.5 top-1.5 rounded-full px-2 font-mono text-[10px] font-bold leading-5 ${r.rank === 1 ? 'bg-gradient-to-b from-[#F2D58A] to-[#C29846] text-charcoal' : 'border border-gold/50 bg-black/55 text-gold'}`}>{r.rank === 1 ? '★ ' : ''}#{r.rank}</span>
+                  {r.movement && <span className="absolute right-1.5 top-1.5 rounded-full bg-black/55 px-1.5 text-[11px] leading-5"><Movement m={r.movement} /></span>}
                 </div>
                 <div className="mt-2 truncate text-[10px] uppercase tracking-wider text-muted">{r.brand}</div>
                 <div className="line-clamp-2 min-h-[2.5rem] font-serif text-[15px] leading-tight">{r.model}</div>
@@ -89,26 +91,11 @@ export default function TrendShowcase({ market, carousel = false }: { market: Ov
             ))}
           </div>
         )}
-        {/* only the top two, side by side and large: the rest is one tap away under "see all" */}
-        {first && !carousel && (
-          <div className="grid grid-cols-2 gap-2.5 p-2.5">
-            {[first, ...rest.slice(0, 1)].map((r, i) => (
-              <Link key={r.id} to={`/trends?country=${cc}`} className="hz-rise-in relative flex flex-col rounded-2xl border border-gold/25 p-2"
-                style={{ animationDelay: `${i * 90}ms`, background: i === 0 ? 'linear-gradient(165deg, rgba(242,202,80,0.16), rgba(242,202,80,0.03) 60%)' : 'rgba(255,255,255,0.03)' }}>
-                <div className="relative">
-                  <Shot r={r} size="fill" />
-                  <span className={`absolute left-1.5 top-1.5 rounded-full px-2 font-mono text-[10px] font-bold leading-5 ${i === 0 ? 'bg-gradient-to-b from-[#F2D58A] to-[#C29846] text-charcoal shadow-[0_0_12px_rgba(242,202,80,0.7)]' : 'border border-gold/50 bg-black/55 text-gold'}`}>{i === 0 ? '★ ' : ''}#{r.rank}</span>
-                  {r.movement && <span className="absolute right-1.5 top-1.5 rounded-full bg-black/55 px-1.5 text-[11px] leading-5"><Movement m={r.movement} /></span>}
-                </div>
-                <div className="mt-2 min-w-0 px-0.5">
-                  <div className="truncate text-[10px] uppercase tracking-wider text-muted">{r.brand}</div>
-                  <div className="line-clamp-2 min-h-[2.5rem] font-serif text-[16px] leading-tight">{r.model}</div>
-                  <Tags r={r} />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+        {/* small shortcut under the models: read a date code */}
+        <Link to="/datecode" className="flex items-center gap-2 border-t border-hairline px-3.5 py-2 text-[12px] text-muted transition hover:text-gold">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-gold" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M9 12l2 2 4-4M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6z" /></svg>
+          <span className="flex-1">{t('home.datecode')}</span><span aria-hidden className="text-gold">→</span>
+        </Link>
       </div>
     </section>
   );
