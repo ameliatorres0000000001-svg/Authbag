@@ -106,6 +106,12 @@ export function AiCheck() {
         <button type="button" className="btn-primary !py-2 text-xs" disabled={busy} onClick={() => run(false)}>{busy ? '…' : `🔎 ${t('ai.test')}`}</button>
         <button type="button" className="btn-ghost !py-2 text-xs" disabled={busy} onClick={() => run(true)}>{busy ? '…' : `🌐 ${t('ai.testWeb')}`}</button>
       </div>
+      {r && r.configured && (() => {
+        const okN = r.results.filter((x) => x.ok).length;
+        const claudeOk = claude.some((x) => x.ok);
+        const tone = okN === 0 ? 'border-counterfeit/50 bg-counterfeit-bg' : claudeOk ? 'border-verified/50 bg-verified-bg' : 'border-review/50 bg-review-bg';
+        return <div className={`rounded-xl border p-2.5 text-sm font-semibold ${tone}`}>{okN === 0 ? `❌ ${t('ai.sumBad')}` : claudeOk ? `✅ ${t('ai.sumOk')}` : `⚠️ ${t('ai.sumBackup')}`}</div>;
+      })()}
       {r && !r.configured && <p className="text-xs text-counterfeit">{t('ai.noKey')}</p>}
       {r?.provider && <p className="text-xs">🔌 {t('ai.provider')}: <b>{r.gateway ? `${t('ai.prov.gateway')} ${r.gateway}` : t(`ai.prov.${r.provider}`)}</b>{r.region ? ` · ${r.region}` : ''}</p>}
       {r?.chain && r.chain.length > 1 && <p className="text-xs text-muted">🛟 {t('ai.chain')}: {r.chain.slice(1).map((p) => t(`ai.prov.${p}`)).join(' → ')}</p>}

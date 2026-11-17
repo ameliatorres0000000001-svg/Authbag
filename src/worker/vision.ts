@@ -223,9 +223,19 @@ async function claudeCall(env: Env, p: AiProvider, model: string, o: CallOpts): 
   }
 }
 
+/** A backup AI that hangs must not hold the customer for minutes (Cloudflare drops the page at ~100 s): give up after BACKUP_MS. */
+const BACKUP_MS = 40_000;
+async function timedFetch(url: string, init: RequestInit): Promise<Response> {
+  try { return await fetch(url, { ...init, signal: AbortSignal.timeout(BACKUP_MS) }); }
+  catch (e) {
+    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') throw new Error(`ai_http_408: no answer after ${BACKUP_MS / 1000} s`);
+    throw e;
+  }
+}
+
 async function geminiCall(env: Env, model: string, o: CallOpts): Promise<string> {
   const lastIdx = o.turns.length - 1;
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+  const res = await timedFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'x-goog-api-key': cleanKey(env.GEMINI_API_KEY), 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -244,7 +254,7 @@ async function geminiCall(env: Env, model: string, o: CallOpts): Promise<string>
 /** Any OpenAI-compatible Chat Completions API (OpenAI, gateways, OpenRouter, DeepSeek…); photos as data URLs. */
 async function openaiCall(env: Env, model: string, o: CallOpts): Promise<string> {
   const lastIdx = o.turns.length - 1;
-  const res = await fetch(`${openaiBase(env)}/chat/completions`, {
+  const res = await timedFetch(`${openaiBase(env)}/chat/completions`, {
     method: 'POST',
     headers: { authorization: `Bearer ${cleanKey(env.OPENAI_API_KEY)}`, 'content-type': 'application/json' },
     body: JSON.stringify({
