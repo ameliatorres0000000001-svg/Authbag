@@ -3,20 +3,20 @@
 @tailwind utilities;
 
 @layer base {
-  /* Auto-Skin: dark (default) — workshop black & gold */
+  /* Auto-Skin: dark (default) — plum black & champagne gold (matches the violet of the Galaxy picture) */
   :root {
-    --c-surface: 14 14 16;
-    --c-surface-card: 23 23 26;
-    --c-surface-canvas: 18 18 21;
-    --c-surface-low: 31 31 36;
-    --c-surface-high: 43 43 49;
-    --c-charcoal: 5 5 6;
-    --c-ink: 243 238 228;
-    --c-muted: 172 167 157;
-    --c-hairline: 44 43 40;
-    --c-strong: 74 70 63;
-    --c-gold: 212 175 95;
-    --c-gold-light: 45 38 24;
+    --c-surface: 13 11 17;
+    --c-surface-card: 26 22 32;
+    --c-surface-canvas: 20 17 25;
+    --c-surface-low: 34 29 41;
+    --c-surface-high: 48 42 57;
+    --c-charcoal: 6 5 9;
+    --c-ink: 246 241 232;
+    --c-muted: 176 168 164;
+    --c-hairline: 52 45 58;
+    --c-strong: 84 74 92;
+    --c-gold: 226 190 112;
+    --c-gold-light: 52 42 30;
     --c-verified: 62 155 99;
     --c-verified-bg: 19 38 26;
     --c-counterfeit: 211 84 84;
@@ -52,6 +52,10 @@
     color-scheme: light;
   }
   body { background: radial-gradient(900px 420px at 50% -160px, rgb(var(--c-gold) / 0.11), transparent 70%), rgb(var(--c-surface)); }
+  /* every screen shares the Home picture (the scene chosen on Home, set by homeTheme.ts) under a dark veil, so Scan, Paint, Repair… look like one app */
+  :root:not([data-theme='light']) body {
+    background: linear-gradient(180deg, rgba(13, 11, 17, 0.58), rgba(13, 11, 17, 0.86) 70%), var(--bg-pic, url(/galaxy/home-bg.webp)) center / cover fixed, rgb(var(--c-surface));
+  }
   ::selection { background: rgba(212,175,95,0.35); }
   html, body { margin: 0; background-color: rgb(var(--c-surface)); color: rgb(var(--c-ink)); font-family: Manrope, 'Noto Sans Khmer', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
   h1, h2, h3 { font-family: 'EB Garamond', 'Noto Serif Khmer', serif; font-weight: 500; }
@@ -103,7 +107,7 @@
 :root:not([data-theme='light']) .home-glass a.bg-surface-card:active { box-shadow: 0 0 0 1px rgba(242, 202, 80, 0.35), 0 10px 30px -12px rgba(242, 202, 80, 0.35); }
 :root:not([data-theme='light']) .home-glass .bg-surface-card,
 :root:not([data-theme='light']) .home-glass .from-surface-card {
-  background: linear-gradient(165deg, rgba(24, 24, 28, 0.78), rgba(24, 24, 28, 0.62));
+  background: linear-gradient(165deg, rgba(26, 22, 32, 0.8), rgba(26, 22, 32, 0.64));
   border-color: rgba(212, 175, 55, 0.25);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);

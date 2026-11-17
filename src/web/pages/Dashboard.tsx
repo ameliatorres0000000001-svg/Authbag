@@ -73,7 +73,7 @@ export default function Dashboard() {
           </div>
           {/* quick actions: straight into the two things vendors do most */}
           <div className="relative mt-3 flex flex-wrap gap-2">
-            <Link to="/verify" className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-[#E8CA82] to-[#C29846] px-3.5 py-1.5 text-xs font-semibold text-charcoal shadow-[0_6px_16px_-8px_rgba(242,202,80,0.9)]">
+            <Link to="/check" className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-[#E8CA82] to-[#C29846] px-3.5 py-1.5 text-xs font-semibold text-charcoal shadow-[0_6px_16px_-8px_rgba(242,202,80,0.9)]">
               <Icon name="camera" size={14} />{t('home.pillScan')}
             </Link>
             <Link to="/paint" className="inline-flex items-center gap-1.5 rounded-full border border-gold/45 px-3.5 py-1.5 text-xs font-semibold text-gold">
@@ -141,7 +141,7 @@ export default function Dashboard() {
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <Link to="/verify" className="hz-rise-in col-span-2 flex items-center gap-4 rounded-3xl border border-gold/40 p-5 shadow-[0_14px_44px_-20px_rgba(242,202,80,0.55)]"
+              <Link to="/check" className="hz-rise-in col-span-2 flex items-center gap-4 rounded-3xl border border-gold/40 p-5 shadow-[0_14px_44px_-20px_rgba(242,202,80,0.55)]"
                 style={{ background: 'linear-gradient(120deg, rgba(242,202,80,0.30), rgba(242,202,80,0.06) 70%)' }}>
                 <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-b from-[#E8CA82] to-[#C29846] text-charcoal"><Svg d={ICON.scan} className="h-8 w-8" /></span>
                 <span className="min-w-0 flex-1">
@@ -161,7 +161,7 @@ export default function Dashboard() {
         )}
 
         {/* this month's fast sellers first: what vendors look at every day */}
-        <TrendShowcase market={market} carousel={bento} />
+        <TrendShowcase market={market} />
 
         {/* staff: customers found on TikTok */}
         <LeadsHome />
@@ -169,8 +169,8 @@ export default function Dashboard() {
         {/* only what has no tab at the bottom */}
         {!bento && <section aria-labelledby="tools-h" className="space-y-2">
           <h2 id="tools-h" className="px-1 text-sm font-semibold text-muted">{t('home.more')}</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {([['/datecode', 'home.datecode', ICON.shield], ['/verify', 'nav.verify', ICON.trend]] as const).map(([to, title, icon], i) => (
+          <div className="grid grid-cols-1 gap-3">
+            {([['/verify', 'nav.verify', ICON.trend]] as const).map(([to, title, icon], i) => (
               <Link key={to} to={to} style={{ animationDelay: `${i * 90}ms` }} className="hz-rise-in flex items-center gap-3 rounded-2xl border border-gold/20 bg-surface-card p-3.5 transition hover:border-gold/60">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold shadow-[0_0_18px_-4px_rgba(242,202,80,0.55)]"><Svg d={icon} className="h-5 w-5" /></span>
                 <span className="flex min-w-0 flex-1 items-center justify-between gap-1 text-[13px] font-semibold leading-snug">{t(title)}<span aria-hidden className="text-gold">→</span></span>
