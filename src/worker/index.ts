@@ -2575,8 +2575,16 @@ const productOut = ({ photo_key, sources_json, ...p }: PaintProduct & Record<str
 
 /** Recipes with their parts (paint, brand, ratio). Public: published only. */
 async function paintRecipes(env: AppEnv['Bindings'], all: boolean) {
-  const recipes = (await env.DB.prepare(`SELECT id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, method, status, photo_key, updated_at, mix_text, mix_tts_key, strap_safe, fast_soak FROM paint_recipes
-    ${all ? '' : "WHERE status = 'published'"} ORDER BY lab_l DESC`).all<Record<string, any>>()).results;
+  // strap_safe / fast_soak come from migration 0040: until it is applied on this database, load without them
+  // (the paint screen must keep working; only the strap tags are missing)
+  const cols = 'id, name_km, name_en, surface, finish, lab_l, lab_a, lab_b, hex, method, status, photo_key, updated_at, mix_text, mix_tts_key';
+  const load = (extra: string) => env.DB.prepare(`SELECT ${cols}${extra} FROM paint_recipes ${all ? '' : "WHERE status = 'published'"} ORDER BY lab_l DESC`).all<Record<string, any>>();
+  let recipes: Record<string, any>[];
+  try { recipes = (await load(', strap_safe, fast_soak')).results; }
+  catch (e) {
+    if (!/no such column/i.test(String((e as Error).message))) throw e;
+    recipes = (await load('')).results;
+  }
   const parts = (await env.DB.prepare(`SELECT pp.recipe_id, pp.parts, pp.sort, p.id, p.brand, p.code, p.name, p.kind, p.color_hex, p.photo_key, p.updated_at
     FROM paint_recipe_parts pp JOIN paint_products p ON p.id = pp.product_id ORDER BY pp.sort`).all<Record<string, any>>()).results;
   const steps = (await env.DB.prepare('SELECT id, recipe_id, sort, text, icon, minutes, photo_key, tts_key, voice_key, updated_at FROM paint_recipe_steps ORDER BY sort').all<Record<string, any>>()).results;
