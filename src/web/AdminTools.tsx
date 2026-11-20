@@ -108,7 +108,8 @@ export function AiCheck() {
       </div>
       {r && r.configured && (() => {
         const okN = r.results.filter((x) => x.ok).length;
-        const claudeOk = claude.some((x) => x.ok);
+        // the main AI is whichever provider is in use (Gemini, Claude …): its rows are named "<provider> · main"
+        const claudeOk = r.results.some((x) => x.ok && /· main/.test(x.name));
         const tone = okN === 0 ? 'border-counterfeit/50 bg-counterfeit-bg' : claudeOk ? 'border-verified/50 bg-verified-bg' : 'border-review/50 bg-review-bg';
         return <div className={`rounded-xl border p-2.5 text-sm font-semibold ${tone}`}>{okN === 0 ? `❌ ${t('ai.sumBad')}` : claudeOk ? `✅ ${t('ai.sumOk')}` : `⚠️ ${t('ai.sumBackup')}`}</div>;
       })()}
