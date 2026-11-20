@@ -47,7 +47,9 @@ export const bedrockRegion = (env: Env): string => env.AWS_REGION?.trim() || 'us
 export const aiProvider = (env: Env): AiProvider | null => {
   const forced = env.AI_PROVIDER?.trim().toLowerCase();
   // a forced OpenAI-compatible API without its key / model yet is ignored, so the app keeps working until the secret is set
-  if (forced === 'anthropic' || forced === 'bedrock' || forced === 'gemini' || (forced === 'openai' && openaiConfigured(env))) return forced;
+  // likewise a forced provider without credentials is ignored (e.g. AI_PROVIDER=anthropic after the Claude key was removed):
+  // the app then goes straight to the provider that has a key, with no failed call first
+  if ((forced === 'anthropic' || forced === 'bedrock' || forced === 'gemini' || forced === 'openai') && configured(env)[forced]) return forced;
   const a = cleanKey(env.ANTHROPIC_API_KEY);
   if (a.startsWith('sk-ant-')) return 'anthropic';
   if (bedrockKey(env) || awsKeys(env)) return 'bedrock';
