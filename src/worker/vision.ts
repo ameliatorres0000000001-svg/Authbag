@@ -248,7 +248,12 @@ async function geminiCall(env: Env, model: string, o: CallOpts): Promise<string>
       ...(o.json ? { generationConfig: { responseMimeType: 'application/json' } } : {}),
     }),
   });
-  if (!res.ok) throw new Error(`ai_http_${res.status}`);
+  if (!res.ok) {
+    // Google's own explanation (overloaded model, bad key, quota, region…) — shown in the admin check; never the key
+    let why = '';
+    try { why = ((await res.json()) as { error?: { message?: string; status?: string } }).error?.message ?? ''; } catch { /* no body */ }
+    throw new Error(`ai_http_${res.status}${why ? `: ${why.replace(/\s+/g, ' ').slice(0, 160)}` : ''}`);
+  }
   const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: Record<string, number> };
   await recordUsage(env, model, data.usageMetadata);
   return data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
