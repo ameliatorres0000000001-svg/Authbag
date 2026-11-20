@@ -27,7 +27,7 @@
   // there only to route through a reseller). The laalaa GPT settings below stay as a BACKUP: it is used only when
   // OPENAI_API_KEY is set and the main AI fails. Gemini backs up too when GEMINI_API_KEY is set; web search stays on Claude.
   "vars": { "AI_MODEL": "", "AZURE_SPEECH_REGION": "southeastasia", "ANTHROPIC_BASE_URL": "",
-    "AI_PROVIDER": "anthropic", "OPENAI_MODEL": "gpt-5.5", "OPENAI_BASE_URL": "https://api.laalaa.me/v1" }
+    "AI_PROVIDER": "gemini", "OPENAI_MODEL": "gpt-5.5", "OPENAI_BASE_URL": "https://api.laalaa.me/v1" }
   // Optional secrets (set with `wrangler secret put NAME`, never committed):
   //   AZURE_SPEECH_KEY  – Azure AI Speech key for Khmer voice (text-to-speech); region is the var above
   //   ENTRUPY_API_KEY   – only after Entrupy approves your business account
