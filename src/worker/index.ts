@@ -24,6 +24,7 @@ import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview
 import { GUIDE_VERSION, guideFor, isCurrentGuide } from '../shared/pointGuide.ts';
 import { dealerGuideText } from '../shared/dealerGuide.ts';
 import { lineAudio, lineDisplayName, lineMessagingConfigured, linePush, parseLineEvents, verifyLineSignature } from './line.ts';
+import { WA_PREFIX, WA_WINDOW_MS, isWhatsApp, parseWhatsAppEvents, verifyWhatsAppSignature, whatsappAudio, whatsappConfigured, whatsappSend } from './whatsapp.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -199,7 +200,7 @@ const PUBLIC_GET = [
 // everything below requires a session (or is a public read above)
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
-  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p === '/api/line/webhook' || p.startsWith('/api/public/cert/')) return next();
+  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p === '/api/line/webhook' || p === '/api/whatsapp/webhook' || p.startsWith('/api/public/cert/')) return next();
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
   if (!user) {
     // guests can browse the public teaching pages (read only); everything else needs an account
@@ -2149,47 +2150,77 @@ app.post('/api/line/webhook', async (c) => {
   return c.json({ ok: true });
 });
 
+/** One customer message (text, or voice fetched on demand) → stored with its Khmer translation. Shared by LINE and WhatsApp. */
+async function ingestMessage(env: AppEnv['Bindings'], x: { contactId: string; name: string | null; messageId: string; kind: 'text' | 'audio'; text?: string; audio?: () => Promise<{ data: ArrayBuffer; mime: string }> }) {
+  const id = 'lm_' + x.messageId; // the same event may be delivered twice: the message id keeps it single
+  if (await env.DB.prepare('SELECT 1 FROM line_messages WHERE id = ?').bind(id).first()) return;
+  await env.DB.prepare("INSERT OR IGNORE INTO line_contacts (line_user_id, display_name, role) VALUES (?, ?, 'customer')").bind(x.contactId, x.name).run();
+  if (x.name) await env.DB.prepare('UPDATE line_contacts SET display_name = COALESCE(display_name, ?) WHERE line_user_id = ?').bind(x.name, x.contactId).run();
+  const role = await env.DB.prepare('SELECT role FROM line_contacts WHERE line_user_id = ?').bind(x.contactId).first<{ role: string }>();
+  if (role?.role === 'staff') return; // a staff member's own account is not a customer chat
+  const today = (await env.DB.prepare("SELECT COUNT(*) AS n FROM line_messages WHERE line_user_id = ? AND role = 'user' AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 day')").bind(x.contactId).first<{ n: number }>())?.n ?? 0;
+  const allowed = today < LINE_DAILY_AI;
+  let content = '', translated: string | null = null, lang: ChatLang | null = null;
+  try {
+    if (x.kind === 'text') {
+      content = x.text ?? '';
+      if (allowed && content) { const r = await asFeature('line', () => translateInbound(env, content)); translated = r.km; lang = r.lang; }
+    } else if (allowed && x.audio) {
+      const r = await asFeature('line', async () => transcribeInbound(env, await x.audio!()));
+      content = r.original; translated = r.km; lang = r.lang;
+    }
+  } catch (e) { console.error(`chat ${x.kind} ${x.contactId.slice(0, 8)}…: ${(e as Error).message}`); }
+  if (!content) content = x.kind === 'audio' ? '🎤 (voice message — could not be transcribed)' : '(message)';
+  await env.DB.batch([
+    env.DB.prepare('INSERT OR IGNORE INTO line_messages (id, line_user_id, role, content, kind, lang, translated) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, x.contactId, 'user', content.slice(0, 5000), x.kind, lang, translated),
+    env.DB.prepare("UPDATE line_contacts SET messages = messages + 1, needs_staff = 1, last_message_at = ?, lang = COALESCE(?, lang) WHERE line_user_id = ?").bind(nowIso(), lang, x.contactId),
+  ]);
+}
+
 async function processLineEvents(env: AppEnv['Bindings'], events: ReturnType<typeof parseLineEvents>) {
   for (const ev of events) {
-    const known = await env.DB.prepare('SELECT display_name FROM line_contacts WHERE line_user_id = ?').bind(ev.userId).first<{ display_name: string | null }>();
-    if (!known) {
-      const name = await lineDisplayName(env, ev.userId);
-      await env.DB.prepare("INSERT OR IGNORE INTO line_contacts (line_user_id, display_name, role) VALUES (?, ?, 'customer')").bind(ev.userId, name).run();
-    }
     if (ev.type === 'follow' || ev.type === 'unfollow') {
+      await env.DB.prepare("INSERT OR IGNORE INTO line_contacts (line_user_id, display_name, role) VALUES (?, ?, 'customer')").bind(ev.userId, await lineDisplayName(env, ev.userId)).run();
       await env.DB.prepare('UPDATE line_contacts SET followed = ? WHERE line_user_id = ?').bind(ev.type === 'follow' ? 1 : 0, ev.userId).run();
       continue;
     }
-    // a staff member's own LINE is not a customer chat
-    const role = await env.DB.prepare('SELECT role FROM line_contacts WHERE line_user_id = ?').bind(ev.userId).first<{ role: string }>();
-    if (role?.role === 'staff') continue;
-    const id = 'lm_' + ev.messageId; // LINE may deliver an event twice: the message id keeps it single
-    if (await env.DB.prepare('SELECT 1 FROM line_messages WHERE id = ?').bind(id).first()) continue;
-    const today = (await env.DB.prepare("SELECT COUNT(*) AS n FROM line_messages WHERE line_user_id = ? AND role = 'user' AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 day')").bind(ev.userId).first<{ n: number }>())?.n ?? 0;
-    const allowed = today < LINE_DAILY_AI;
-    let content = '', translated: string | null = null, lang: ChatLang | null = null;
-    try {
-      if (ev.type === 'text') {
-        content = ev.text;
-        if (allowed) { const r = await asFeature('line', () => translateInbound(env, ev.text)); translated = r.km; lang = r.lang; }
-      } else if (allowed) {
-        const r = await asFeature('line', async () => transcribeInbound(env, await lineAudio(env, ev.messageId)));
-        content = r.original; translated = r.km; lang = r.lang;
-      }
-    } catch (e) { console.error(`line ${ev.type} ${ev.userId.slice(0, 6)}…: ${(e as Error).message}`); }
-    if (!content) content = ev.type === 'audio' ? '🎤 (voice message — could not be transcribed)' : '(message)';
-    await env.DB.batch([
-      env.DB.prepare('INSERT OR IGNORE INTO line_messages (id, line_user_id, role, content, kind, lang, translated) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .bind(id, ev.userId, 'user', content.slice(0, 5000), ev.type, lang, translated),
-      env.DB.prepare("UPDATE line_contacts SET messages = messages + 1, needs_staff = 1, last_message_at = ?, lang = COALESCE(?, lang) WHERE line_user_id = ?").bind(nowIso(), lang, ev.userId),
-    ]);
+    const known = await env.DB.prepare('SELECT display_name FROM line_contacts WHERE line_user_id = ?').bind(ev.userId).first<{ display_name: string | null }>();
+    const name = known ? known.display_name : await lineDisplayName(env, ev.userId);
+    await ingestMessage(env, { contactId: ev.userId, name, messageId: ev.messageId, kind: ev.type, ...(ev.type === 'text' ? { text: ev.text } : { audio: () => lineAudio(env, ev.messageId) }) });
   }
 }
 
-app.get('/api/line/status', need(ADMINS), (c) => c.json({
-  configured: lineMessagingConfigured(c.env), ai: aiConfigured(c.env), audio: !!c.env.GEMINI_API_KEY?.trim(),
-  webhook: `${new URL(c.req.url).origin}/api/line/webhook`,
-}));
+/** Meta checks the webhook once when it is set up: echo the challenge if the verify token matches. */
+app.get('/api/whatsapp/webhook', (c) => {
+  const token = c.env.WHATSAPP_VERIFY_TOKEN?.trim();
+  if (token && c.req.query('hub.mode') === 'subscribe' && c.req.query('hub.verify_token') === token) return c.text(c.req.query('hub.challenge') ?? '');
+  return c.json({ error: 'forbidden' }, 403);
+});
+
+/** WhatsApp → us. Authenticated by X-Hub-Signature-256 (app secret); answers at once and translates in the background. */
+app.post('/api/whatsapp/webhook', async (c) => {
+  const raw = await c.req.text();
+  if (!(await verifyWhatsAppSignature(c.env.WHATSAPP_APP_SECRET?.trim() ?? '', raw, c.req.header('x-hub-signature-256')))) return c.json({ error: 'forbidden' }, 403);
+  let body: unknown = null; try { body = JSON.parse(raw); } catch { /* not JSON */ }
+  const events = parseWhatsAppEvents(body);
+  if (events.length) c.executionCtx.waitUntil((async () => {
+    for (const ev of events) {
+      await ingestMessage(c.env, { contactId: ev.contactId, name: ev.name, messageId: ev.messageId, kind: ev.type, ...(ev.type === 'text' ? { text: ev.text } : { audio: () => whatsappAudio(c.env, ev.mediaId) }) })
+        .catch((e) => console.error('whatsapp:', (e as Error).message));
+    }
+  })());
+  return c.json({ ok: true });
+});
+
+app.get('/api/line/status', need(ADMINS), (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json({
+    ai: aiConfigured(c.env), audio: !!c.env.GEMINI_API_KEY?.trim(),
+    line: { configured: lineMessagingConfigured(c.env), webhook: `${origin}/api/line/webhook` },
+    whatsapp: { configured: whatsappConfigured(c.env), webhook: `${origin}/api/whatsapp/webhook` },
+  });
+});
 
 app.get('/api/line/contacts', need(ADMINS), async (c) => {
   const rows = (await c.env.DB.prepare(`SELECT k.line_user_id AS id, k.display_name, k.lang, k.needs_staff, k.followed, k.last_message_at,
@@ -2227,18 +2258,24 @@ app.post('/api/line/contacts/:id/translate', need(ADMINS), async (c) => {
 
 /** Step 2: staff approved the text: send it through LINE and keep it in the conversation. */
 app.post('/api/line/contacts/:id/send', need(ADMINS), async (c) => {
-  if (!lineMessagingConfigured(c.env)) return c.json({ error: 'line_not_configured' }, 501);
-  const b = await parse(c, z.object({ text_km: z.string().trim().min(1).max(2000), text_out: z.string().trim().min(1).max(4500) }));
   const id = c.req.param('id');
+  const wa = isWhatsApp(id);
+  if (!(wa ? whatsappConfigured(c.env) : lineMessagingConfigured(c.env))) return c.json({ error: wa ? 'whatsapp_not_configured' : 'line_not_configured' }, 501);
+  const b = await parse(c, z.object({ text_km: z.string().trim().min(1).max(2000), text_out: z.string().trim().min(1).max(4500) }));
   const k = await c.env.DB.prepare("SELECT lang FROM line_contacts WHERE line_user_id = ? AND role = 'customer'").bind(id).first<{ lang: string | null }>();
   if (!k) return c.json({ error: 'not_found' }, 404);
-  await linePush(c.env, id, b.text_out);
+  if (wa) {
+    // WhatsApp: free text only within 24 hours of the customer's last message
+    const last = await c.env.DB.prepare("SELECT created_at FROM line_messages WHERE line_user_id = ? AND role = 'user' ORDER BY created_at DESC LIMIT 1").bind(id).first<{ created_at: string }>();
+    if (!last || Date.now() - Date.parse(last.created_at) > WA_WINDOW_MS) return c.json({ error: 'wa_window_closed' }, 409);
+    try { await whatsappSend(c.env, id, b.text_out); } catch (e) { return c.json({ error: (e as Error).message.startsWith('wa_send_window') ? 'wa_window_closed' : (e as Error).message }, (e as Error).message.startsWith('wa_send_window') ? 409 : 502); }
+  } else await linePush(c.env, id, b.text_out);
   const me = c.get('user');
   await c.env.DB.batch([
     c.env.DB.prepare("INSERT INTO line_messages (id, line_user_id, role, content, kind, lang, translated, sent_by) VALUES (?, ?, 'assistant', ?, 'text', ?, ?, ?)").bind(uid('lm_'), id, b.text_km, k.lang, b.text_out, me.id),
     c.env.DB.prepare("UPDATE line_contacts SET needs_staff = 0, messages = messages + 1, last_message_at = ? WHERE line_user_id = ?").bind(nowIso(), id),
   ]);
-  await audit(c.env, me.id, 'line.send', 'line_contact', id, { chars: b.text_out.length });
+  await audit(c.env, me.id, wa ? 'whatsapp.send' : 'line.send', 'line_contact', wa ? null : id, { chars: b.text_out.length });
   return c.json({ ok: true });
 });
 
