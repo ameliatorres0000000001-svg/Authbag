@@ -11,7 +11,7 @@ function Shot({ r, size }: { r: TrendRow; size: 'lg' | 'sm' | 'fill' }) {
   const box = size === 'fill' ? 'aspect-square w-full rounded-xl' : size === 'lg' ? 'h-[88px] w-[88px] rounded-2xl' : 'h-9 w-9 rounded-lg';
   return (
     <span className={`relative flex shrink-0 items-center justify-center overflow-hidden ${box}`}
-      style={{ background: 'radial-gradient(circle at 50% 40%, rgba(212,175,95,0.35), rgba(212,175,95,0.06) 60%, transparent 75%), rgb(var(--c-surface-canvas))' }}>
+      style={{ background: 'radial-gradient(circle at 50% 40%, rgba(255,255,255,0.14), rgba(255,255,255,0.03) 60%, transparent 75%), rgb(var(--c-surface-canvas))' }}>
       {url ? <img src={url} alt="" loading="lazy" className={`h-full w-full ${r.image_cutout ? 'object-contain p-1.5 drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]' : 'object-cover'}`} />
         : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" className={`text-gold/70 ${size === 'sm' ? 'h-5 w-5' : 'h-12 w-12'}`} aria-hidden><path d="M5 9h14l1 11H4z" /><path d="M9 9V7a3 3 0 0 1 6 0v2" /></svg>}
     </span>
@@ -64,7 +64,7 @@ export default function TrendShowcase({ market }: { market: Overview | null }) {
           <span className="ml-1.5 font-sans text-[11px] font-normal text-muted">{m?.period ? monthLabel(m.period, locale) : ''}</span></h2>
         <Link to={`/trends?country=${cc}`} className="shrink-0 text-[11px] font-semibold text-gold">{t('market.seeAll')} →</Link>
       </div>
-      <div className="overflow-hidden rounded-3xl border border-gold/35 bg-gradient-to-b from-surface-card to-surface shadow-[0_14px_44px_-20px_rgba(242,202,80,0.45)]">
+      <div className="overflow-hidden rounded-3xl border border-hairline bg-surface-card">
         <div className="grid grid-cols-3 gap-1.5 border-b border-hairline p-1.5 text-xs" role="tablist">
           {COUNTRIES.map((k) => (
             <button key={k} type="button" role="tab" aria-selected={cc === k} onClick={() => setCc(k)}
@@ -81,7 +81,7 @@ export default function TrendShowcase({ market }: { market: Overview | null }) {
                 style={{ background: i === 0 ? 'linear-gradient(165deg, rgba(226,190,112,0.16), rgba(226,190,112,0.03) 60%)' : 'rgba(255,255,255,0.03)' }}>
                 <div className="relative">
                   <Shot r={r} size="fill" />
-                  <span className={`absolute left-1.5 top-1.5 rounded-full px-2 font-mono text-[10px] font-bold leading-5 ${r.rank === 1 ? 'bg-gradient-to-b from-[#F2D58A] to-[#C29846] text-charcoal' : 'border border-gold/50 bg-black/55 text-gold'}`}>{r.rank === 1 ? '★ ' : ''}#{r.rank}</span>
+                  <span className={`absolute left-1.5 top-1.5 rounded-full px-2 font-mono text-[10px] font-bold leading-5 ${r.rank === 1 ? 'bg-gold text-surface' : 'border border-gold/50 bg-black/55 text-gold'}`}>{r.rank === 1 ? '★ ' : ''}#{r.rank}</span>
                   {r.movement && <span className="absolute right-1.5 top-1.5 rounded-full bg-black/55 px-1.5 text-[11px] leading-5"><Movement m={r.movement} /></span>}
                 </div>
                 <div className="mt-2 truncate text-[10px] uppercase tracking-wider text-muted">{r.brand}</div>

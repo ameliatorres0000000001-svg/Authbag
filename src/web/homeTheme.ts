@@ -9,7 +9,7 @@ export const SCENE_PIC: Record<HomeScene, string> = {
 const KEY = 'hz_bg';
 
 const read = (): HomeScene => {
-  try { const v = localStorage.getItem(KEY); return (SCENES as readonly string[]).includes(v ?? '') ? (v as HomeScene) : 'galaxy'; } catch { return 'galaxy'; }
+  try { const v = localStorage.getItem(KEY); return (SCENES as readonly string[]).includes(v ?? '') ? (v as HomeScene) : 'obsidian'; } catch { return 'obsidian'; }
 };
 
 /** The picture behind every screen follows the scene chosen on Home (CSS variable read by body in index.css). */
@@ -19,7 +19,7 @@ export function applyScenePic(sc: HomeScene) {
 if (typeof document !== 'undefined') applyScenePic(read());
 
 export function useHomeScene(): [HomeScene, (s: HomeScene) => void] {
-  const [scene, setScene] = useState<HomeScene>('galaxy');
+  const [scene, setScene] = useState<HomeScene>('obsidian');
   useEffect(() => { setScene(read()); }, []);
   const pick = useCallback((s: HomeScene) => {
     setScene(s); applyScenePic(s);
