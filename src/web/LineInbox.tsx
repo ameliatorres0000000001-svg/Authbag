@@ -7,7 +7,10 @@ type Lang = 'th' | 'ms' | 'id' | 'en' | 'vi' | 'zh' | 'km' | 'other';
 const LANGS: Lang[] = ['th', 'ms', 'id', 'en', 'vi', 'zh', 'km', 'other'];
 interface Contact { id: string; display_name: string | null; lang: Lang | null; needs_staff: number; followed: number; last_message_at: string | null; last_text: string | null }
 interface Msg { id: string; role: 'user' | 'assistant'; content: string; kind: 'text' | 'audio'; lang: Lang | null; translated: string | null; created_at: string }
-interface Status { configured: boolean; ai: boolean; audio: boolean; webhook: string }
+interface Chan { configured: boolean; webhook: string }
+interface Status { ai: boolean; audio: boolean; line: Chan; whatsapp: Chan }
+const isWa = (id: string) => id.startsWith('wa:');
+const chanLabel = (id: string) => (isWa(id) ? '🟢 WhatsApp' : '💬 LINE');
 
 const clock = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 
@@ -43,14 +46,14 @@ function Chat({ id, onBack, onChanged }: { id: string; onBack: () => void; onCha
     if (out === null) return;
     setBusy(true); setErr('');
     try { await api.post(`/api/line/contacts/${encodeURIComponent(id)}/send`, { text_km: text, text_out: out }); setText(''); setOut(null); await load(); onChanged(); }
-    catch (e) { setErr(errText(e)); } finally { setBusy(false); }
+    catch (e) { setErr((e as { body?: { error?: string } }).body?.error === 'wa_window_closed' ? t('li.windowClosed') : errText(e)); } finally { setBusy(false); }
   };
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <button type="button" className="btn-ghost !px-3 !py-1.5 text-xs" onClick={onBack}>← {t('li.back')}</button>
-        <div className="min-w-0 flex-1 truncate font-semibold">{contact?.display_name || '—'}</div>
+        <div className="min-w-0 flex-1 truncate font-semibold">{contact?.display_name || '—'} <span className="text-[10px] font-normal text-muted">{chanLabel(id)}</span></div>
         <label className="flex items-center gap-1.5 text-xs text-muted">{t('li.lang')}
           <select className="input !w-auto !py-1 text-xs" value={contact?.lang ?? ''} onChange={(e) => { if (e.target.value) void pickLang(e.target.value as Lang); }}>
             <option value="" disabled>—</option>
@@ -123,9 +126,13 @@ export default function LineInbox() {
       <div className="font-semibold">💬 {t('li.title')}</div>
       <p className="text-xs text-muted">{t('li.note')}</p>
       {err && <p className="text-xs text-counterfeit">{err}</p>}
-      {status && !status.configured && (
+      {status && !status.line.configured && (
         <Notice tone="warn"><b>{t('li.setupTitle')}</b><p className="mt-1">{t('li.setupBody')}</p>
-          <div className="mt-2 label">{t('li.webhook')}</div><code className="block break-all rounded bg-charcoal p-2 text-[11px] text-white">{status.webhook}</code></Notice>
+          <div className="mt-2 label">{t('li.webhook')}</div><code className="block break-all rounded bg-charcoal p-2 text-[11px] text-white">{status.line.webhook}</code></Notice>
+      )}
+      {status && !status.whatsapp.configured && (
+        <Notice tone="warn"><b>{t('li.waSetupTitle')}</b><p className="mt-1">{t('li.waSetupBody')}</p>
+          <div className="mt-2 label">{t('li.webhook')}</div><code className="block break-all rounded bg-charcoal p-2 text-[11px] text-white">{status.whatsapp.webhook}</code></Notice>
       )}
       {status && !status.ai && <Notice tone="warn">{t('li.noAi')}</Notice>}
       {status && status.ai && !status.audio && <p className="text-xs text-muted">{t('li.noAudio')}</p>}
@@ -137,7 +144,7 @@ export default function LineInbox() {
                 <button type="button" onClick={() => setOpen(k.id)} className="flex w-full items-center gap-3 py-2.5 text-left">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold/20 font-semibold uppercase text-gold" aria-hidden>{(k.display_name || '?').slice(0, 1)}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2"><span className="truncate font-semibold">{k.display_name || '—'}</span>
+                    <span className="flex items-center gap-2"><span className="truncate font-semibold">{k.display_name || (isWa(k.id) ? k.id.slice(3) : '—')}</span><span className="text-[10px] text-muted">{chanLabel(k.id)}</span>
                       {k.lang && <span className="rounded-full bg-surface-high px-2 text-[10px]">{t(`li.lang.${k.lang}`)}</span>}
                       {k.needs_staff ? <span className="rounded-full bg-review-bg px-2 text-[10px] text-review">{t('li.waiting')}</span> : null}</span>
                     <span className="block truncate text-xs text-muted">{k.last_text}</span>
