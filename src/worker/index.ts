@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, reviewModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
+import { assessVerification, reviewModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, translateInbound, translateOutbound, transcribeInbound, toChatLang, CHAT_LANGS, type ChatLang, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
 import { checkMeasurement, checkQuick, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab, quickLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -23,6 +23,7 @@ import { STEP_ICONS, UI_VOICE_KEYS } from '../shared/voiceKeys.ts';
 import { customerPrecheck, parseAiReview, trackRecord } from '../shared/aiReview.ts';
 import { GUIDE_VERSION, guideFor, isCurrentGuide } from '../shared/pointGuide.ts';
 import { dealerGuideText } from '../shared/dealerGuide.ts';
+import { lineAudio, lineDisplayName, lineMessagingConfigured, linePush, parseLineEvents, verifyLineSignature } from './line.ts';
 import { EXPERT_ANSWERS, answerCallback, editDecision, sendReviewRequest, sendText, setWebhook, telegramConfigured, webhookInfo } from './telegram.ts';
 import { coverageForModel, type CoverageEra } from '../shared/coverage.ts';
 
@@ -198,7 +199,7 @@ const PUBLIC_GET = [
 // everything below requires a session (or is a public read above)
 app.use('/api/*', async (c, next) => {
   const p = new URL(c.req.url).pathname;
-  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p.startsWith('/api/public/cert/')) return next();
+  if (p === '/api/health' || p.startsWith('/api/auth/') || p.startsWith('/api/entrupy/partner/') || p === '/api/telegram/webhook' || p === '/api/line/webhook' || p.startsWith('/api/public/cert/')) return next();
   const user = await userFromToken(c.env, getCookie(c, COOKIE));
   if (!user) {
     // guests can browse the public teaching pages (read only); everything else needs an account
@@ -2133,6 +2134,114 @@ app.post('/api/admin/telegram/setup', need(ADMINS), async (c) => {
   return c.json({ ok: true, url });
 });
 
+/* ───────────── LINE interpreter inbox ─────────────
+ * Customers / partners (Thai, Malay, Indonesian …) write or send voice to the shop's LINE Official Account; the AI translates
+ * into Khmer for staff. Staff write Khmer, check the translation, and send it. The AI never replies by itself. */
+const LINE_DAILY_AI = 60; // translations per contact per day: a cost guard against spam
+
+/** LINE → us. Authenticated by the X-Line-Signature header; answers at once and translates in the background. */
+app.post('/api/line/webhook', async (c) => {
+  const raw = await c.req.text();
+  if (!(await verifyLineSignature(c.env.LINE_MESSAGING_SECRET?.trim() ?? '', raw, c.req.header('x-line-signature')))) return c.json({ error: 'forbidden' }, 403);
+  let body: unknown = null; try { body = JSON.parse(raw); } catch { /* empty verification ping */ }
+  const events = parseLineEvents(body);
+  if (events.length) c.executionCtx.waitUntil(processLineEvents(c.env, events).catch((e) => console.error('line:', (e as Error).message)));
+  return c.json({ ok: true });
+});
+
+async function processLineEvents(env: AppEnv['Bindings'], events: ReturnType<typeof parseLineEvents>) {
+  for (const ev of events) {
+    const known = await env.DB.prepare('SELECT display_name FROM line_contacts WHERE line_user_id = ?').bind(ev.userId).first<{ display_name: string | null }>();
+    if (!known) {
+      const name = await lineDisplayName(env, ev.userId);
+      await env.DB.prepare("INSERT OR IGNORE INTO line_contacts (line_user_id, display_name, role) VALUES (?, ?, 'customer')").bind(ev.userId, name).run();
+    }
+    if (ev.type === 'follow' || ev.type === 'unfollow') {
+      await env.DB.prepare('UPDATE line_contacts SET followed = ? WHERE line_user_id = ?').bind(ev.type === 'follow' ? 1 : 0, ev.userId).run();
+      continue;
+    }
+    // a staff member's own LINE is not a customer chat
+    const role = await env.DB.prepare('SELECT role FROM line_contacts WHERE line_user_id = ?').bind(ev.userId).first<{ role: string }>();
+    if (role?.role === 'staff') continue;
+    const id = 'lm_' + ev.messageId; // LINE may deliver an event twice: the message id keeps it single
+    if (await env.DB.prepare('SELECT 1 FROM line_messages WHERE id = ?').bind(id).first()) continue;
+    const today = (await env.DB.prepare("SELECT COUNT(*) AS n FROM line_messages WHERE line_user_id = ? AND role = 'user' AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 day')").bind(ev.userId).first<{ n: number }>())?.n ?? 0;
+    const allowed = today < LINE_DAILY_AI;
+    let content = '', translated: string | null = null, lang: ChatLang | null = null;
+    try {
+      if (ev.type === 'text') {
+        content = ev.text;
+        if (allowed) { const r = await asFeature('line', () => translateInbound(env, ev.text)); translated = r.km; lang = r.lang; }
+      } else if (allowed) {
+        const r = await asFeature('line', async () => transcribeInbound(env, await lineAudio(env, ev.messageId)));
+        content = r.original; translated = r.km; lang = r.lang;
+      }
+    } catch (e) { console.error(`line ${ev.type} ${ev.userId.slice(0, 6)}…: ${(e as Error).message}`); }
+    if (!content) content = ev.type === 'audio' ? '🎤 (voice message — could not be transcribed)' : '(message)';
+    await env.DB.batch([
+      env.DB.prepare('INSERT OR IGNORE INTO line_messages (id, line_user_id, role, content, kind, lang, translated) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(id, ev.userId, 'user', content.slice(0, 5000), ev.type, lang, translated),
+      env.DB.prepare("UPDATE line_contacts SET messages = messages + 1, needs_staff = 1, last_message_at = ?, lang = COALESCE(?, lang) WHERE line_user_id = ?").bind(nowIso(), lang, ev.userId),
+    ]);
+  }
+}
+
+app.get('/api/line/status', need(ADMINS), (c) => c.json({
+  configured: lineMessagingConfigured(c.env), ai: aiConfigured(c.env), audio: !!c.env.GEMINI_API_KEY?.trim(),
+  webhook: `${new URL(c.req.url).origin}/api/line/webhook`,
+}));
+
+app.get('/api/line/contacts', need(ADMINS), async (c) => {
+  const rows = (await c.env.DB.prepare(`SELECT k.line_user_id AS id, k.display_name, k.lang, k.needs_staff, k.followed, k.last_message_at,
+      (SELECT COALESCE(m.translated, m.content) FROM line_messages m WHERE m.line_user_id = k.line_user_id ORDER BY m.created_at DESC, m.rowid DESC LIMIT 1) AS last_text
+    FROM line_contacts k WHERE k.role = 'customer' AND k.last_message_at IS NOT NULL ORDER BY k.needs_staff DESC, k.last_message_at DESC LIMIT 100`).all()).results;
+  return c.json({ contacts: rows });
+});
+
+app.get('/api/line/contacts/:id/messages', need(ADMINS), async (c) => {
+  const id = c.req.param('id');
+  const contact = await c.env.DB.prepare('SELECT line_user_id AS id, display_name, lang, needs_staff, followed FROM line_contacts WHERE line_user_id = ? AND role = ?').bind(id, 'customer').first();
+  if (!contact) return c.json({ error: 'not_found' }, 404);
+  const rows = (await c.env.DB.prepare('SELECT id, role, content, kind, lang, translated, created_at FROM line_messages WHERE line_user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 100').bind(id).all()).results.reverse();
+  return c.json({ contact, messages: rows });
+});
+
+/** Staff pick the customer's language when the AI could not tell (or got it wrong). */
+app.put('/api/line/contacts/:id/lang', need(ADMINS), async (c) => {
+  const { lang } = await parse(c, z.object({ lang: z.enum(CHAT_LANGS as [ChatLang, ...ChatLang[]]) }));
+  const r = await c.env.DB.prepare("UPDATE line_contacts SET lang = ? WHERE line_user_id = ? AND role = 'customer'").bind(lang, c.req.param('id')).run();
+  if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
+  return c.json({ ok: true });
+});
+
+/** Step 1 of a reply: Khmer → the customer's language. Nothing is sent yet; staff read the result first. */
+app.post('/api/line/contacts/:id/translate', need(ADMINS), async (c) => {
+  const { text_km } = await parse(c, z.object({ text_km: z.string().trim().min(1).max(2000) }));
+  const k = await c.env.DB.prepare("SELECT lang FROM line_contacts WHERE line_user_id = ? AND role = 'customer'").bind(c.req.param('id')).first<{ lang: string | null }>();
+  if (!k) return c.json({ error: 'not_found' }, 404);
+  if (!k.lang) return c.json({ error: 'lang_unknown' }, 409);
+  const lang = toChatLang(k.lang);
+  if (lang === 'km') return c.json({ text_out: text_km, lang });
+  return c.json({ text_out: await asFeature('line', () => translateOutbound(c.env, text_km, lang)), lang });
+});
+
+/** Step 2: staff approved the text: send it through LINE and keep it in the conversation. */
+app.post('/api/line/contacts/:id/send', need(ADMINS), async (c) => {
+  if (!lineMessagingConfigured(c.env)) return c.json({ error: 'line_not_configured' }, 501);
+  const b = await parse(c, z.object({ text_km: z.string().trim().min(1).max(2000), text_out: z.string().trim().min(1).max(4500) }));
+  const id = c.req.param('id');
+  const k = await c.env.DB.prepare("SELECT lang FROM line_contacts WHERE line_user_id = ? AND role = 'customer'").bind(id).first<{ lang: string | null }>();
+  if (!k) return c.json({ error: 'not_found' }, 404);
+  await linePush(c.env, id, b.text_out);
+  const me = c.get('user');
+  await c.env.DB.batch([
+    c.env.DB.prepare("INSERT INTO line_messages (id, line_user_id, role, content, kind, lang, translated, sent_by) VALUES (?, ?, 'assistant', ?, 'text', ?, ?, ?)").bind(uid('lm_'), id, b.text_km, k.lang, b.text_out, me.id),
+    c.env.DB.prepare("UPDATE line_contacts SET needs_staff = 0, messages = messages + 1, last_message_at = ? WHERE line_user_id = ?").bind(nowIso(), id),
+  ]);
+  await audit(c.env, me.id, 'line.send', 'line_contact', id, { chars: b.text_out.length });
+  return c.json({ ok: true });
+});
+
 /** Telegram → us. Authenticated by the secret token header, and only the experts' group is accepted. */
 app.post('/api/telegram/webhook', async (c) => {
   const secret = c.env.TELEGRAM_WEBHOOK_SECRET;
@@ -3760,6 +3869,8 @@ async function aiReviewBacklog(env: AppEnv['Bindings']) {
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: AppEnv['Bindings'], ctx: ExecutionContext) {
+    // customer chats are kept 30 days, then deleted
+    ctx.waitUntil(env.DB.prepare("DELETE FROM line_messages WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')").run().catch(() => null));
     ctx.waitUntil(asFeature('translate', () => translateBacklog(env)));
     ctx.waitUntil(asFeature('precheck', () => aiReviewBacklog(env)));
     // rewrite old reference guides in the current format, a few per run (Admin has a button to do it all now)
