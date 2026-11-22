@@ -73,7 +73,7 @@ export default function Dashboard() {
           </div>
           {/* quick actions: straight into the two things vendors do most */}
           <div className="relative mt-3 flex flex-wrap gap-2">
-            <Link to="/check" className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-b from-[#E8CA82] to-[#C29846] px-3.5 py-1.5 text-xs font-semibold text-charcoal shadow-[0_6px_16px_-8px_rgba(242,202,80,0.9)]">
+            <Link to="/check" className="inline-flex items-center gap-1.5 rounded-full bg-gold px-3.5 py-1.5 text-xs font-semibold text-surface">
               <Icon name="camera" size={14} />{t('home.pillScan')}
             </Link>
             <Link to="/paint" className="inline-flex items-center gap-1.5 rounded-full border border-gold/45 px-3.5 py-1.5 text-xs font-semibold text-gold">
@@ -143,7 +143,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-3">
               <Link to="/check" className="hz-rise-in col-span-2 flex items-center gap-4 rounded-3xl border border-gold/40 p-5 shadow-[0_14px_44px_-20px_rgba(242,202,80,0.55)]"
                 style={{ background: 'linear-gradient(120deg, rgba(242,202,80,0.30), rgba(242,202,80,0.06) 70%)' }}>
-                <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-b from-[#E8CA82] to-[#C29846] text-charcoal"><Svg d={ICON.scan} className="h-8 w-8" /></span>
+                <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gold text-surface"><Svg d={ICON.scan} className="h-8 w-8" /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-serif text-[20px] leading-tight text-ink">{t('home.pillScan')}</span>
                   <span className="mt-0.5 block text-xs text-muted">{t('home.tileScanSub')}</span>
