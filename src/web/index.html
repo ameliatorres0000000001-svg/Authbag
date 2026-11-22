@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Anajak Bag</title>
   <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="theme-color" content="#0E0E10" />
+  <meta name="theme-color" content="#0A0A0B" />
   <script>
     /* Auto-Skin: apply the saved theme before the first paint (dark by default; "auto" follows the phone). */
     (function () { try {
       var m = localStorage.getItem('hz_theme') || 'dark';
       var light = m === 'light' || (m === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches);
       if (light) document.documentElement.setAttribute('data-theme', 'light');
-      document.querySelector('meta[name=theme-color]').setAttribute('content', light ? '#FAF9F6' : '#0E0E10');
+      document.querySelector('meta[name=theme-color]').setAttribute('content', light ? '#FAFAF9' : '#0A0A0B');
     } catch (e) {} })();
   </script>
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
