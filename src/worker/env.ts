@@ -36,6 +36,15 @@ export interface Env {
   /** LINE Login channel (LINE Developers): channel ID and channel secret */
   LINE_CHANNEL_ID?: string;
   LINE_CHANNEL_SECRET?: string;
+  /** LINE Official Account (Messaging API): channel secret (webhook signature) and channel access token — secrets, never in the DB */
+  LINE_MESSAGING_SECRET?: string;
+  LINE_MESSAGING_TOKEN?: string;
+  /** WhatsApp Business Cloud API (Meta): access token, phone number id, app secret (webhook signature), verify token — secrets; API version is optional (default v24.0) */
+  WHATSAPP_TOKEN?: string;
+  WHATSAPP_PHONE_NUMBER_ID?: string;
+  WHATSAPP_APP_SECRET?: string;
+  WHATSAPP_VERIFY_TOKEN?: string;
+  WHATSAPP_API_VERSION?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
