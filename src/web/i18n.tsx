@@ -839,6 +839,8 @@ const D: Record<string, { km: string; en: string }> = {
   'li.windowClosed': { km: 'ហួស 24 ម៉ោងហើយ ចាប់តាំងពីម៉ូយសរសេរមកចុងក្រោយ — WhatsApp មិនអនុញ្ញាតឱ្យផ្ញើអត្ថបទធម្មតាទេ។ សូមរង់ចាំម៉ូយសរសេរមកម្ដងទៀត (ឬប្រើ template ក្នុង Meta)។', en: 'More than 24 hours since the customer last wrote — WhatsApp does not allow a free text now. Wait for them to write again (or use a template in Meta).' },
   'li.chLine': { km: 'LINE', en: 'LINE' },
   'li.chWa': { km: 'WhatsApp', en: 'WhatsApp' },
+  'li.homeTitle': { km: 'ជជែកជាមួយម៉ូយ (WhatsApp / LINE)', en: 'Customer chat (WhatsApp / LINE)' },
+  'li.homeSub': { km: 'AI បកប្រែសារ និងសំឡេងម៉ូយជាខ្មែរ', en: 'AI translates customer messages and voice into Khmer' },
   'li.notFollowed': { km: 'ម៉ូយនេះបានទប់ OA — ផ្ញើមិនបានទេ។', en: 'This person blocked the account — sending will fail.' },
   'us.f.lead_message': { km: 'សារទាក់ទងម៉ូយ', en: 'Customer first messages' },
   'ld.topicTitle': { km: 'ស្វែងរកតាមអ្វីដែលអ្នកចង់លក់', en: 'Search for what you want to sell' },

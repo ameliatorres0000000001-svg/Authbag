@@ -1,4 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { MeContext } from './App.tsx';
+import { ADMIN_ROLES } from './studio.ts';
+import Icon from './Icon.tsx';
 import { api } from './api.ts';
 import { useI18n } from './i18n.tsx';
 import { Empty, Notice, errText } from './ui.tsx';
@@ -157,5 +161,28 @@ export default function LineInbox() {
         )
       )}
     </div>
+  );
+}
+
+/** Home shortcut for the owner / lead staff: how many people are waiting for a reply, one tap to the chat. */
+export function ChatHome() {
+  const { t } = useI18n();
+  const me = useContext(MeContext);
+  const admin = !!me && ADMIN_ROLES.includes(me.role);
+  const [waiting, setWaiting] = useState<number | null>(null);
+  useEffect(() => {
+    if (!admin) return;
+    api.get<{ contacts: Contact[] }>('/api/line/contacts').then((r) => setWaiting(r.contacts.filter((k) => k.needs_staff).length)).catch(() => setWaiting(0));
+  }, [admin]);
+  if (!admin) return null;
+  return (
+    <Link to="/admin?tab=line" className="flex items-center gap-3 rounded-2xl border border-hairline bg-surface-card p-3.5 hover:border-gold">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold/20 text-gold" aria-hidden><Icon name="chat" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{t('li.homeTitle')}</span>
+        <span className="block text-xs text-muted">{waiting ? `${waiting} ${t('li.waiting')}` : t('li.homeSub')}</span>
+      </span>
+      {waiting ? <span className="rounded-full bg-review-bg px-2 py-0.5 text-xs font-semibold text-review">{waiting}</span> : <span className="text-muted" aria-hidden>›</span>}
+    </Link>
   );
 }
