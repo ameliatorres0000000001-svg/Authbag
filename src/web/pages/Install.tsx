@@ -93,7 +93,7 @@ export default function Install() {
           )}
           <button type="button" onClick={continueWeb}
             className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[15px] font-semibold transition active:scale-[0.99]"
-            style={{ background: 'linear-gradient(135deg, #F2CA50, #D4AF37)', color: '#3C2F00', boxShadow: '0 10px 40px rgba(242,202,80,0.25)' }}>
+            style={{ background: 'rgb(var(--c-gold))', color: 'rgb(var(--c-on-gold))' }}>
             {t('install.go')} <span aria-hidden>→</span>
           </button>
         </section>
