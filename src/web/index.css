@@ -3,60 +3,67 @@
 @tailwind utilities;
 
 @layer base {
-  /* Minimal black (owner request, 2026-11-22): near-black neutrals, hairlines instead of shadows, one soft-white accent.
-     The token is still called "gold" (action / selected) so every screen follows without edits. */
+  /* Blush & Berry (owner choice, 2026-11-23): light is the default. The token is still called "gold" (= the accent: action /
+     selected), so every screen follows without edits. Berry is a plum-leaning magenta, kept away from the red that means
+     "counterfeit" and the green that means "verified". Dark = "Berry Night" (the theme when data-theme is not set). */
   :root {
-    --c-surface: 10 10 11;
-    --c-surface-card: 20 20 22;
-    --c-surface-canvas: 16 16 18;
-    --c-surface-low: 27 27 30;
-    --c-surface-high: 40 40 44;
-    --c-charcoal: 0 0 0;
-    --c-ink: 244 244 242;
-    --c-muted: 150 150 154;
-    --c-hairline: 38 38 42;
-    --c-strong: 66 66 72;
-    --c-gold: 236 234 228;
-    --c-gold-light: 36 36 38;
-    --c-verified: 62 155 99;
-    --c-verified-bg: 17 33 24;
-    --c-counterfeit: 214 86 86;
-    --c-counterfeit-bg: 52 22 22;
-    --c-review: 217 167 59;
-    --c-review-bg: 42 35 19;
-    --c-telemetry: 184 192 204;
-    --c-telemetry-bg: 27 30 36;
+    --c-surface: 23 13 18;
+    --c-surface-card: 35 19 25;
+    --c-surface-canvas: 29 16 22;
+    --c-surface-low: 44 26 34;
+    --c-surface-high: 61 37 48;
+    --c-charcoal: 10 5 8;
+    --c-ink: 251 239 242;
+    --c-muted: 191 160 171;
+    --c-hairline: 58 36 48;
+    --c-strong: 90 58 72;
+    --c-gold: 242 155 192;
+    --c-gold-light: 58 32 48;
+    --c-on-gold: 42 14 27;
+    --c-verified: 74 190 120;
+    --c-verified-bg: 16 38 27;
+    --c-counterfeit: 240 96 96;
+    --c-counterfeit-bg: 56 22 24;
+    --c-review: 232 180 70;
+    --c-review-bg: 48 38 18;
+    --c-telemetry: 190 200 215;
+    --c-telemetry-bg: 30 33 40;
     color-scheme: dark;
   }
-  /* light — paper white and ink; chosen in the account menu, or "auto" follows the phone (data-theme is set by index.html) */
+  /* light — blush paper, deep plum ink, berry accent; "auto" follows the phone (data-theme is set by index.html) */
   :root[data-theme='light'] {
-    --c-surface: 250 250 249;
+    --c-surface: 252 241 242;
     --c-surface-card: 255 255 255;
-    --c-surface-canvas: 245 245 244;
-    --c-surface-low: 243 243 242;
-    --c-surface-high: 232 232 230;
-    --c-charcoal: 17 17 17;
-    --c-ink: 17 17 17;
-    --c-muted: 102 102 106;
-    --c-hairline: 230 230 228;
-    --c-strong: 196 196 192;
-    --c-gold: 180 138 58;
-    --c-gold-light: 239 230 210;
-    --c-verified: 44 76 56;
-    --c-verified-bg: 235 242 237;
-    --c-counterfeit: 138 35 35;
-    --c-counterfeit-bg: 249 235 235;
-    --c-review: 140 106 26;
-    --c-review-bg: 253 248 232;
+    --c-surface-canvas: 249 233 235;
+    --c-surface-low: 246 225 229;
+    --c-surface-high: 239 208 215;
+    --c-charcoal: 58 24 34;
+    --c-ink: 58 24 34;
+    --c-muted: 124 90 102;
+    --c-hairline: 241 217 221;
+    --c-strong: 217 179 188;
+    --c-gold: 157 28 107;
+    --c-gold-light: 248 220 228;
+    --c-on-gold: 255 255 255;
+    --c-verified: 31 107 66;
+    --c-verified-bg: 232 245 237;
+    --c-counterfeit: 200 30 30;
+    --c-counterfeit-bg: 254 226 226;
+    --c-review: 146 100 10;
+    --c-review-bg: 254 244 214;
     --c-telemetry: 55 65 81;
-    --c-telemetry-bg: 238 240 242;
+    --c-telemetry-bg: 238 240 245;
     color-scheme: light;
   }
+  /* text on an accent fill: the old "bg-gold text-charcoal" pairs follow the theme (white on berry, plum on pink) */
+  .bg-gold.text-charcoal, .bg-gold.text-surface { color: rgb(var(--c-on-gold)); }
   /* flat background on every screen: no picture, no glow */
   body { background: rgb(var(--c-surface)); }
   ::selection { background: rgb(var(--c-gold) / 0.28); }
   html, body { margin: 0; background-color: rgb(var(--c-surface)); color: rgb(var(--c-ink)); font-family: Manrope, 'Noto Sans Khmer', system-ui, sans-serif; font-size: 14px; line-height: 1.6; }
-  h1, h2, h3 { font-family: Manrope, 'Noto Sans Khmer', system-ui, sans-serif; font-weight: 600; letter-spacing: -0.01em; }
+  h1, h2, h3 { font-family: Manrope, 'Noto Sans Khmer', system-ui, sans-serif; font-weight: 600; }
+  /* Khmer stacks vowels and subscripts above and below the line: give it room (utilities like leading-tight still win) */
+  :lang(km) body { line-height: 1.7; }
   select, input, textarea { font: inherit; }
   /* Wide letter-spacing tears Khmer clusters apart; keep the tracked mono look for Latin text only. */
   :lang(km) .label, :lang(km) .tracking-widest, :lang(km) .tracking-wider { letter-spacing: 0; }

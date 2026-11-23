@@ -9,7 +9,9 @@ import type { PaintRecipe } from './pages/Paint.tsx';
  * never a made-up percentage, and no stock status. A custom colour gets a recipe only when one is close (ΔE ≤ 6).
  */
 const FLEX_PERCENT = 20; // flex softener share of the mix (owner's strap guideline)
-const OBSIDIAN = '#0B0B0E', CARD = '#15151A', GOLD = '#D4AF37';
+// theme tokens (not fixed colours) so the panel follows light / dark
+const OBSIDIAN = 'rgb(var(--c-surface))', CARD = 'rgb(var(--c-surface-card))', GOLD = 'rgb(var(--c-gold))', LINE = 'rgb(var(--c-hairline))', ON_GOLD = 'rgb(var(--c-on-gold))';
+const tint = (pct: number) => `color-mix(in srgb, ${GOLD} ${pct}%, transparent)`;
 const STEPS: [string, string][] = [['🧽', 'strap.s1'], ['🖌️', 'strap.s2'], ['⏱️', 'strap.s3'], ['🛡️', 'strap.s4']];
 
 const hexLab = (hex: string): Lab => {
@@ -45,18 +47,18 @@ export default function StrapPanel({ recipes }: { recipes: PaintRecipe[] | null 
 
   const total = picked ? picked.parts.reduce((s, p) => s + p.parts, 0) || 1 : 1;
   return (
-    <section className="space-y-3 rounded-3xl border p-4" style={{ background: CARD, borderColor: `${GOLD}66` }}>
+    <section className="space-y-3 rounded-3xl border p-4" style={{ background: CARD, borderColor: tint(40) }}>
       <h2 className="text-base font-semibold leading-snug" style={{ color: GOLD }}>🎨 {t('strap.recTitle')}</h2>
       {recipes && list.length === 0 && <p className="text-sm text-muted">{t('noData')}</p>}
       <div className="-mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {list.map((r) => (
           <button key={r.id} type="button" onClick={() => { setPicked(r); setCustom(null); }} aria-pressed={picked?.id === r.id}
-            className="w-32 shrink-0 snap-start rounded-2xl border p-2.5 text-left" style={{ background: OBSIDIAN, borderColor: picked?.id === r.id ? GOLD : '#2a2a31' }}>
+            className="w-32 shrink-0 snap-start rounded-2xl border p-2.5 text-left" style={{ background: OBSIDIAN, borderColor: picked?.id === r.id ? GOLD : LINE }}>
             <span className="block h-10 w-10 rounded-full border border-white/20" style={{ background: r.hex }} />
             <span className="mt-2 block text-[13px] font-semibold leading-snug">{name(r)}</span>
             <span className="mt-1.5 flex flex-wrap gap-1 text-[10px]">
-              {!!r.fast_soak && <span className="rounded-full px-1.5 py-0.5" style={{ background: `${GOLD}22`, color: GOLD }}>⚡ {t('strap.fast')}</span>}
-              <span className="rounded-full px-1.5 py-0.5" style={{ background: '#3e9b6322', color: '#6fd39a' }}>🛡️ {t('strap.safe')}</span>
+              {!!r.fast_soak && <span className="rounded-full px-1.5 py-0.5" style={{ background: tint(13), color: GOLD }}>⚡ {t('strap.fast')}</span>}
+              <span className="rounded-full px-1.5 py-0.5" style={{ background: 'rgb(var(--c-verified-bg))', color: 'rgb(var(--c-verified))' }}>🛡️ {t('strap.safe')}</span>
             </span>
           </button>
         ))}
@@ -65,11 +67,11 @@ export default function StrapPanel({ recipes }: { recipes: PaintRecipe[] | null 
           {t('strap.custom')}
         </label>
       </div>
-      {custom?.none && <p className="rounded-xl px-3 py-2 text-sm" style={{ background: '#2e2614', color: '#e8c668' }}>{t('strap.noRecipe')}</p>}
+      {custom?.none && <p className="rounded-xl px-3 py-2 text-sm" style={{ background: 'rgb(var(--c-review-bg))', color: 'rgb(var(--c-review))' }}>{t('strap.noRecipe')}</p>}
       {custom && !custom.none && picked && <p className="text-xs text-muted">{t('strap.closeNote')}</p>}
 
       {picked && (
-        <article className="space-y-4 rounded-2xl border p-4" style={{ background: OBSIDIAN, borderColor: `${GOLD}55` }}>
+        <article className="space-y-4 rounded-2xl border p-4" style={{ background: OBSIDIAN, borderColor: tint(33) }}>
           <div className="flex items-center gap-3">
             <span className="h-12 w-12 shrink-0 rounded-full border border-white/20" style={{ background: picked.hex }} />
             <h3 className="min-w-0 flex-1 text-lg leading-snug">{name(picked)}</h3>
@@ -84,7 +86,7 @@ export default function StrapPanel({ recipes }: { recipes: PaintRecipe[] | null 
             <div className="mb-1.5 text-xs font-semibold" style={{ color: GOLD }}>{t('strap.mixTitle')}</div>
             <div className="mb-2 flex h-3.5 overflow-hidden rounded-full border border-white/10">
               {picked.parts.map((p) => <span key={p.id} style={{ width: `${(p.parts / total) * (100 - FLEX_PERCENT)}%`, background: p.color_hex ?? '#ccc' }} title={`${p.brand} ${p.name}`} />)}
-              <span style={{ width: `${FLEX_PERCENT}%`, background: `repeating-linear-gradient(45deg, ${GOLD}, ${GOLD} 4px, #8a6f1c 4px, #8a6f1c 8px)` }} title={t('strap.flex')} />
+              <span style={{ width: `${FLEX_PERCENT}%`, background: `repeating-linear-gradient(45deg, ${GOLD}, ${GOLD} 4px, ${tint(55)} 4px, ${tint(55)} 8px)` }} title={t('strap.flex')} />
             </div>
             <ul className="space-y-1.5 text-sm">
               {picked.parts.map((p) => (
@@ -107,8 +109,8 @@ export default function StrapPanel({ recipes }: { recipes: PaintRecipe[] | null 
             <div className="mb-1.5 text-xs font-semibold" style={{ color: GOLD }}>{t('strap.stepsTitle')}</div>
             <ol className="space-y-2">
               {STEPS.map(([icon, k], i) => (
-                <li key={k} className="flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm leading-snug" style={{ background: CARD, borderColor: '#2a2a31' }}>
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold" style={{ background: GOLD, color: OBSIDIAN }}>{i + 1}</span>
+                <li key={k} className="flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm leading-snug" style={{ background: CARD, borderColor: LINE }}>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold" style={{ background: GOLD, color: ON_GOLD }}>{i + 1}</span>
                   <span className="min-w-0 flex-1">{icon} {t(k)}</span>
                 </li>
               ))}

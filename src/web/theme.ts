@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 
-/** Auto-Skin: "dark" (workshop black & gold, default), "light" (ivory & gold) or "auto" (follows the phone). */
+/** Auto-Skin: "dark" (Berry Night), "light" (blush & berry, default) or "auto" (follows the phone). */
 export type ThemeMode = 'auto' | 'dark' | 'light';
 const KEY = 'hz_theme';
 
 export const readTheme = (): ThemeMode => {
-  try { const v = localStorage.getItem(KEY); return v === 'auto' || v === 'light' || v === 'dark' ? v : 'dark'; } catch { return 'dark'; }
+  try { const v = localStorage.getItem(KEY); return v === 'auto' || v === 'light' || v === 'dark' ? v : 'light'; } catch { return 'light'; }
 };
 
 export function applyTheme(mode: ThemeMode) {
   const light = mode === 'light' || (mode === 'auto' && window.matchMedia?.('(prefers-color-scheme: light)').matches);
   const root = document.documentElement;
   if (light) root.setAttribute('data-theme', 'light'); else root.removeAttribute('data-theme');
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', light ? '#FAF9F6' : '#0E0E10');
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', light ? '#FCF1F2' : '#170D12');
 }
 
 /** The chosen mode, a setter that saves it, and live switching while "auto" when the phone changes day / night. */
