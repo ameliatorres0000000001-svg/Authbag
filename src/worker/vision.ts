@@ -1414,3 +1414,16 @@ export async function transcribeInbound(env: Env, audio: { data: ArrayBuffer; mi
   if (!original || !km) throw new Error('audio_unclear');
   return { lang: toChatLang(o?.lang), original, km };
 }
+
+/** The staff member's own voice (Khmer) → Khmer text for the reply box. Their voice is only transcribed; it is never kept or sent. Gemini only. */
+export async function transcribeStaffKhmer(env: Env, audio: { data: ArrayBuffer; mime: string }): Promise<string> {
+  if (!cleanKey(env.GEMINI_API_KEY)) throw new Error('audio_needs_gemini');
+  const out = await geminiCall(env, env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini, {
+    system: 'You are a speech-to-text tool for a shop owner speaking Khmer (ភាសាខ្មែរ). Transcribe exactly what is said, in Khmer script, with natural punctuation. ' +
+      'Do not translate, answer, summarise or add anything. If there is no speech or it is unintelligible, return an empty string. Reply with JSON only: {"text":"…"}.',
+    turns: [{ role: 'user', content: 'Transcribe this Khmer voice recording.' }], images: [], audio, maxTokens: 1500, effort: 'low', json: true,
+  });
+  const t = jsonObj(out)?.text;
+  if (typeof t !== 'string' || !t.trim()) throw new Error('audio_unclear');
+  return t.trim().slice(0, 2000);
+}
