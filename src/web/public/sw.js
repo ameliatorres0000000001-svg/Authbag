@@ -1,6 +1,6 @@
 // Anajak Secondhand service worker: makes the app installable and keeps the shell available offline.
 // API calls and photos are never cached here, so every reading always comes from the server.
-const SHELL = 'hengz-shell-v3';
+const SHELL = 'hengz-shell-v4';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])).then(() => self.skipWaiting()));
@@ -21,7 +21,15 @@ self.addEventListener('fetch', (e) => {
   }
   if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/')) {
     // hashed build files never change: cache after the first load
-    e.respondWith(caches.open(SHELL).then(async (c) => (await c.match(req)) ?? fetch(req).then((r) => { if (r.ok) c.put(req, r.clone()); return r; })));
+    // never keep an HTML answer (the SPA fallback for a missing file) as a stylesheet/script: that left the app unstyled
+    const good = (r) => r.ok && !(r.headers.get('content-type') || '').includes('text/html');
+    e.respondWith(caches.open(SHELL).then(async (c) => {
+      const hit = await c.match(req);
+      if (hit && good(hit)) return hit;
+      const r = await fetch(req);
+      if (good(r)) c.put(req, r.clone()); else if (hit) c.delete(req);
+      return r;
+    }));
   }
 });
 
