@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, reviewModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, translateInbound, translateOutbound, transcribeInbound, toChatLang, CHAT_LANGS, type ChatLang, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
+import { assessVerification, reviewModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, translateInbound, transcribeStaffKhmer, translateOutbound, transcribeInbound, toChatLang, CHAT_LANGS, type ChatLang, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
 import { checkMeasurement, checkQuick, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab, quickLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2243,6 +2243,17 @@ app.put('/api/line/contacts/:id/lang', need(ADMINS), async (c) => {
   const r = await c.env.DB.prepare("UPDATE line_contacts SET lang = ? WHERE line_user_id = ? AND role = 'customer'").bind(lang, c.req.param('id')).run();
   if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
   return c.json({ ok: true });
+});
+
+/** The staff member speaks Khmer into the mic: the recording is transcribed into the reply box (their own voice, never a synthetic one). Not stored. */
+app.post('/api/line/transcribe', need(ADMINS), async (c) => {
+  const f = (await c.req.formData()).get('audio');
+  if (!(f instanceof File) || !f.size) return c.json({ error: 'audio_required' }, 400);
+  if (f.size > 4 * 1024 * 1024) return c.json({ error: 'audio_too_big' }, 413);
+  const mime = (f.type || 'audio/webm').split(';')[0];
+  if (!mime.startsWith('audio/')) return c.json({ error: 'audio_required' }, 400);
+  try { return c.json({ text: await asFeature('line', async () => transcribeStaffKhmer(c.env, { data: await f.arrayBuffer(), mime })) }); }
+  catch (e) { const m = (e as Error).message; return c.json({ error: m }, m === 'audio_needs_gemini' ? 501 : m === 'audio_unclear' ? 422 : 502); }
 });
 
 /** Step 1 of a reply: Khmer → the customer's language. Nothing is sent yet; staff read the result first. */

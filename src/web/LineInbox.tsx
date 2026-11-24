@@ -27,6 +27,8 @@ function Chat({ id, onBack, onChanged }: { id: string; onBack: () => void; onCha
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const end = useRef<HTMLDivElement>(null);
+  const [rec, setRec] = useState<MediaRecorder | null>(null);
+  const [micErr, setMicErr] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -41,6 +43,35 @@ function Chat({ id, onBack, onChanged }: { id: string; onBack: () => void; onCha
     setErr('');
     try { await api.put(`/api/line/contacts/${encodeURIComponent(id)}/lang`, { lang }); setContact((c) => (c ? { ...c, lang } : c)); onChanged(); } catch (e) { setErr(errText(e)); }
   };
+  // The staff member's own voice (Khmer) is turned into text in the reply box; it is not stored and never sent as audio.
+  const toggleMic = async () => {
+    setMicErr('');
+    if (rec) { rec.stop(); return; }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { setMicErr(t('li.micNo')); return; }
+    let stream: MediaStream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { setMicErr(t('li.micDenied')); return; }
+    const chunks: Blob[] = [];
+    const r = new MediaRecorder(stream);
+    r.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    r.onstop = async () => {
+      stream.getTracks().forEach((x) => x.stop());
+      setRec(null);
+      const blob = new Blob(chunks, { type: r.mimeType || 'audio/webm' });
+      if (blob.size < 1500) { setMicErr(t('li.micShort')); return; }
+      setBusy(true);
+      try {
+        const fd = new FormData(); fd.append('audio', blob, 'voice');
+        const { text: said } = await api.post<{ text: string }>('/api/line/transcribe', fd);
+        setText((cur) => (cur.trim() ? `${cur.trim()} ${said}` : said).slice(0, 2000));
+      } catch (e) {
+        const code = (e as { body?: { error?: string } }).body?.error;
+        setMicErr(code === 'audio_needs_gemini' ? t('li.micNeedsGemini') : code === 'audio_unclear' ? t('li.micUnclear') : errText(e));
+      } finally { setBusy(false); }
+    };
+    r.start(); setRec(r);
+    setTimeout(() => { if (r.state === 'recording') r.stop(); }, 60000); // one minute at most
+  };
+  useEffect(() => () => { rec?.state === 'recording' && rec.stop(); }, [rec]);
   const translate = async () => {
     setBusy(true); setErr('');
     try { setOut((await api.post<{ text_out: string }>(`/api/line/contacts/${encodeURIComponent(id)}/translate`, { text_km: text })).text_out); }
@@ -91,7 +122,14 @@ function Chat({ id, onBack, onChanged }: { id: string; onBack: () => void; onCha
         <textarea className="input min-h-[72px]" value={text} maxLength={2000} placeholder={t('li.placeholder')} disabled={busy || out !== null}
           onChange={(e) => setText(e.target.value)} />
         {out === null ? (
-          <button type="button" className="btn-primary w-full" disabled={busy || !text.trim()} onClick={translate}>{busy ? '…' : `🌐 ${t('li.translate')}`}</button>
+          <>
+          <div className="flex gap-2">
+            <button type="button" className={`btn-ghost shrink-0 ${rec ? '!border-counterfeit !text-counterfeit' : ''}`} disabled={busy && !rec} onClick={toggleMic}
+              aria-label={rec ? t('li.micStop') : t('li.mic')}>{rec ? `⏹ ${t('li.micStop')}` : `🎤 ${t('li.mic')}`}</button>
+            <button type="button" className="btn-primary min-w-0 flex-1" disabled={busy || !!rec || !text.trim()} onClick={translate}>{busy ? '…' : `🌐 ${t('li.translate')}`}</button>
+          </div>
+          {micErr && <p className="text-xs text-counterfeit">{micErr}</p>}
+          </>
         ) : (
           <div className="space-y-2 rounded-2xl border border-gold/50 p-3">
             <div className="label">{t('li.preview')}</div>
