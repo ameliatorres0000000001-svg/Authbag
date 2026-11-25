@@ -106,3 +106,19 @@
 }
 :root:not([data-theme='light']) .home-glass a.bg-surface-card:hover,
 :root:not([data-theme='light']) .home-glass a.bg-surface-card:active { border-color: rgb(var(--c-strong)); }
+
+/*
+ * iPhone (Safari and the installed app).
+ * - Safari zooms the page when a field under 16px gets focus: touch screens get 16px fields (the zoom never comes back by itself).
+ * - 100vh is taller than the visible screen while Safari's bars show: use the dynamic viewport height.
+ * - No grey flash on tap, no 300 ms double-tap zoom on buttons, no text inflation when the phone is turned.
+ * - In landscape the notch and the home bar must not cover the content.
+ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+a, button, summary, [role='button'], label, select { touch-action: manipulation; }
+body { overscroll-behavior-y: none; }
+#root { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+@supports (height: 100dvh) { .min-h-screen { min-height: 100dvh; } }
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea, .input, :lang(km) .input { font-size: 16px; }
+}
