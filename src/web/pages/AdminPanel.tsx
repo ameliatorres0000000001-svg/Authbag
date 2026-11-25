@@ -58,7 +58,7 @@ export default function AdminPanel() {
   return (
     <Page title={t('acct.admin')} subtitle={tab === 'library' ? t('admin.subtitle') : undefined} actions={<Link to="/" className="btn-ghost">{t('admin.close')}</Link>}>
       {/* one job per tab, so each screen stays short */}
-      <nav className="sticky top-14 z-10 -mx-4 mb-4 flex gap-1.5 overflow-x-auto bg-surface/95 px-4 py-2 backdrop-blur md:top-0 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={t('admin.title')}>
+      <nav className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-10 -mx-4 mb-4 flex gap-1.5 overflow-x-auto bg-surface/95 px-4 py-2 backdrop-blur md:top-0 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={t('admin.title')}>
         {tabs.map(([k, icon]) => (
           <button key={k} type="button" onClick={() => setSp({ tab: k }, { replace: true })} aria-current={tab === k}
             className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm ${tab === k ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>

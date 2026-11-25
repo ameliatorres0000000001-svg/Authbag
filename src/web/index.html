@@ -6,12 +6,14 @@
   <title>Anajak Bag</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#FCF1F2" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <script>
     /* Auto-Skin: apply the saved theme before the first paint (dark by default; "auto" follows the phone). */
     (function () { try {
       var m = localStorage.getItem('hz_theme') || 'light';
       var light = m === 'light' || (m === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches);
       if (light) document.documentElement.setAttribute('data-theme', 'light');
+      if (!light) document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]').setAttribute('content', 'black-translucent');
       document.querySelector('meta[name=theme-color]').setAttribute('content', light ? '#FCF1F2' : '#170D12');
     } catch (e) {} })();
   </script>
@@ -19,7 +21,6 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Anajak Bag" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
