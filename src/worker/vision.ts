@@ -997,21 +997,23 @@ export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY';
   const client = anthropicClient(env, 'anthropic');
   const system =
     `You research the SECOND-HAND (preloved) designer handbag market in ${c.name} for resellers at a Cambodian border market. ` +
-    `Find which brands and models are selling fast or are most wanted there around ${x.period}: look at ${c.places}, resale price guides and recent articles. ` +
+    `Find which models are selling fast or are most wanted there around ${x.period}: look at ${c.places}, resale price guides and recent articles. ` +
+    'Cover these brands one by one, searching each separately: Louis Vuitton, Gucci, Balenciaga, Prada (up to 6 models each), then OTHER brands that sell well there (Chanel, Hermès, Dior, Saint Laurent, Celine, Coach, Fendi, Burberry, Goyard, Bottega Veneta, Miu Miu …: up to 8 models in total). ' +
+    'Name each model exactly as the brand and the market call it (e.g. "Neverfull MM", "GG Marmont small", "City", "Re-Edition 2005"), never a whole category like "tote bags". ' +
     'Prefer evidence such as many sold listings, "sold out", high resale value, waiting lists, trending searches, or articles naming the model. ' +
-    'Report ONLY what the sources support. Never invent rankings or statistics. Prices are never shown in the app (owner zero-price policy): always use null for price_min / price_max. Use sources from the last 12 months where possible. ' +
+    'Report ONLY what the sources support: a brand with no real evidence gets no rows. Never invent rankings or statistics. Prices are never shown in the app (owner zero-price policy): always use null for price_min / price_max. Use sources from the last 12 months where possible. ' +
     'Never comment on whether any item is authentic or counterfeit. ' +
     `For each model write "reason": ONE short sentence in ${LANG_NAME[x.lang]} on why it sells (demand, rarity, style trend, resale value), based on the sources. ` +
-    `Finish with JSON only: {"rows":[{"brand":"...","model":"...","reason":"...","price_min":number|null,"price_max":number|null,"currency":"${c.currency}"|null,"sources":["url", ...]}]} — up to 10 rows, most in-demand first.`;
+    `Finish with JSON only: {"rows":[{"brand":"...","model":"...","reason":"...","price_min":number|null,"price_max":number|null,"currency":"${c.currency}"|null,"sources":["url", ...]}]} — up to 30 rows in total, the most in-demand first across all brands.`;
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: `Country: ${c.name}\nMonth: ${x.period}` }];
   const found = new Map<string, string>();
   let final: Anthropic.Beta.BetaMessage | null = null;
   try {
-    for (let turn = 0; turn < 5 && !final; turn++) {
+    for (let turn = 0; turn < 7 && !final; turn++) {
       const r = await client.beta.messages.create({
         model, max_tokens: 16000, output_config: { effort: 'medium' }, system, messages,
         betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
-        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 8 }],
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 16 }],
       });
       await recordUsage(env, r.model, r.usage);
       for (const b of r.content) {
@@ -1041,7 +1043,7 @@ export async function researchMarket(env: Env, x: { country: 'TH' | 'ID' | 'MY';
     if (pmin !== null && pmax !== null && pmax < pmin) [pmin, pmax] = [pmax, pmin];
     const currency = pmin !== null || pmax !== null ? (['THB', 'IDR', 'MYR', 'USD'].includes(r?.currency) ? r.currency : c.currency) : null;
     rows.push({ brand, model: name, reason: str(r?.reason, 300), price_min: pmin, price_max: pmax, currency, sources });
-    if (rows.length >= 10) break;
+    if (rows.length >= 30) break;
   }
   const used = [...new Set(rows.flatMap((r) => r.sources))];
   const proposed = Array.isArray(o.rows) ? o.rows.length : 0;

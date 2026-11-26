@@ -52,14 +52,22 @@ export function Movement({ m, dark }: { m: TrendRow['movement']; dark?: boolean 
  * One country's ranking as a compact "trending" table. `dark` = the black install screen.
  * Empty list → "no data" (nothing is ever made up).
  */
+/** The brands owners ask about by name; everything else is "other". */
+const BRAND_FILTERS = [['lv', 'Louis Vuitton', /louis\s*vuitton|\blv\b/i], ['gucci', 'Gucci', /gucci/i], ['balenciaga', 'Balenciaga', /balenciaga/i], ['prada', 'Prada', /prada/i]] as const;
+const brandGroup = (brand: string): string => BRAND_FILTERS.find(([, , re]) => re.test(brand))?.[0] ?? 'other';
+
 export function TrendTable({ country, period, rows, dark, showSource = true, compact }: {
   country: Country; period: string | null; rows: TrendRow[]; dark?: boolean; showSource?: boolean; compact?: boolean;
 }) {
   const { t, locale } = useI18n();
+  const [group, setGroup] = React.useState('all');
   const box = dark ? 'border-white/10 bg-white/[0.05] backdrop-blur' : 'border-hairline bg-surface-card';
   const sub = dark ? 'text-[#a9a2b6]' : 'text-muted';
   const line = dark ? 'border-white/10' : 'border-hairline';
   const sources = [...new Set(rows.map((r) => r.source))];
+  const filterable = !dark && !compact && rows.length > 8;
+  const shown = filterable && group !== 'all' ? rows.filter((r) => brandGroup(r.brand) === group) : rows;
+  const chips: [string, string][] = [['all', t('market.brandAll')], ...BRAND_FILTERS.map(([k, n]) => [k, n] as [string, string]), ['other', t('market.brandOther')]];
   return (
     <div className={`overflow-hidden rounded-2xl border ${box}`}>
       <div className={`flex items-center justify-between gap-2 border-b px-4 py-3 ${line}`}>
@@ -69,11 +77,19 @@ export function TrendTable({ country, period, rows, dark, showSource = true, com
         </div>
         <span className={`text-[11px] ${sub}`}>{period ? monthLabel(period, locale) : ''}</span>
       </div>
-      {rows.length === 0 ? (
+      {filterable && (
+        <div className={`flex gap-1.5 overflow-x-auto border-b px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${line}`} role="tablist">
+          {chips.map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={group === k} onClick={() => setGroup(k)}
+              className={`shrink-0 rounded-full border px-3 py-1 text-xs ${group === k ? 'border-gold bg-gold text-charcoal' : 'border-hairline bg-surface-card'}`}>{label}</button>
+          ))}
+        </div>
+      )}
+      {shown.length === 0 ? (
         <p className={`px-4 py-6 text-center text-sm ${sub}`}>{t('noData')}</p>
       ) : (
         <ol>
-          {rows.map((r) => (
+          {shown.map((r) => (
             <li key={r.id} className={`flex items-center gap-3 border-b px-4 ${compact ? 'py-2' : 'py-2.5'} last:border-b-0 ${line}`}>
               <span className={`w-6 shrink-0 text-center font-serif text-lg leading-none ${r.rank <= 3 ? (dark ? 'text-[#f2ca50]' : 'text-gold') : sub}`}>{r.rank}</span>
               <div className="min-w-0 flex-1">

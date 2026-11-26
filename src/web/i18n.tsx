@@ -836,6 +836,8 @@ const D: Record<string, { km: string; en: string }> = {
   'li.micShort': { km: 'សំឡេងខ្លីពេក សូមនិយាយម្ដងទៀត។', en: 'Recording too short — please speak again.' },
   'li.micUnclear': { km: 'ស្ដាប់មិនបាន សូមនិយាយម្ដងទៀតឲ្យច្បាស់។', en: 'Could not understand — please speak again, clearly.' },
   'li.micNeedsGemini': { km: 'ការស្ដាប់សំឡេងត្រូវការ Gemini API key (បើកគិតលុយ)។', en: 'Voice input needs a Gemini API key (with billing).' },
+  'market.brandAll': { km: 'ទាំងអស់', en: 'All' },
+  'market.brandOther': { km: 'ម៉ាកផ្សេងៗ', en: 'Other brands' },
   'li.translate': { km: 'បកប្រែ', en: 'Translate' },
   'li.preview': { km: 'អត្ថបទដែលនឹងផ្ញើ (អាចកែបាន)', en: 'Text that will be sent (you can edit)' },
   'li.send': { km: 'ផ្ញើ', en: 'Send' },
