@@ -26,6 +26,7 @@ export interface Env {
   AI_MODEL?: string;
   /** Model for the photo check (default: the provider's normal model, cheaper than the drawing-points model) */
   AI_REVIEW_MODEL?: string;
+  CHAT_MODEL?: string;
   /** Thinking effort for the photo check: low | medium (default) | high */
   AI_REVIEW_EFFORT?: string;
   /** Gemini model used for text translation when GEMINI_API_KEY is set (default gemini-3.8-flash) */
