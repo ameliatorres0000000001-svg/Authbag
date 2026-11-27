@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, reviewModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, translateInbound, transcribeStaffKhmer, translateOutbound, transcribeInbound, toChatLang, CHAT_LANGS, type ChatLang, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
+import { assessVerification, reviewModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, translateInbound, transcribeStaffKhmer, translateText, TR_LANGS, type TrLang, translateOutbound, transcribeInbound, toChatLang, CHAT_LANGS, type ChatLang, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
 import { checkMeasurement, checkQuick, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab, quickLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2243,6 +2243,14 @@ app.put('/api/line/contacts/:id/lang', need(ADMINS), async (c) => {
   const r = await c.env.DB.prepare("UPDATE line_contacts SET lang = ? WHERE line_user_id = ? AND role = 'customer'").bind(lang, c.req.param('id')).run();
   if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
   return c.json({ ok: true });
+});
+
+/** The translator page: Khmer, Thai, Malay, Indonesian in any direction (source detected if not given). Nothing is stored. */
+app.post('/api/translate', need(STAFF), async (c) => {
+  const lang = z.enum(TR_LANGS as [TrLang, ...TrLang[]]);
+  const b = await parse(c, z.object({ text: z.string().trim().min(1).max(3000), to: lang, from: lang.nullable().optional(), check: z.boolean().optional() }));
+  try { return c.json(await asFeature('translate', () => translateText(c.env, { text: b.text, to: b.to, from: b.from ?? null, check: !!b.check }))); }
+  catch (e) { const m = String((e as Error).message); console.error('translate failed:', m); return c.json({ error: m.startsWith('ai_') ? m : 'ai_failed' }, 502); }
 });
 
 /** The staff member speaks Khmer into the mic: the recording is transcribed into the reply box (their own voice, never a synthetic one). Not stored. */

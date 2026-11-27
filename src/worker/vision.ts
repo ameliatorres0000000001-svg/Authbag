@@ -1431,3 +1431,41 @@ export async function transcribeStaffKhmer(env: Env, audio: { data: ArrayBuffer;
   if (typeof t !== 'string' || !t.trim()) throw new Error('audio_unclear');
   return t.trim().slice(0, 2000);
 }
+
+export type TrLang = 'km' | 'th' | 'ms' | 'id';
+export const TR_LANGS: TrLang[] = ['km', 'th', 'ms', 'id'];
+const TR_NAME: Record<TrLang, string> = { km: 'Khmer (ភាសាខ្មែរ)', th: 'Thai (ภาษาไทย)', ms: 'Malay — Bahasa Melayu as used in Malaysia (not Indonesian)', id: 'Indonesian — Bahasa Indonesia as used in Indonesia (not Malay)' };
+const TR_STYLE: Record<TrLang, string> = {
+  km: 'Use natural modern Khmer (not word-for-word), polite register (ជម្រាបសួរ/សូម/បាទ/ចាស as fitting). Write numbers and Latin brand names as in the source.',
+  th: 'Use natural Thai with polite particles (ครับ/ค่ะ) only when the source is a polite address to someone; keep it neutral otherwise. No Khmer or Lao words.',
+  ms: 'Use standard Malaysian Malay vocabulary (e.g. "beg", "harga", "terima kasih"), never Indonesian-only words.',
+  id: 'Use standard Indonesian vocabulary (e.g. "tas", "harga", "terima kasih"), never Malaysian-only words.',
+};
+/**
+ * Accurate text translation between Khmer, Thai, Malay and Indonesian. The source language is detected when not given.
+ * Uses the provider's normal (main) model, not the cheap chat model: accuracy first. With `check`, the result is also
+ * translated back into the source language so the person can see whether the meaning survived.
+ */
+export async function translateText(env: Env, x: { text: string; to: TrLang; from?: TrLang | null; check?: boolean }): Promise<{ from: TrLang | 'other'; text: string; back: string | null }> {
+  const src = x.from ? TR_NAME[x.from] : 'Khmer, Thai, Malay or Indonesian (detect which)';
+  const out = await callVision(env,
+    'You are a professional human translator for Khmer, Thai, Malay and Indonesian, used by a second-hand designer-bag business. ' + TRANSLATE_RULES +
+    `Source language: ${src}. Target language: ${TR_NAME[x.to]}. ${TR_STYLE[x.to]} ` +
+    'Keep the meaning exact: do not add, drop or soften anything; keep line breaks, lists and tone. Do not explain. If the text is already in the target language, return it unchanged. ' +
+    'Reply with JSON only: {"from":"km|th|ms|id|other","text":"…"}.',
+    [], x.text.slice(0, 4000), 2000, 'low');
+  const o = jsonObj(out);
+  const text = typeof o?.text === 'string' ? o.text.trim().slice(0, 6000) : '';
+  if (!text) throw new Error('ai_empty');
+  const from = (TR_LANGS as string[]).includes(o?.from) ? (o.from as TrLang) : x.from ?? 'other';
+  let back: string | null = null;
+  if (x.check && from !== 'other' && from !== x.to) {
+    try {
+      const b = jsonObj(await callVision(env,
+        'You are a professional translator. ' + TRANSLATE_RULES + `Translate this ${TR_NAME[x.to]} text into ${TR_NAME[from]}, as literally as natural language allows, so a reader can check the meaning. Reply with JSON only: {"text":"…"}.`,
+        [], text.slice(0, 4000), 2000, 'low'));
+      back = typeof b?.text === 'string' ? b.text.trim().slice(0, 6000) : null;
+    } catch { back = null; }
+  }
+  return { from, text, back };
+}

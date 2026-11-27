@@ -7,6 +7,7 @@ import { FolderCard, LooseFolderCard, type Folder } from '../FeedFolders.tsx';
 import Timeline from '../Timeline.tsx';
 import { LeadsHome } from '../Leads.tsx';
 import { ChatHome } from '../LineInbox.tsx';
+import { TranslateHome } from './Translate.tsx';
 import TrendShowcase from '../TrendShowcase.tsx';
 import Galaxy from '../Galaxy.tsx';
 import { SCENES, SCENE_PIC, useHomeScene, useHomeLayout } from '../homeTheme.ts';
@@ -167,6 +168,7 @@ export default function Dashboard() {
         {/* staff: customers found on TikTok */}
         <LeadsHome />
         <ChatHome />
+        <TranslateHome />
 
         {/* only what has no tab at the bottom */}
         {!bento && <section aria-labelledby="tools-h" className="space-y-2">
