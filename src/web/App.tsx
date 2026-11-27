@@ -34,6 +34,7 @@ import EntrupyGuide from './pages/EntrupyGuide.tsx';
 import Verify from './pages/Verify.tsx';
 import VerifyRequest from './pages/VerifyRequest.tsx';
 import Trends from './pages/Trends.tsx';
+import Translate from './pages/Translate.tsx';
 import Restore from './pages/Restore.tsx';
 import RestoreLesson from './pages/RestoreLesson.tsx';
 import Paint from './pages/Paint.tsx';
@@ -167,6 +168,7 @@ export default function App() {
             <Route path="/inspections/:id/compare/:captureId" element={<Comparator />} />
             <Route path="/studio/:modelId" element={<ModelStudio />} />
             <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/translate" element={<Translate />} />
             <Route path="/learn" element={<Learn />} />
             <Route path="/datecode" element={<DateCodes />} />
             <Route path="/check" element={<Check />} />
