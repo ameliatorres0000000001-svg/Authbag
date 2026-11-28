@@ -4,6 +4,7 @@ import { MeContext } from './App.tsx';
 import { ADMIN_ROLES } from './studio.ts';
 import Icon from './Icon.tsx';
 import { api } from './api.ts';
+import MicButton from './MicButton.tsx';
 import { useI18n } from './i18n.tsx';
 import { Empty, Notice, errText } from './ui.tsx';
 
@@ -124,8 +125,7 @@ function Chat({ id, onBack, onChanged }: { id: string; onBack: () => void; onCha
         {out === null ? (
           <>
           <div className="flex gap-2">
-            <button type="button" className={`btn-ghost shrink-0 ${rec ? '!border-counterfeit !text-counterfeit' : ''}`} disabled={busy && !rec} onClick={toggleMic}
-              aria-label={rec ? t('li.micStop') : t('li.mic')}>{rec ? `⏹ ${t('li.micStop')}` : `🎤 ${t('li.mic')}`}</button>
+            <MicButton listening={!!rec} disabled={busy && !rec} onClick={toggleMic} label={rec ? t('li.micStop') : t('li.mic')} size={44} />
             <button type="button" className="btn-primary min-w-0 flex-1" disabled={busy || !!rec || !text.trim()} onClick={translate}>{busy ? '…' : `🌐 ${t('li.translate')}`}</button>
           </div>
           {micErr && <p className="text-xs text-counterfeit">{micErr}</p>}
