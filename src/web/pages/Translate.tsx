@@ -4,6 +4,7 @@ import { api } from '../api.ts';
 import { useI18n } from '../i18n.tsx';
 import { Page, errText } from '../ui.tsx';
 import { MeContext } from '../App.tsx';
+import MicButton from '../MicButton.tsx';
 
 type L = 'km' | 'th' | 'ms' | 'id';
 const LANGS: { k: L; name: string; sr: string }[] = [
@@ -131,8 +132,7 @@ export default function TranslatePage() {
             {text && <button type="button" onClick={clear} className="shrink-0 rounded-full p-2 text-muted" aria-label={t('tr.clear')}>✕</button>}
           </div>
           <div className="mt-2 flex items-center justify-between gap-2">
-            <button type="button" onClick={mic} disabled={busy && !listening} aria-pressed={listening} aria-label={listening ? t('tr.micStop') : t('tr.mic')}
-              className={`flex h-14 w-14 items-center justify-center rounded-full border text-2xl ${listening ? 'animate-pulse border-counterfeit bg-counterfeit/15' : 'border-hairline bg-surface-low'}`}>{listening ? '⏹' : '🎤'}</button>
+            <MicButton listening={listening} disabled={busy && !listening} onClick={mic} label={listening ? t('tr.micStop') : t('tr.mic')} size={60} />
             <span className="min-w-0 flex-1 truncate text-center text-xs text-muted">{listening ? t('tr.listening') : `${text.length}/3000`}</span>
           </div>
         </div>
