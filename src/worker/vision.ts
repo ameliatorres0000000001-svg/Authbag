@@ -1469,3 +1469,20 @@ export async function translateText(env: Env, x: { text: string; to: TrLang; fro
   }
   return { from, text, back };
 }
+
+/** A voice recording in Khmer, Thai, Malay or Indonesian → what was said and which of the four it was. Gemini only. Not stored. */
+export async function transcribeSpeech(env: Env, audio: { data: ArrayBuffer; mime: string }, hint: TrLang | null): Promise<{ lang: TrLang; text: string }> {
+  if (!cleanKey(env.GEMINI_API_KEY)) throw new Error('audio_needs_gemini');
+  const out = await geminiCall(env, env.GEMINI_MODEL?.trim() || DEFAULT_MODEL.gemini, {
+    system: 'You are a speech-to-text tool. The speaker uses ONE of: Khmer (km), Thai (th), Malay (ms), Indonesian (id). ' +
+      (hint ? `The speaker said it is ${TR_NAME[hint]}. ` : 'Listen carefully to decide which of the four it is; Malay and Indonesian are different languages, tell them apart by vocabulary. ') +
+      'Transcribe exactly what is said, in that language\'s own script, with natural punctuation. Never translate, answer or add anything. ' +
+      'If there is no speech or it is unintelligible, return an empty text. Reply with JSON only: {"lang":"km|th|ms|id","text":"…"}.',
+    turns: [{ role: 'user', content: 'Transcribe this voice recording.' }], images: [], audio, maxTokens: 1500, effort: 'low', json: true,
+  });
+  const o = jsonObj(out);
+  const text = typeof o?.text === 'string' ? o.text.trim().slice(0, 3000) : '';
+  if (!text) throw new Error('audio_unclear');
+  const lang = (TR_LANGS as string[]).includes(o?.lang) ? (o.lang as TrLang) : hint ?? 'km';
+  return { lang, text };
+}
