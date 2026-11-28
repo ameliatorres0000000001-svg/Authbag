@@ -8,7 +8,7 @@ import {
 } from './lib.ts';
 import { resolveTemplates, runEvaluation } from './evaluate.ts';
 import { secretPresent, testProvider, type ProviderConfig } from './providers.ts';
-import { assessVerification, reviewModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, translateInbound, transcribeStaffKhmer, translateText, TR_LANGS, type TrLang, translateOutbound, transcribeInbound, toChatLang, CHAT_LANGS, type ChatLang, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
+import { assessVerification, reviewModel, providerChain, testAi, testWebSearch, anthropicKeyKind, bedrockRegion, gatewayUrl, OUT_LANGS, type OutLang, translatePoints, writeModelGuide, suggestModelForPhoto, aiConfigured, aiModel, aiProvider, analyzeDateCodeAppearance, findPhotoRegions, identifyStyleCode, explainDifferences, suggestFocusRegions, suggestObservations, suggestTeachingPoints, chatAssistant, type ShopPaint, draftCareLesson, draftSkill, findTiktokSellers, draftOutreach, translateInbound, transcribeStaffKhmer, translateText, transcribeSpeech, TR_LANGS, type TrLang, translateOutbound, transcribeInbound, toChatLang, CHAT_LANGS, type ChatLang, paintMethod, repairAdvice, identifyLeather, workspaceAnswer, readPaintTube, researchPaintProduct, identifyBag, researchMarket, guidePoints } from './vision.ts';
 import { checkMeasurement, checkQuick, colourDiff, deltaE2000, labToHex, matchLevel, measuredLab, quickLab } from '../shared/color.ts';
 import { isValidRect } from '../shared/marks.ts';
 import { notifyStaff, notifyUser, vapidKeys } from './push.ts';
@@ -2243,6 +2243,20 @@ app.put('/api/line/contacts/:id/lang', need(ADMINS), async (c) => {
   const r = await c.env.DB.prepare("UPDATE line_contacts SET lang = ? WHERE line_user_id = ? AND role = 'customer'").bind(lang, c.req.param('id')).run();
   if (!r.meta.changes) return c.json({ error: 'not_found' }, 404);
   return c.json({ ok: true });
+});
+
+/** The translator's microphone: a recording in Khmer / Thai / Malay / Indonesian → text + the language heard. Not stored. */
+app.post('/api/translate/voice', need(STAFF), async (c) => {
+  const form = await c.req.formData();
+  const f = form.get('audio');
+  if (!(f instanceof File) || !f.size) return c.json({ error: 'audio_required' }, 400);
+  if (f.size > 4 * 1024 * 1024) return c.json({ error: 'audio_too_big' }, 413);
+  const mime = (f.type || 'audio/webm').split(';')[0];
+  if (!mime.startsWith('audio/')) return c.json({ error: 'audio_required' }, 400);
+  const h = String(form.get('from') ?? '');
+  const hint = (TR_LANGS as string[]).includes(h) ? (h as TrLang) : null;
+  try { return c.json(await asFeature('translate', async () => transcribeSpeech(c.env, { data: await f.arrayBuffer(), mime }, hint))); }
+  catch (e) { const m = (e as Error).message; return c.json({ error: m }, m === 'audio_needs_gemini' ? 501 : m === 'audio_unclear' ? 422 : 502); }
 });
 
 /** The translator page: Khmer, Thai, Malay, Indonesian in any direction (source detected if not given). Nothing is stored. */
