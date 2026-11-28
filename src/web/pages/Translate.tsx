@@ -132,11 +132,14 @@ export default function TranslatePage() {
           </div>
           <div className="mt-2 flex items-center justify-between gap-2">
             <button type="button" onClick={mic} disabled={busy && !listening} aria-pressed={listening} aria-label={listening ? t('tr.micStop') : t('tr.mic')}
-              className={`flex h-12 w-12 items-center justify-center rounded-full border text-xl ${listening ? 'animate-pulse border-counterfeit bg-counterfeit/15' : 'border-hairline'}`}>{listening ? '⏹' : '🎤'}</button>
-            <span className="text-xs text-muted">{text.length}/3000</span>
-            <button type="button" className="btn-primary px-5" disabled={busy || listening || !text.trim()} onClick={() => translate(text)}>{busy ? '…' : t('tr.go')}</button>
+              className={`flex h-14 w-14 items-center justify-center rounded-full border text-2xl ${listening ? 'animate-pulse border-counterfeit bg-counterfeit/15' : 'border-hairline bg-surface-low'}`}>{listening ? '⏹' : '🎤'}</button>
+            <span className="min-w-0 flex-1 truncate text-center text-xs text-muted">{listening ? t('tr.listening') : `${text.length}/3000`}</span>
           </div>
         </div>
+
+        <button type="button" className="btn bg-gold text-charcoal w-full py-3.5 text-base font-semibold" disabled={busy || listening || !text.trim()} onClick={() => translate(text)}>
+          {busy ? '…' : `🌐 ${t('tr.go')}`}
+        </button>
 
         {err && <p className="text-sm text-counterfeit" role="alert">{err}</p>}
 
